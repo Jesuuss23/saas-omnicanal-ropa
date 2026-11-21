@@ -15,12 +15,16 @@ import org.springframework.web.server.ResponseStatusException;
 class OwnerWebOrdersApi {
     private final JdbcTemplate db;
 
-    OwnerWebOrdersApi(JdbcTemplate db) { this.db = db; }
+    private final WebOrderItems orderItems;
+
+    OwnerWebOrdersApi(JdbcTemplate db, WebOrderItems orderItems) {
+        this.db = db;
+        this.orderItems = orderItems;
+    }
 
     enum Status { PENDING_PAYMENT, CANCELLED, EXPIRED }
     record Summary(UUID id, String name, String phone, BigDecimal total, String status, Instant createdAt) {}
     record Page(List<Summary> orders, boolean more) {}
-    record Item(UUID variant, String name, String size, String color, int quantity, BigDecimal unitPrice) {}
 
     private static void requireOwner(UUID store, Principal principal) {
         if (principal == null || !store.toString().equals(principal.getName()))
@@ -43,14 +47,9 @@ class OwnerWebOrdersApi {
     }
 
     @GetMapping("/{order}/items")
-    List<Item> items(@PathVariable UUID store, @PathVariable UUID order, Principal principal) {
+    List<WebOrderItems.Item> items(@PathVariable UUID store, @PathVariable UUID order, Principal principal) {
         requireOwner(store, principal);
-        var rows = db.query("""
-                SELECT variant_id,name,size,color,quantity,unit_price
-                FROM web_order_item WHERE tenant_id=? AND order_id=?
-                ORDER BY name,size,color,variant_id
-                """,(rs,n)->new Item(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),
-                rs.getString(4),rs.getInt(5),rs.getBigDecimal(6)),store,order);
+        var rows = orderItems.list(store, order);
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return rows;
     }
