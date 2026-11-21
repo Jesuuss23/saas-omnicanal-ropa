@@ -1,0 +1,90 @@
+"use client";
+
+import {useEffect,useRef,useState} from "react";
+
+export type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number};
+type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number};
+const currency = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
+
+function isLine(value:unknown):value is Line {
+  if (!value || typeof value !== "object") return false;
+  const row=value as Partial<Line>;
+  return typeof row.id==="string" && typeof row.name==="string" && typeof row.size==="string" &&
+    (row.color===null || typeof row.color==="string") && typeof row.price==="number" &&
+    Number.isFinite(row.price) && row.price>=0 && typeof row.quantity==="number" &&
+    Number.isSafeInteger(row.quantity) && row.quantity>0;
+}
+
+export default function CatalogCart({store,variants,query}:{store:string;variants:Variant[];query:string}) {
+  const storageKey="store-cart:v1:"+store.toLowerCase();
+  const [lines,setLines]=useState<Line[]>([]);
+  const [ready,setReady]=useState(false);
+  const [storageError,setStorageError]=useState(false);
+  const [notice,setNotice]=useState("");
+  const current=useRef<Line[]>([]);
+
+  useEffect(()=>{
+    try {
+      const raw=sessionStorage.getItem(storageKey);
+      const data:unknown=raw ? JSON.parse(raw) : [];
+      current.current=Array.isArray(data) ? data.filter(isLine) : [];
+      setLines(current.current);
+    } catch {setStorageError(true);}
+    setReady(true);
+  },[storageKey]);
+
+  function save(next:Line[],message:string) {
+    current.current=next;
+    setLines(next);
+    setNotice(message);
+    try {
+      sessionStorage.setItem(storageKey,JSON.stringify(next));
+      setStorageError(false);
+    } catch {setStorageError(true);}
+  }
+
+  function add(item:Variant) {
+    const cart=current.current;
+    const existing=cart.find(line=>line.id===item.id);
+    const next={...item,quantity:(existing?.quantity ?? 0)+1};
+    save(existing ? cart.map(line=>line.id===item.id ? next : line) : [...cart,next],
+      item.name+" agregado al carrito.");
+  }
+
+  function changeQuantity(id:string,delta:number) {
+    save(current.current.map(line=>line.id===id ? {...line,quantity:line.quantity+delta} : line)
+      .filter(line=>line.quantity>0),"Carrito actualizado.");
+  }
+
+  const subtotal=lines.reduce((sum,line)=>sum+Math.round(line.price*100)*line.quantity,0)/100;
+  return <>
+    {variants.length ? <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {variants.map(item=><li key={item.id} className="rounded-xl border border-stone-200 p-5">
+        {item.category && <p className="text-sm text-stone-600">{item.category}</p>}
+        <h2 className="text-xl font-semibold">{item.name}</h2>
+        <p className="my-2">Talla {item.size}{item.color && " · "+item.color}</p>
+        <p className="font-semibold">{currency.format(item.price)}</p>
+        <button type="button" disabled={!ready} onClick={()=>add(item)} className="mt-3 rounded bg-teal-800 px-3 py-2 text-white">Agregar al carrito</button>
+      </li>)}
+    </ul> : <p>{query?"No hay prendas disponibles para esta búsqueda.":"No hay prendas disponibles en esta página."}</p>}
+    <p role="status" className="mt-2 text-sm">{notice}</p>
+    <section className="mt-8 rounded-xl border p-5" aria-label="Carrito">
+      <h2 className="text-xl font-semibold">Tu carrito</h2>
+      {storageError && <p role="alert">El navegador no pudo guardar o recuperar el carrito de esta pestaña.</p>}
+      {!ready ? <p>Cargando carrito…</p> : lines.length===0 ? <p>Tu carrito está vacío.</p> : <>
+        <ul className="divide-y">{lines.map(line=><li key={line.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div><strong>{line.name}</strong><p>Talla {line.size}{line.color && " · "+line.color}</p>
+            <p>{currency.format(line.price)} por unidad</p></div>
+          <div className="flex items-center gap-3">
+            <button type="button" aria-label={"Restar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,-1)} className="rounded border px-3 py-1">−</button>
+            <span>{line.quantity}</span>
+            <button type="button" aria-label={"Sumar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,1)} className="rounded border px-3 py-1">+</button>
+            <button type="button" className="underline" onClick={()=>save(current.current.filter(row=>row.id!==line.id),"Prenda retirada.")}>Retirar</button>
+          </div>
+        </li>)}</ul>
+        <p className="mt-3 font-semibold">Subtotal estimado {currency.format(subtotal)}</p>
+        <p className="text-sm text-stone-600">Agregar prendas al carrito no reserva stock.</p>
+      </>}
+    </section>
+  </>;
+}
