@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import OwnerInvitations from "./OwnerInvitations";
 import { csrfToken } from "./auth";
 
 export default function NewStore() {
@@ -58,5 +59,6 @@ export default function NewStore() {
       </button>
     </form>
     <p aria-live="polite" className="mt-3 text-sm text-stone-700">{message}</p>
+  <OwnerInvitations />
   </section>;
 }
