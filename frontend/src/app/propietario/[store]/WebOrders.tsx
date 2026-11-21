@@ -3,7 +3,7 @@
 import {useEffect,useState} from "react";
 
 const labels={PENDING_PAYMENT:"Pendiente de pago",CANCELLED:"Cancelado",EXPIRED:"Vencido"};
-type Order={id:string;name:string;phone:string;total:number;status:keyof typeof labels;createdAt:string};
+type Order={id:string;name:string;phone:string;total:number;status:keyof typeof labels;createdAt:string;method?:string;address?:string;pickupHours?:string};
 type Page={orders:Order[];more:boolean};
 type Item={variant:string;name:string;size:string;color:string|null;quantity:number;unitPrice:number};
 const money=new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
@@ -91,6 +91,7 @@ export default function WebOrders({store}:{store:string}) {
         <ul className="divide-y">{data.orders.map(o=><li key={o.id} className="space-y-1 py-3">
           <p><strong>{o.name}</strong> · {o.phone}</p>
           <p>{labels[o.status]} · {money.format(o.total)} · {date.format(new Date(o.createdAt))}</p>
+          {o.method && <p>{o.method==="PICKUP"?"Recojo en tienda":"Delivery"} · {o.address}{o.pickupHours && " · "+o.pickupHours}</p>}
           <p className="break-all text-sm">Pedido {o.id}</p>
           <button className="text-teal-800 underline" aria-expanded={expanded===o.id}
             onClick={()=>setExpanded(expanded===o.id?"":o.id)}>{expanded===o.id?"Ocultar prendas":"Ver prendas"}</button>

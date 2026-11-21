@@ -33,7 +33,10 @@ class GuestCheckoutApi {
     record Order(UUID id, BigDecimal total, List<WebOrderItems.Item> items, String trackingToken) {}
     record Header(UUID id, BigDecimal total) {}
     record GuestRow(String name, String phone, UUID orderId, BigDecimal total) {}
-    record Checkout(String name, String phone, Order order) {}
+    record Pickup(String address, String hours, long revision) {}
+    record Checkout(String name, String phone, Order order, Pickup pickup) {}
+    enum Method { PICKUP, DELIVERY }
+    record Choice(Method method, @Size(max=250) String address, Long pickupRevision) {}
 
     private void lockActive(UUID store, UUID key) {
         var active = db.query("""
@@ -45,19 +48,36 @@ class GuestCheckoutApi {
 
     @PostMapping
     @Transactional
-    ResponseEntity<Order> confirm(@PathVariable UUID store, @RequestHeader("X-Reservation-Key") UUID key) {
+    ResponseEntity<Order> confirm(@PathVariable UUID store, @RequestHeader("X-Reservation-Key") UUID key,
+                                  @Valid @RequestBody(required=false) Choice choice) {
         lockActive(store,key);
-        db.update("""
-                INSERT INTO web_checkout_order(tenant_id,reservation_id,guest_name,guest_phone,merchandise_total)
-                SELECT r.tenant_id,r.id,r.guest_name,r.guest_phone,sum(l.quantity*l.unit_price)
+        var existing=db.query("SELECT id,merchandise_total FROM web_checkout_order WHERE tenant_id=? AND reservation_id=?",
+                (rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2)),store,key);
+        if (!existing.isEmpty()) {
+            Header prior=existing.get(0);
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,prior.id(),prior.total()));
+        }
+        if (choice==null || choice.method()==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        String address=choice.address()==null ? "" : choice.address().strip();
+        String hours=null;
+        if (choice.method()==Method.PICKUP) {
+            var pickup=db.query("""
+                    SELECT pickup_address,pickup_hours,pickup_revision FROM tenant
+                    WHERE id=? AND pickup_enabled AND pickup_revision=? FOR SHARE
+                    """,(rs,n)->new Pickup(rs.getString(1),rs.getString(2),rs.getLong(3)),store,choice.pickupRevision())
+                    .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
+            address=pickup.address();
+            hours=pickup.hours();
+        } else if (address.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        Header header=db.query("""
+                INSERT INTO web_checkout_order(tenant_id,reservation_id,guest_name,guest_phone,merchandise_total,
+                                               delivery_method,fulfillment_address,pickup_hours)
+                SELECT r.tenant_id,r.id,r.guest_name,r.guest_phone,sum(l.quantity*l.unit_price),?,?,?
                 FROM cart_reservation r JOIN cart_reservation_line l
                   ON (l.tenant_id,l.reservation_id)=(r.tenant_id,r.id)
                 WHERE r.tenant_id=? AND r.id=? AND r.guest_name IS NOT NULL
-                GROUP BY r.tenant_id,r.id ON CONFLICT (tenant_id,reservation_id) DO NOTHING
-                """,store,key);
-        Header header=db.query("""
-                SELECT id,merchandise_total FROM web_checkout_order WHERE tenant_id=? AND reservation_id=?
-                """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2)),store,key)
+                GROUP BY r.tenant_id,r.id RETURNING id,merchandise_total
+                """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2)),choice.method().name(),address,hours,store,key)
                 .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,header.id(),header.total()));
     }
@@ -74,8 +94,10 @@ class GuestCheckoutApi {
                 WHERE r.tenant_id=? AND r.id=? AND NOT r.released AND r.expires_at>clock_timestamp()
                 """, (rs, n) -> new GuestRow(rs.getString(1),rs.getString(2),rs.getObject(3,UUID.class),rs.getBigDecimal(4)), store, key)
                 .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.GONE));
+        Pickup pickup=db.query("SELECT pickup_address,pickup_hours,pickup_revision FROM tenant WHERE id=? AND pickup_enabled",
+                (rs,n)->new Pickup(rs.getString(1),rs.getString(2),rs.getLong(3)),store).stream().findFirst().orElse(null);
         Order detail=contact.orderId()==null ? null : order(store,key,contact.orderId(),contact.total());
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Checkout(contact.name(),contact.phone(),detail));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Checkout(contact.name(),contact.phone(),detail,pickup));
     }
 
     @Transactional
