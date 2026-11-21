@@ -23,7 +23,7 @@ class PublicStoreCatalogApi {
     record Variant(UUID id, String name, String category, String size, String color, BigDecimal price) {}
     record Pickup(String address, String hours) {}
     record Store(String name, Pickup pickup) {}
-    record Catalog(String storeName, List<Variant> variants, boolean hasNext, Pickup pickup, List<String> sizes, List<String> colors) {}
+    record Catalog(String storeName, List<Variant> variants, boolean hasNext, Pickup pickup, List<String> sizes, List<String> colors, List<String> categories) {}
 
     record Availability(UUID id, BigDecimal price, int available) {}
 
@@ -45,7 +45,8 @@ class PublicStoreCatalogApi {
     Catalog catalog(@PathVariable UUID store, @RequestParam(defaultValue = "") String query,
                     @RequestParam(defaultValue = "0") int page,
                     @RequestParam(defaultValue = "") String size,
-                    @RequestParam(defaultValue = "") String color) {
+                    @RequestParam(defaultValue = "") String color,
+                    @RequestParam(defaultValue = "") String category) {
         if (page < 0 || query.length() > 150) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         Store details = db.query("""
                 SELECT name,pickup_enabled,pickup_address,pickup_hours FROM tenant WHERE id=?
@@ -60,14 +61,17 @@ class PublicStoreCatalogApi {
         String search = query.strip();
         String sizeFilter = " AND (? = '' OR v.size = ?) ";
         String colorFilter = " AND (? = '' OR v.color = ?) ";
-        var sizes = db.queryForList("SELECT DISTINCT v.size " + matches + colorFilter
-                + " AND v.size <> '' ORDER BY v.size", String.class, store, search, color, color);
-        var colors = db.queryForList("SELECT DISTINCT v.color " + matches + sizeFilter
-                + " AND trim(v.color) <> '' ORDER BY v.color", String.class, store, search, size, size);
-        var variants = db.query("SELECT v.id, p.name, p.category, v.size, v.color, v.price " + matches + sizeFilter + colorFilter + """
+        String categoryFilter = " AND (? = '' OR p.category = ?) ";
+        var categories = db.queryForList("SELECT DISTINCT p.category " + matches + sizeFilter + colorFilter
+                + " AND trim(p.category) <> '' ORDER BY p.category", String.class, store, search, size, size, color, color);
+        var sizes = db.queryForList("SELECT DISTINCT v.size " + matches + categoryFilter + colorFilter
+                + " AND v.size <> '' ORDER BY v.size", String.class, store, search, category, category, color, color);
+        var colors = db.queryForList("SELECT DISTINCT v.color " + matches + categoryFilter + sizeFilter
+                + " AND trim(v.color) <> '' ORDER BY v.color", String.class, store, search, category, category, size, size);
+        var variants = db.query("SELECT v.id, p.name, p.category, v.size, v.color, v.price " + matches + categoryFilter + sizeFilter + colorFilter + """
                  ORDER BY p.name, p.id, v.size, v.color, v.id LIMIT 25 OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
-                rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, search, size, size, color, color, page * 24L);
-        return new Catalog(details.name(), variants.stream().limit(24).toList(), variants.size() > 24, details.pickup(), sizes, colors);
+                rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, search, category, category, size, size, color, color, page * 24L);
+        return new Catalog(details.name(), variants.stream().limit(24).toList(), variants.size() > 24, details.pickup(), sizes, colors, categories);
     }
 }
