@@ -31,9 +31,9 @@ class GuestCheckoutApi {
     record Contact(@NotBlank @Size(max=150) String name,
                    @NotBlank @Pattern(regexp="[+]?[0-9]{7,15}") String phone) {}
 
-    record Order(UUID id, BigDecimal total, List<WebOrderItems.Item> items, String trackingToken, boolean freeDelivery, BigDecimal deliveryFee) {}
-    record Header(UUID id, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee) {}
-    record GuestRow(String name, String phone, UUID orderId, BigDecimal total, boolean freeDelivery, BigDecimal minimum, BigDecimal subtotal, BigDecimal fee, boolean distancePricing) {}
+    record Order(UUID id, BigDecimal total, List<WebOrderItems.Item> items, String trackingToken, boolean freeDelivery, BigDecimal deliveryFee, String method) {}
+    record Header(UUID id, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee, String method) {}
+    record GuestRow(String name, String phone, UUID orderId, BigDecimal total, boolean freeDelivery, BigDecimal minimum, BigDecimal subtotal, BigDecimal fee, boolean distancePricing, String method) {}
     record Pickup(String address, String hours, long revision) {}
     record Checkout(String name, String phone, Order order, Pickup pickup, BigDecimal freeDeliveryMinimum, BigDecimal subtotal, boolean distancePricing) {}
     enum Method { PICKUP, DELIVERY }
@@ -75,11 +75,11 @@ class GuestCheckoutApi {
     ResponseEntity<Order> confirm(@PathVariable UUID store, @RequestHeader("X-Reservation-Key") UUID key,
                                   @Valid @RequestBody(required=false) Choice choice) {
         lockActive(store,key);
-        var existing=db.query("SELECT id,merchandise_total,free_delivery,delivery_fee FROM web_checkout_order WHERE tenant_id=? AND reservation_id=?",
-                (rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2),rs.getBoolean(3),rs.getBigDecimal(4)),store,key);
+        var existing=db.query("SELECT id,merchandise_total,free_delivery,delivery_fee,delivery_method FROM web_checkout_order WHERE tenant_id=? AND reservation_id=?",
+                (rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2),rs.getBoolean(3),rs.getBigDecimal(4),rs.getString(5)),store,key);
         if (!existing.isEmpty()) {
             Header prior=existing.get(0);
-            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,prior.id(),prior.total(),prior.freeDelivery(),prior.deliveryFee()));
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,prior.id(),prior.total(),prior.freeDelivery(),prior.deliveryFee(),prior.method()));
         }
         if (choice==null || choice.method()==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         String address=choice.address()==null ? "" : choice.address().strip();
@@ -117,29 +117,29 @@ class GuestCheckoutApi {
                   ON (l.tenant_id,l.reservation_id)=(r.tenant_id,r.id)
                 WHERE r.tenant_id=? AND r.id=? AND r.guest_name IS NOT NULL
                   AND (? <> 'DELIVERY' OR t.free_delivery_minimum IS NOT DISTINCT FROM CAST(? AS numeric))
-                GROUP BY r.tenant_id,r.id,t.free_delivery_minimum RETURNING id,merchandise_total,free_delivery,delivery_fee
-                """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2),rs.getBoolean(3),rs.getBigDecimal(4)),choice.method().name(),address,hours,charge,destination==null?null:destination.latitude(),destination==null?null:destination.longitude(),choice.method().name(),store,key,choice.method().name(),choice.freeDeliveryMinimum())
+                GROUP BY r.tenant_id,r.id,t.free_delivery_minimum RETURNING id,merchandise_total,free_delivery,delivery_fee,delivery_method
+                """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2),rs.getBoolean(3),rs.getBigDecimal(4),rs.getString(5)),choice.method().name(),address,hours,charge,destination==null?null:destination.latitude(),destination==null?null:destination.longitude(),choice.method().name(),store,key,choice.method().name(),choice.freeDeliveryMinimum())
                 .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,header.id(),header.total(),header.freeDelivery(),header.deliveryFee()));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,header.id(),header.total(),header.freeDelivery(),header.deliveryFee(),header.method()));
     }
 
-    private Order order(UUID store, UUID key, UUID id, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee) {
-        return new Order(id,total,orderItems.list(store,id),OrderTrackingApi.token(store,id,key),freeDelivery,deliveryFee);
+    private Order order(UUID store, UUID key, UUID id, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee, String method) {
+        return new Order(id,total,orderItems.list(store,id),OrderTrackingApi.token(store,id,key),freeDelivery,deliveryFee,method);
     }
 
     @GetMapping
     ResponseEntity<Checkout> read(@PathVariable UUID store, @RequestHeader("X-Reservation-Key") UUID key) {
         var contact = db.query("""
                 SELECT r.guest_name,r.guest_phone,o.id,o.merchandise_total,o.free_delivery,t.free_delivery_minimum,
-                       (SELECT sum(l.quantity*l.unit_price) FROM cart_reservation_line l WHERE (l.tenant_id,l.reservation_id)=(r.tenant_id,r.id)),o.delivery_fee,t.delivery_per_km IS NOT NULL
+                       (SELECT sum(l.quantity*l.unit_price) FROM cart_reservation_line l WHERE (l.tenant_id,l.reservation_id)=(r.tenant_id,r.id)),o.delivery_fee,t.delivery_per_km IS NOT NULL,o.delivery_method
                 FROM cart_reservation r JOIN tenant t ON t.id=r.tenant_id
                 LEFT JOIN web_checkout_order o ON (o.tenant_id,o.reservation_id)=(r.tenant_id,r.id)
                 WHERE r.tenant_id=? AND r.id=? AND NOT r.released AND r.expires_at>clock_timestamp()
-                """, (rs, n) -> new GuestRow(rs.getString(1),rs.getString(2),rs.getObject(3,UUID.class),rs.getBigDecimal(4),rs.getBoolean(5),rs.getBigDecimal(6),rs.getBigDecimal(7),rs.getBigDecimal(8),rs.getBoolean(9)), store, key)
+                """, (rs, n) -> new GuestRow(rs.getString(1),rs.getString(2),rs.getObject(3,UUID.class),rs.getBigDecimal(4),rs.getBoolean(5),rs.getBigDecimal(6),rs.getBigDecimal(7),rs.getBigDecimal(8),rs.getBoolean(9),rs.getString(10)), store, key)
                 .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.GONE));
         Pickup pickup=db.query("SELECT pickup_address,pickup_hours,pickup_revision FROM tenant WHERE id=? AND pickup_enabled",
                 (rs,n)->new Pickup(rs.getString(1),rs.getString(2),rs.getLong(3)),store).stream().findFirst().orElse(null);
-        Order detail=contact.orderId()==null ? null : order(store,key,contact.orderId(),contact.total(),contact.freeDelivery(),contact.fee());
+        Order detail=contact.orderId()==null ? null : order(store,key,contact.orderId(),contact.total(),contact.freeDelivery(),contact.fee(),contact.method());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Checkout(contact.name(),contact.phone(),detail,pickup,contact.minimum(),contact.subtotal(),contact.distancePricing()));
     }
 
