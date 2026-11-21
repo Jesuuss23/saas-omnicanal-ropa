@@ -1,5 +1,6 @@
 "use client";
 
+import CategoryResources from "./CategoryResources";
 import CatalogReplyPicker from "./CatalogReplyPicker";
 import {deliveryLabels as labels} from "./deliveryLabels";
 import {useEffect,useRef,useState,type FormEvent} from "react";
@@ -51,14 +52,16 @@ export default function ManualReply({store,chat,send}:Props) {
     finally {sending.current=false;setBusy(false);setRefresh(n=>n+1);}
   }
 
+  function append(line:string) {
+    const draft=text ? text+"\n"+line : line;
+    if (draft.length>4000) {setNotice("El mensaje superaría los 4000 caracteres. Acorta el borrador.");return;}
+    setText(draft);setNotice("");
+  }
+
   return <details onToggle={e=>{e.stopPropagation();setOpen(e.currentTarget.open);}}>
     <summary className="cursor-pointer text-teal-800">Mensaje de seguimiento por WhatsApp</summary>
     {open && <>
-      {/^[0-9]{5,15}@s\.whatsapp\.net$/.test(chat) ? <><CatalogReplyPicker store={store} disabled={busy} insert={line=>{
-        const draft=text ? text+"\n"+line : line;
-        if (draft.length>4000) {setNotice("El mensaje superaría los 4000 caracteres. Acorta el borrador antes de agregar la prenda.");return;}
-        setText(draft);setNotice("");
-      }}/><form onSubmit={submit} className="my-2 grid max-w-md gap-2">
+      {/^[0-9]{5,15}@s\.whatsapp\.net$/.test(chat) ? <><CatalogReplyPicker store={store} disabled={busy} insert={append}/><CategoryResources store={store} insert={append} disabled={busy}/><form onSubmit={submit} className="my-2 grid max-w-md gap-2">
         <label>Mensaje para {chat.split("@")[0]}<textarea value={text} onChange={e=>setText(e.target.value)}
           disabled={busy} maxLength={4000} required className="block w-full rounded border p-2"/></label>
         <button type="submit" disabled={busy || !text.trim()} className="rounded bg-teal-800 px-3 py-2 text-white">
