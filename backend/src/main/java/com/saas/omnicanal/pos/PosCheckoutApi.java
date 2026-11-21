@@ -22,10 +22,36 @@ public class PosCheckoutApi {
     enum Method { CASH, YAPE, PLIN, CARD }
     record Line(@NotNull UUID id, @Min(1) @Max(10000) int quantity,
                 @NotNull @Positive @Digits(integer=8, fraction=2) BigDecimal price) {}
+    enum Kind { BOLETA, FACTURA }
+    enum DocumentType { DNI, RUC, CE, PASSPORT }
+    record Fiscal(@NotNull Kind kind, DocumentType documentType, @Size(max=20) String documentNumber,
+                  @Size(max=200) String customerName) {
+        Fiscal {
+            documentNumber = clean(documentNumber);
+            customerName = clean(customerName);
+        }
+        private static String clean(String value) {
+            return value == null || value.isBlank() ? null : value.strip();
+        }
+        void validateFor(BigDecimal total) {
+            if (kind == Kind.FACTURA && documentType != DocumentType.RUC) throw invalid();
+            if (documentType == null) {
+                if (documentNumber != null || customerName != null || total.compareTo(BigDecimal.valueOf(700)) > 0) throw invalid();
+                return;
+            }
+            if (customerName == null || documentNumber == null) throw invalid();
+            String pattern = switch (documentType) {
+                case DNI -> "[0-9]{8}";
+                case RUC -> "[0-9]{11}";
+                case CE, PASSPORT -> "[a-zA-Z0-9-]{1,20}";
+            };
+            if (!documentNumber.matches(pattern)) throw invalid();
+        }
+    }
     record Checkout(@NotNull UUID id, @NotNull Method method, @Size(max=100) String reference,
                     @Positive @Digits(integer=12,fraction=2) BigDecimal cashReceived,
-                    @NotEmpty @Size(max=100) List<@Valid @NotNull Line> lines) {}
-    record Receipt(UUID id, BigDecimal total, BigDecimal change) {}
+                    @NotEmpty @Size(max=100) List<@Valid @NotNull Line> lines, @Valid Fiscal fiscal) {}
+    record Receipt(UUID id, BigDecimal total, BigDecimal change, String fiscalStatus) {}
 
     @PostMapping
     @Transactional
@@ -35,6 +61,8 @@ public class PosCheckoutApi {
         if (lines.stream().map(Line::id).distinct().count() != lines.size()) throw invalid();
         BigDecimal total = lines.stream().map(line -> line.price().multiply(BigDecimal.valueOf(line.quantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Fiscal fiscal = request.fiscal();
+        if (fiscal != null) fiscal.validateFor(total);
         boolean cash = request.method() == Method.CASH;
         String ref = cash || request.reference() == null ? "" : request.reference().strip();
         BigDecimal received = request.cashReceived();
@@ -51,14 +79,37 @@ public class PosCheckoutApi {
                 INSERT INTO pos_sale(tenant_id,id,method,reference,total,cash_received,request_signature)
                 VALUES (?,?,?,?,?,?,?) ON CONFLICT (tenant_id,id) DO NOTHING
                 """, store, request.id(), request.method().name(), cash ? null : ref, total, received, signature.toString());
+        String fiscalStatus = null;
         if (created == 0) {
             String original = db.queryForObject("SELECT request_signature FROM pos_sale WHERE tenant_id=? AND id=?",
                     String.class, store, request.id());
             if (!signature.toString().equals(original)) throw new ResponseStatusException(HttpStatus.CONFLICT);
+            var saved = db.query("""
+                    SELECT kind, document_type, document_number, customer_name, status FROM pos_fiscal_request
+                    WHERE tenant_id=? AND sale_id=?
+                    """, (rs, row) -> {
+                String type = rs.getString("document_type");
+                Fiscal previous = new Fiscal(Kind.valueOf(rs.getString("kind")),
+                        type == null ? null : DocumentType.valueOf(type), rs.getString("document_number"),
+                        rs.getString("customer_name"));
+                if (!previous.equals(fiscal)) throw new ResponseStatusException(HttpStatus.CONFLICT);
+                return rs.getString("status");
+            }, store, request.id());
+            if (saved.isEmpty() && fiscal != null) throw new ResponseStatusException(HttpStatus.CONFLICT);
+            if (!saved.isEmpty()) fiscalStatus = saved.get(0);
         } else {
+            if (fiscal != null) {
+                db.update("""
+                        INSERT INTO pos_fiscal_request(tenant_id,sale_id,kind,document_type,document_number,customer_name)
+                        VALUES (?,?,?,?,?,?)
+                        """, store, request.id(), fiscal.kind().name(),
+                        fiscal.documentType() == null ? null : fiscal.documentType().name(),
+                        fiscal.documentNumber(), fiscal.customerName());
+                fiscalStatus = "PENDING";
+            }
             for (Line line : lines) recordLine(store, request.id(), line);
         }
-        return new Receipt(request.id(), total, cash ? received.subtract(total) : BigDecimal.ZERO);
+        return new Receipt(request.id(), total, cash ? received.subtract(total) : BigDecimal.ZERO, fiscalStatus);
     }
 
     private void recordLine(UUID store, UUID sale, Line line) {

@@ -32,6 +32,10 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
   const [sku,setSku] = useState("");
   const [camera,setCamera] = useState(false);
   const [busy,setBusy] = useState(false);
+  const [kind,setKind] = useState("BOLETA");
+  const [buyerType,setBuyerType] = useState("");
+  const [buyerNumber,setBuyerNumber] = useState("");
+  const [buyerName,setBuyerName] = useState("");
   const [method,setMethod] = useState("CASH");
   const [amount,setAmount] = useState("");
   const [reference,setReference] = useState("");
@@ -73,6 +77,7 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
     if (sku.trim()) void add("sku",sku.trim());
   }
   const cents = cart.lines.reduce((sum,line)=>sum+Math.round(line.price*100)*line.quantity,0);
+  const documentType = kind === "FACTURA" ? "RUC" : buyerType;
   async function checkout() {
     if (pending.current) return;
     pending.current = true;
@@ -82,6 +87,7 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
       if (!body) {
         if (!cart.lines.length) return;
         body = JSON.stringify({id:crypto.randomUUID(),method,reference:method==="CASH"?null:reference.trim(),
+          fiscal:{kind,documentType:documentType || null,documentNumber:documentType ? buyerNumber.trim() : null,customerName:documentType ? buyerName.trim() : null},
           cashReceived:method==="CASH"?amount:null, lines:cart.lines.map(({id,quantity,price})=>({id,quantity,price}))});
         sessionStorage.setItem(storageKey,body);
       }
@@ -96,8 +102,9 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
       if (!res.ok) throw new Error();
       const receipt = await res.json();
       sessionStorage.removeItem(storageKey);
+      setKind("BOLETA"); setBuyerType(""); setBuyerNumber(""); setBuyerName("");
       setUnconfirmed(false); setAmount(""); setReference("");
-      dispatch({type:"paid",message:`Venta ${receipt.id} registrada por ${money.format(receipt.total)}. Vuelto: ${money.format(receipt.change)}.`});
+      dispatch({type:"paid",message:`Venta ${receipt.id} registrada por ${money.format(receipt.total)}. Vuelto: ${money.format(receipt.change)}.${receipt.fiscalStatus === "PENDING" ? " Comprobante pendiente de emisión." : ""}`});
     } catch {
       dispatch({type:"notice",message:"No se pudo confirmar el registro. Reintenta desde esta pestaña antes de iniciar otro cobro."});
     } finally {pending.current=false; setBusy(false);}
@@ -126,6 +133,15 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
       cart.lines.length>0 && <form className="mt-5 space-y-3" onSubmit={e=>{e.preventDefault();void checkout();}}>
         <fieldset disabled={busy || camera} className="flex flex-wrap items-end gap-3">
           <legend className="mb-2 font-semibold">Registrar pago recibido</legend>
+          <label>Comprobante<select className="block rounded border p-2" value={kind} onChange={e=>{setKind(e.target.value);setBuyerNumber("");setBuyerName("");}}>
+            <option value="BOLETA">Boleta</option><option value="FACTURA">Factura</option></select></label>
+          {kind==="BOLETA" && <label>Documento del comprador<select value={buyerType} required={cents>70000} onChange={e=>{setBuyerType(e.target.value);setBuyerNumber("");}} className="block rounded border p-2">
+            <option value="">{cents>70000 ? "Selecciona un documento" : "Sin identificación"}</option>
+            <option value="DNI">DNI</option><option value="RUC">RUC</option><option value="CE">Carné de extranjería</option><option value="PASSPORT">Pasaporte</option></select></label>}
+          {documentType && <><label>{documentType==="RUC" ? "RUC del comprador" : "Número de documento"}<input required value={buyerNumber}
+            pattern={documentType==="RUC" ? "[0-9]{11}" : documentType==="DNI" ? "[0-9]{8}" : "[A-Za-z0-9\\-]{1,20}"}
+            maxLength={documentType==="RUC"?11:documentType==="DNI"?8:20} onChange={e=>setBuyerNumber(e.target.value)} className="block rounded border p-2"/></label>
+            <label>{documentType==="RUC"?"Razón social":"Nombre completo"}<input required maxLength={200} value={buyerName} onChange={e=>setBuyerName(e.target.value)} className="block rounded border p-2"/></label></>}
           <label>Medio de pago<select value={method} onChange={e=>setMethod(e.target.value)} className="block rounded border p-2">
             <option value="CASH">Efectivo</option><option value="YAPE">Yape</option><option value="PLIN">Plin</option><option value="CARD">Tarjeta física</option>
           </select></label>
