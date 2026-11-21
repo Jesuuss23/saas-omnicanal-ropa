@@ -23,6 +23,7 @@ class PublicCatalogFileApi {
                 .csrf(c->c.ignoringRequestMatchers("/api/public/stores/*/reservation"))
                 .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.GET,"/api/public/catalog-files/*", "/api/public/stores/*/catalog", "/api/public/stores/*/availability").permitAll()
                         .requestMatchers(HttpMethod.POST,"/api/public/stores/*/reservation").permitAll()
+                        .requestMatchers(HttpMethod.DELETE,"/api/public/stores/*/reservation").permitAll()
                         .anyRequest().denyAll()).build();
     }
 
