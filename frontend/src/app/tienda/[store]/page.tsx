@@ -33,16 +33,32 @@ async function catalogView({params,searchParams}:Props) {
   return {store,query,size,color,category,page,catalog};
 }
 
+function categoryImage(resource:Catalog["resource"]):URL|undefined {
+  if (resource?.kind!=="IMAGE") return;
+  try {
+    if (/^https:\/\//i.test(resource.url)) return new URL(resource.url);
+    if (resource.url.startsWith("/catalogos/") && process.env.STOREFRONT_PUBLIC_URL) {
+      const origin=new URL(process.env.STOREFRONT_PUBLIC_URL);
+      if (origin.protocol==="https:" || origin.protocol==="http:") return new URL(resource.url,origin.origin);
+    }
+  } catch {
+    // An invalid public origin should not prevent the catalog from rendering.
+    return;
+  }
+}
+
 export async function generateMetadata(props:Props):Promise<Metadata> {
   const {catalog,category,query,size,color}=await catalogView(props);
   const section=category && (catalog.categories.includes(category) || catalog.resource) ? category : "Catálogo de prendas";
   const title=section+" · "+catalog.storeName;
   const description="Consulta las prendas, tallas, colores y precios de "+catalog.storeName+".";
+  const image=categoryImage(catalog.resource);
   const indexable = !query && !size && !color && (!category || catalog.categories.includes(category) || Boolean(catalog.resource));
   return {
     title,description,
     robots:{index:indexable,follow:true},
-    openGraph:{type:"website",locale:"es_PE",siteName:catalog.storeName,title,description}
+    openGraph:{type:"website",locale:"es_PE",siteName:catalog.storeName,title,description,
+      images:image ? [{url:image,alt:title}] : undefined}
   };
 }
 
