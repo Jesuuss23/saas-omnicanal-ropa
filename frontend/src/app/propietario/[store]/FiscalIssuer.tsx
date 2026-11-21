@@ -1,5 +1,6 @@
 "use client";
 
+import BetaCompany from "./BetaCompany";
 import {useEffect, useState, type FormEvent} from "react";
 
 type Issuer = {ruc:string; legalName:string; address:string; ubigeo:string; revision:number};
@@ -133,6 +134,7 @@ export default function FiscalIssuer({store,send}:Props) {
         <button className="rounded-lg border border-teal-800 px-4 py-2 text-teal-800">Descargar certificado de pruebas</button>
       </fieldset>
     </form>}
+    {issuer && issuer.revision > 0 && <BetaCompany key={issuer.revision} path={path} ruc={savedRuc} revision={issuer.revision} send={send}/>}
     <p role="status" className="mt-2 text-sm">{message}</p>
     {retry && <button className="text-teal-800 underline" onClick={()=>setReload(v=>v+1)}>Recargar ficha</button>}
   </details>;
