@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.CacheControl;
@@ -19,12 +20,19 @@ import org.springframework.web.server.ResponseStatusException;
 class GuestCheckoutApi {
     private final JdbcTemplate db;
 
-    GuestCheckoutApi(JdbcTemplate db) { this.db = db; }
+    private final WebOrderItems orderItems;
+
+    GuestCheckoutApi(JdbcTemplate db, WebOrderItems orderItems) {
+        this.db = db;
+        this.orderItems = orderItems;
+    }
 
     record Contact(@NotBlank @Size(max=150) String name,
                    @NotBlank @Pattern(regexp="[+]?[0-9]{7,15}") String phone) {}
 
-    record Order(UUID id, BigDecimal total) {}
+    record Order(UUID id, BigDecimal total, List<WebOrderItems.Item> items) {}
+    record Header(UUID id, BigDecimal total) {}
+    record GuestRow(String name, String phone, UUID orderId, BigDecimal total) {}
     record Checkout(String name, String phone, Order order) {}
 
     private void lockActive(UUID store, UUID key) {
@@ -47,11 +55,15 @@ class GuestCheckoutApi {
                 WHERE r.tenant_id=? AND r.id=? AND r.guest_name IS NOT NULL
                 GROUP BY r.tenant_id,r.id ON CONFLICT (tenant_id,reservation_id) DO NOTHING
                 """,store,key);
-        Order order=db.query("""
+        Header header=db.query("""
                 SELECT id,merchandise_total FROM web_checkout_order WHERE tenant_id=? AND reservation_id=?
-                """,(rs,n)->new Order(rs.getObject(1,UUID.class),rs.getBigDecimal(2)),store,key)
+                """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2)),store,key)
                 .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,header.id(),header.total()));
+    }
+
+    private Order order(UUID store, UUID id, BigDecimal total) {
+        return new Order(id,total,orderItems.list(store,id));
     }
 
     @GetMapping
@@ -60,10 +72,10 @@ class GuestCheckoutApi {
                 SELECT r.guest_name,r.guest_phone,o.id,o.merchandise_total FROM cart_reservation r
                 LEFT JOIN web_checkout_order o ON (o.tenant_id,o.reservation_id)=(r.tenant_id,r.id)
                 WHERE r.tenant_id=? AND r.id=? AND NOT r.released AND r.expires_at>clock_timestamp()
-                """, (rs, n) -> new Checkout(rs.getString(1), rs.getString(2),rs.getObject(3)==null ? null :
-                    new Order(rs.getObject(3,UUID.class),rs.getBigDecimal(4))), store, key)
+                """, (rs, n) -> new GuestRow(rs.getString(1),rs.getString(2),rs.getObject(3,UUID.class),rs.getBigDecimal(4)), store, key)
                 .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.GONE));
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(contact);
+        Order detail=contact.orderId()==null ? null : order(store,contact.orderId(),contact.total());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Checkout(contact.name(),contact.phone(),detail));
     }
 
     @Transactional
