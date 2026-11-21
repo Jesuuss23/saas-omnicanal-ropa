@@ -5,7 +5,10 @@ import {useParams} from "next/navigation";
 import OrderSummary, {type Order} from "../../OrderSummary";
 
 const statuses={PENDING_PAYMENT:"Pendiente de pago",EXPIRED:"Vencido",CANCELLED:"Cancelado"};
-type Detail=Pick<Order,"items"|"total"> & {status:keyof typeof statuses};
+type Detail=Pick<Order,"items"|"total"|"freeDelivery"|"deliveryFee"> & {
+  status:keyof typeof statuses;
+  pickup?:{address:string;hours:string}|null;
+};
 
 export default function OrderTracking() {
   const {store,order}=useParams<{store:string;order:string}>();
@@ -42,6 +45,13 @@ export default function OrderTracking() {
     {error ? <p role="alert">{error}</p> : detail ? <>
       <p className="break-all">Pedido {order}</p>
       <p className="font-semibold">{statuses[detail.status]}</p>
+      {detail.pickup && <section className="rounded border p-3">
+        <h2 className="font-semibold">Punto de recojo del pedido</h2>
+        <p>{detail.pickup.address}</p>
+        <p>Horario de recojo: {detail.pickup.hours}</p>
+        <a href={"https://www.google.com/maps/dir/?"+new URLSearchParams({api:"1",destination:detail.pickup.address})}
+          target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">Ver ruta al local en Google Maps</a>
+      </section>}
       <OrderSummary order={detail}/>
     </> : <p>Cargando pedido…</p>}
     <button type="button" className="text-teal-800 underline" onClick={()=>setVersion(v=>v+1)}>Actualizar</button>
