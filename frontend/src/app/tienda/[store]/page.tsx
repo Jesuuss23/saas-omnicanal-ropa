@@ -56,6 +56,11 @@ export default async function StoreCatalog({params,searchParams}:Props) {
       <button className="rounded bg-teal-800 px-4 py-2 text-white">Buscar</button>
       {(query || size || color) && <Link href={path} className="p-2 underline">Limpiar</Link>}
     </form>
+    {page===0 && !catalog.variants.length && query && (size || color) && <p className="my-3">
+      <Link href={{pathname:path,query:{q:query}}} className="text-teal-800 underline">
+        Buscar «{query}» en todas las tallas y colores
+      </Link>
+    </p>}
     <CatalogCart key={store} store={store} variants={catalog.variants} query={query}/>
     <nav aria-label="Páginas del catálogo" className="mt-6 flex gap-4 text-teal-800 underline">
       {page>0 && <Link href={pageLink(page-1)}>Anterior</Link>}
