@@ -1,0 +1,22 @@
+spring:
+  autoconfigure:
+    exclude: org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+  datasource:
+    url: jdbc:postgresql://ep-polished-flower-bedmh6il-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
+    username: neondb_owner
+    password: npg_ptnXBR71WqCm
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  ai:
+    google:
+      genai:
+        api-key: PON_TU_API_KEY_AQUI_O_CUALQUIER_TEXTO_TEMPORAL
