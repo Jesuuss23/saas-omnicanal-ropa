@@ -56,6 +56,34 @@ class OwnerCrmApi {
                 """,(rs,row)->new Message(rs.getString(1),rs.getString(2),rs.getObject(3,OffsetDateTime.class)),store,chat);
     }
 
+    record ChatLine(String key, String text, OffsetDateTime at, String status) {}
+    record Conversation(List<ChatLine> lines, boolean more) {}
+
+    @GetMapping("/conversation")
+    Conversation conversation(@PathVariable UUID store, Principal owner, @RequestParam String chat,
+                              @RequestParam(required=false) OffsetDateTime before,
+                              @RequestParam(required=false) String beforeKey) {
+        requireOwner(store,owner);
+        if ((before == null) != (beforeKey == null)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        var rows = db.query("""
+                SELECT line_key,body,at_time,delivery FROM (
+                    SELECT 'in:' || message_id AS line_key,body,received_at AS at_time,NULL::text AS delivery
+                      FROM whatsapp_inbound_message WHERE tenant_id=? AND chat_id=?
+                    UNION ALL
+                    SELECT 'out:' || m.request_id::text,m.body,m.created_at,coalesce(r.status,m.status)
+                      FROM whatsapp_manual_reply m LEFT JOIN whatsapp_reply_receipt r
+                        ON r.tenant_id=m.tenant_id AND r.chat_id=m.chat_id AND r.provider_id=m.provider_id
+                     WHERE m.tenant_id=? AND m.chat_id=?
+                ) history
+                 WHERE CAST(? AS timestamptz) IS NULL OR (at_time,line_key)<(CAST(? AS timestamptz),CAST(? AS text))
+                 ORDER BY at_time DESC,line_key DESC LIMIT 21
+                """,(rs,row)->new ChatLine(rs.getString(1),rs.getString(2),rs.getObject(3,OffsetDateTime.class),
+                        rs.getString(4)),store,chat,store,chat,before,before,beforeKey);
+        var lines = new java.util.ArrayList<>(rows.subList(0,Math.min(rows.size(),20)));
+        java.util.Collections.reverse(lines);
+        return new Conversation(lines,rows.size()>20);
+    }
+
     record FollowUpEdit(@NotBlank @Size(max=160) String chat, LocalDate date,
                         @NotNull @PositiveOrZero Long revision) {}
     record FollowUpSaved(LocalDate date, long revision) {}
