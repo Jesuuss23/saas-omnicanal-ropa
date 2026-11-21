@@ -16,7 +16,10 @@ class FiscalIssuerApi {
 
     private final ApisPeruCompanyDirectory companies;
 
-    FiscalIssuerApi(JdbcTemplate db, ApisPeruCompanyDirectory companies) {
+    private final EmissionTokenCipher tokens;
+
+    FiscalIssuerApi(JdbcTemplate db, ApisPeruCompanyDirectory companies, EmissionTokenCipher tokens) {
+        this.tokens = tokens;
         this.companies = companies;
         this.db = db;
     }
@@ -97,6 +100,7 @@ class FiscalIssuerApi {
                 java.util.Arrays.copyOf(logo, signature.length))) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         decodeUpload(input.pfx());
         String token = companies.accountToken();
+        var encryptionKey = tokens.keyIfConfigured();
         String pem = companies.convert(input.pfx(), input.password(), token);
         // Commit the claim before contacting the non-idempotent creation endpoint.
         int claimed = db.update("""
@@ -110,9 +114,13 @@ class FiscalIssuerApi {
             return current;
         }
         try {
-            Long id = companies.registerBeta(profile, pem, input.logo(), token);
-            if (id != null) {
-                db.update("UPDATE beta_company_registration SET company_id=? WHERE tenant_id=?", id, store);
+            var company = companies.registerBeta(profile, pem, input.logo(), token);
+            if (company != null) {
+                String tokenValue = company.token();
+                byte[] encrypted = encryptionKey != null && tokenValue != null && !tokenValue.isBlank()
+                        ? tokens.encrypt(encryptionKey, store, company.id(), profile.ruc(), tokenValue) : null;
+                db.update("UPDATE beta_company_registration SET company_id=?, emission_token_ciphertext=? WHERE tenant_id=?",
+                        company.id(), encrypted, store);
                 return new Registration("REGISTERED");
             }
         } catch (org.springframework.web.client.RestClientResponseException ex) {
@@ -126,6 +134,43 @@ class FiscalIssuerApi {
             // A remote company may already exist. Keep the claim for reconciliation.
         }
         return new Registration("REVIEW");
+    }
+
+    record TokenStatus(boolean stored) {}
+    record TokenInput(@NotBlank @Size(max=16384) String token, @NotNull @Positive Integer revision) {
+        @Override public String toString() { return "TokenInput[redacted]"; }
+    }
+
+    @GetMapping("/beta-company/token")
+    TokenStatus tokenStatus(@PathVariable UUID store, Principal owner) {
+        requireOwner(store, owner);
+        return new TokenStatus(Boolean.TRUE.equals(db.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM beta_company_registration b
+                    JOIN tenant_fiscal_issuer i USING (tenant_id)
+                    WHERE b.tenant_id=? AND b.registered_ruc=i.ruc AND b.emission_token_ciphertext IS NOT NULL)
+                """, Boolean.class, store)));
+    }
+
+    @PutMapping("/beta-company/token")
+    TokenStatus saveToken(@PathVariable UUID store, Principal owner, @Valid @RequestBody TokenInput input) {
+        Profile profile = get(store, owner);
+        if (!profile.revision().equals(input.revision()) || !companies.configuredCompanyId(store).isBlank())
+            throw new ResponseStatusException(HttpStatus.CONFLICT);
+        Long companyId = db.query("""
+                SELECT company_id FROM beta_company_registration
+                WHERE tenant_id=? AND registered_ruc=? AND company_id IS NOT NULL
+                """, (rs, row) -> rs.getLong(1), store, profile.ruc()).stream().findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT));
+        var key = tokens.keyIfConfigured();
+        if (key == null) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        byte[] encrypted = tokens.encrypt(key, store, companyId, profile.ruc(), input.token().strip());
+        int changed = db.update("""
+                UPDATE beta_company_registration b SET emission_token_ciphertext=?
+                FROM tenant_fiscal_issuer i WHERE b.tenant_id=i.tenant_id AND b.tenant_id=?
+                AND b.company_id=? AND b.registered_ruc=i.ruc AND i.revision=?
+                """, encrypted, store, companyId, input.revision());
+        if (changed != 1) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        return new TokenStatus(true);
     }
 
     private static byte[] decodeUpload(String value) {
