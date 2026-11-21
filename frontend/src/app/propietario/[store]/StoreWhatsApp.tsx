@@ -1,5 +1,6 @@
 "use client";
 
+import WhatsAppInbox from "./WhatsAppInbox";
 import {useEffect,useRef,useState} from "react";
 
 type Props = {store:string; send:(path:string,body:string)=>Promise<Response>};
@@ -78,5 +79,6 @@ export default function StoreWhatsApp({store,send}:Props) {
         {busy?"Conectando…":channel.qr?"Renovar QR":"Conectar WhatsApp"}</button>}
       <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>{setError("");setRefresh(v=>v+1);}}>Actualizar estado</button>
     </div>
+    {open && <WhatsAppInbox path={path} send={send} connected={channel?.state==="CONNECTED"}/>}
   </details>;
 }
