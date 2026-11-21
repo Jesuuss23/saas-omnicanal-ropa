@@ -35,6 +35,20 @@ class EmissionTokenCipher {
         throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
+    String decrypt(UUID store, long companyId, String ruc, byte[] envelope) {
+        var key = keyIfConfigured();
+        if (key == null || envelope == null || envelope.length < 29)
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, envelope, 0, 12));
+            cipher.updateAAD((store + "/" + companyId + "/" + ruc).getBytes(StandardCharsets.UTF_8));
+            return new String(cipher.doFinal(envelope, 12, envelope.length-12), StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
     byte[] encrypt(SecretKeySpec key, UUID store, long companyId, String ruc, String token) {
         byte[] nonce = new byte[12];
         random.nextBytes(nonce);

@@ -8,6 +8,7 @@ type DocumentRow = {
 };
 type Page = {documents:DocumentRow[]; more:boolean};
 type Props = {store:string; salesRevision:number; send:(path:string,body:string)=>Promise<Response>};
+const statusLabels:Record<string,string> = {PENDING:"Pendiente de emisión", BETA_REVIEW:"Pendiente de confirmar con el proveedor", BETA_ACCEPTED:"Aceptado en beta", BETA_REJECTED:"Rechazado en beta"};
 const money = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 const date = new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
 
@@ -55,6 +56,23 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
     } finally {setBusy(false);}
   }
 
+  async function emit(sale:string) {
+    setBusy(true); setMessage("");
+    try {
+      const res = await send(path+"/"+sale+"/send","{}");
+      if (res.status===412) throw new Error("No se pudo verificar el ambiente beta y el token de esta empresa.");
+      if (res.status===409) throw new Error("Revisa la numeración, el total de la venta y el RUC del emisor.");
+      if (!res.ok) throw new Error("No se pudo confirmar el envío. Consulta el estado de la solicitud.");
+      const result = await res.json();
+      setMessage(statusLabels[result.status] || result.status);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "No se pudo confirmar el envío.");
+    } finally {
+      setBusy(false);
+      setRefresh(value=>value+1);
+    }
+  }
+
   return <details className="mt-6 rounded-lg border p-4" onToggle={e=>setOpen(e.currentTarget.open)}>
     <summary className="cursor-pointer font-semibold">Solicitudes de boletas y facturas del POS</summary>
     <div className="mt-3 flex items-center justify-between gap-2">
@@ -67,9 +85,10 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
         <strong>{row.kind==="FACTURA"?"Factura":"Boleta"} · {money.format(row.total)}</strong>
         <p>{row.customer || "Venta sin identificación"} · {date.format(new Date(row.created))}</p>
         <p className="break-all text-xs">Venta {row.sale}</p>
-        <p>{row.status==="PENDING"?"Pendiente de emisión":row.status}</p>
+        <p>{statusLabels[row.status] || row.status}</p>
         {row.number!==null ? <p>Serie beta {row.series}-{String(row.number).padStart(8,"0")}</p> :
           row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>assign(row.sale)}>Asignar número de pruebas</button>}
+        {row.number!==null && row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>emit(row.sale)}>Enviar a APIsPERU en beta</button>}
       </li>)}</ul>}
     <p role="status">{message}</p>
     <nav aria-label="Páginas de solicitudes" className="mt-3 flex gap-3">
