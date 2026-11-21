@@ -6,6 +6,7 @@ import StoreWhatsApp from "./StoreWhatsApp";
 import PointOfSale from "./PointOfSale";
 import FiscalIssuer from "./FiscalIssuer";
 import CategoryResources from "./CategoryResources";
+import PickupSettings from "./PickupSettings";
 import WebOrders from "./WebOrders";
 import Catalog from "./Catalog";
 import {useParams} from "next/navigation";
@@ -76,7 +77,7 @@ export default function Owner() {
     <h1 className="text-2xl font-semibold">{profile?.name || (token ? "Activar acceso de propietario" : "Acceso del propietario")}</h1>
     {loading ? <p>Cargando…</p> : profile ? <><p className="my-4">{profile.email}</p>
     <Link className="mr-5 text-teal-800 underline" href={"/tienda/"+profile.id}>Ver catálogo público</Link>
-    <button disabled={busy} onClick={logout} className="text-teal-800 underline">Cerrar sesión</button><WebOrders key={"orders-"+profile.id} store={profile.id}/><StoreWhatsApp key={"wa-"+profile.id} store={profile.id} send={send}/><ContactsCrm key={"crm-"+profile.id} store={profile.id} send={send}/><FiscalIssuer key={"issuer-"+profile.id} store={profile.id} send={send}/><PointOfSale key={"pos-" + profile.id} store={profile.id} send={send}/><CategoryResources key={"resources-"+profile.id} store={profile.id} send={send}/><Catalog key={profile.id} store={profile.id} send={send}/></> :
+    <button disabled={busy} onClick={logout} className="text-teal-800 underline">Cerrar sesión</button><PickupSettings key={"pickup-"+profile.id} store={profile.id} send={send}/><WebOrders key={"orders-"+profile.id} store={profile.id}/><StoreWhatsApp key={"wa-"+profile.id} store={profile.id} send={send}/><ContactsCrm key={"crm-"+profile.id} store={profile.id} send={send}/><FiscalIssuer key={"issuer-"+profile.id} store={profile.id} send={send}/><PointOfSale key={"pos-" + profile.id} store={profile.id} send={send}/><CategoryResources key={"resources-"+profile.id} store={profile.id} send={send}/><Catalog key={profile.id} store={profile.id} send={send}/></> :
     <form onSubmit={submit} className="mt-5 space-y-4"><label className="block">{token ? "Crea una contraseña de al menos 12 caracteres" : "Contraseña"}
     <input className="mt-2 w-full rounded-lg border border-stone-300 p-3" type="password" name="password" required minLength={token ? 12 : undefined}
       autoComplete={token ? "new-password" : "current-password"}/></label>

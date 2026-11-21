@@ -21,7 +21,9 @@ class PublicStoreCatalogApi {
     }
 
     record Variant(UUID id, String name, String category, String size, String color, BigDecimal price) {}
-    record Catalog(String storeName, List<Variant> variants, boolean hasNext) {}
+    record Pickup(String address, String hours) {}
+    record Store(String name, Pickup pickup) {}
+    record Catalog(String storeName, List<Variant> variants, boolean hasNext, Pickup pickup) {}
 
     record Availability(UUID id, BigDecimal price, int available) {}
 
@@ -43,7 +45,10 @@ class PublicStoreCatalogApi {
     Catalog catalog(@PathVariable UUID store, @RequestParam(defaultValue = "") String query,
                     @RequestParam(defaultValue = "0") int page) {
         if (page < 0 || query.length() > 150) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        String name = db.query("SELECT name FROM tenant WHERE id = ?", (rs, n) -> rs.getString(1), store)
+        Store details = db.query("""
+                SELECT name,pickup_enabled,pickup_address,pickup_hours FROM tenant WHERE id=?
+                """,(rs,n)->new Store(rs.getString(1),rs.getBoolean(2)
+                    ? new Pickup(rs.getString(3),rs.getString(4)) : null),store)
                 .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         var variants = db.query("""
                 SELECT v.id, p.name, p.category, v.size, v.color, v.price
@@ -53,6 +58,6 @@ class PublicStoreCatalogApi {
                  ORDER BY p.name, p.id, v.size, v.color, v.id LIMIT 25 OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
                 rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, query.strip(), page * 24L);
-        return new Catalog(name, variants.stream().limit(24).toList(), variants.size() > 24);
+        return new Catalog(details.name(), variants.stream().limit(24).toList(), variants.size() > 24, details.pickup());
     }
 }
