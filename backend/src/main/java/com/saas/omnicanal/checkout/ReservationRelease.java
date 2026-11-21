@@ -14,7 +14,7 @@ class ReservationRelease {
     @Transactional
     public void release(UUID store, UUID key) {
         int changed = db.update("""
-                UPDATE cart_reservation SET released=true
+                UPDATE cart_reservation SET released=true, guest_name=NULL, guest_phone=NULL
                  WHERE tenant_id=? AND id=? AND NOT released
                 """, store, key);
         if (changed == 0) return;
