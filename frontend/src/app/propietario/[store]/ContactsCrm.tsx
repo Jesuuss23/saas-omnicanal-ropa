@@ -1,5 +1,6 @@
 "use client";
 
+import {reviewMessages} from "./reviewMessages";
 import {useEffect,useState} from "react";
 
 const stages = {NEW:"Nuevo", IN_PROGRESS:"En proceso", WON:"Venta ganada", LOST:"Venta perdida"};
@@ -10,7 +11,7 @@ type Page = {contacts:Contact[]; more:boolean};
 type Props = {store:string; send:(path:string,body:string,method:"PUT")=>Promise<Response>};
 const date = new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
 
-function RecentMessages({path,chat}:{path:string;chat:string}) {
+function RecentMessages({path,chat,stage,apply,disabled}:{path:string;chat:string;stage:Stage;apply:(stage:Stage)=>void;disabled:boolean}) {
   const [messages,setMessages] = useState<Message[]|null>(null);
   const [failed,setFailed] = useState(false);
   const [retry,setRetry] = useState(0);
@@ -30,10 +31,19 @@ function RecentMessages({path,chat}:{path:string;chat:string}) {
   },[path,chat,retry]);
   if (failed) return <p role="alert">No se pudieron cargar los mensajes. <button type="button" className="underline" onClick={()=>setRetry(n=>n+1)}>Reintentar</button></p>;
   if (!messages) return <p>Cargando mensajes…</p>;
-  return <ol className="mt-2 space-y-2 border-l pl-3">{messages.map(m=><li key={m.id}>
+  const review = reviewMessages(messages);
+  return <><ol className="mt-2 space-y-2 border-l pl-3">{messages.map(m=><li key={m.id}>
     <time className="text-xs text-stone-600" dateTime={m.receivedAt}>{date.format(new Date(m.receivedAt))}</time>
     <p className="whitespace-pre-wrap break-words">{m.text}</p>
-  </li>)}</ol>;
+  </li>)}</ol>
+    <div className="mt-3 rounded-lg bg-stone-50 p-3">
+      <h4 className="font-semibold">Señales comerciales</h4>
+      {review ? <><p>{review.label}</p><blockquote className="my-2 border-l pl-2">{review.quote}</blockquote>
+        <p>Etapa sugerida: {stages[review.stage]}.</p>
+        {stage!==review.stage && <button type="button" disabled={disabled} className="mt-2 text-teal-800 underline"
+          onClick={()=>apply(review.stage)}>Aplicar etapa sugerida</button>}
+      </> : <p>Los mensajes recientes no contienen una señal clara para sugerir una etapa.</p>}
+    </div></>;
 }
 
 export default function ContactsCrm({store,send}:Props) {
@@ -88,7 +98,7 @@ export default function ContactsCrm({store,send}:Props) {
         <button type="button" aria-expanded={expanded===contact.chat} className="text-teal-800 underline"
           onClick={()=>setExpanded(expanded===contact.chat?"":contact.chat)}>
           {expanded===contact.chat?"Ocultar mensajes":"Ver los últimos 5 mensajes"}</button>
-        {expanded===contact.chat && <RecentMessages path={path} chat={contact.chat}/>}
+        {expanded===contact.chat && <RecentMessages path={path} chat={contact.chat} stage={contact.stage} disabled={busy} apply={stage=>void change(contact,stage)}/>}
       </li>)}</ul>}
     <p role="status">{notice}</p>
     <nav aria-label="Páginas de contactos" className="mt-3 flex gap-3">
