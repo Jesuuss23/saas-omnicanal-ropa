@@ -106,6 +106,29 @@ class ApisPeruCompanyDirectory {
         return company;
     }
 
+    void requireBetaCompany(long companyId, String ruc, String token) {
+        var remote = api.get().uri("/companies/{id}", companyId)
+                .headers(h -> h.setBearerAuth(accountToken())).retrieve().body(tools.jackson.databind.JsonNode.class);
+        if (remote == null || !String.valueOf(companyId).equals(remote.path("id").asText())
+                || !ruc.equals(remote.path("ruc").asText()))
+            throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
+        var environment = remote.path("environment");
+        String mode = environment.isObject() ? environment.path("code").asText(environment.path("name").asText("")) : environment.asText("");
+        if (!token.equals(remote.path("token").asText(""))) {
+            // Some account responses omit the token. Compare against the operator-pinned company token.
+            String pinned = config.getProperty("APISPERU_BETA_COMPANY_TOKEN_" + companyId, "");
+            if (!remote.path("token").asText("").isEmpty() || !token.equals(pinned))
+                throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
+        }
+        if (!"beta".equalsIgnoreCase(mode))
+            throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
+    }
+
+    tools.jackson.databind.JsonNode sendInvoice(Object invoice, String token) {
+        return api.post().uri("/invoice/send").headers(h -> h.setBearerAuth(token))
+                .contentType(MediaType.APPLICATION_JSON).body(invoice).retrieve().body(tools.jackson.databind.JsonNode.class);
+    }
+
     String configuredCompanyId(UUID store) {
         String key = "APISPERU_COMPANY_ID_" + store.toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
         return config.getProperty(key, "");
