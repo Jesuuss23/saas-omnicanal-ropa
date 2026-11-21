@@ -31,6 +31,39 @@ class ApisPeruCompanyDirectory {
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record Company(Long id, String ruc) {}
 
+    byte[] generateTestCertificate(String ruc, String password) {
+        String token = config.getProperty("APISPERU_ACCOUNT_TOKEN", "");
+        if (token.isBlank()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        try {
+            return api.post().uri("/companies/certificate/free")
+                    .headers(headers -> headers.setBearerAuth(token))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.parseMediaType("application/x-pkcs12"))
+                    .body(java.util.Map.of("ruc", ruc, "password", password))
+                    .exchange((request, response) -> {
+                        if (!response.getStatusCode().is2xxSuccessful()) {
+                            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+                        }
+                        byte[] bytes = response.getBody().readNBytes(204801);
+                        if (bytes.length == 0 || bytes.length > 204800) {
+                            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+                        }
+                        try {
+                            var pfx = java.security.KeyStore.getInstance("PKCS12");
+                            pfx.load(new java.io.ByteArrayInputStream(bytes), password.toCharArray());
+                            for (var aliases = pfx.aliases(); aliases.hasMoreElements();) {
+                                if (pfx.isKeyEntry(aliases.nextElement())) return bytes;
+                            }
+                        } catch (java.security.GeneralSecurityException | java.io.IOException invalidCertificate) {
+                            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+                        }
+                        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+                    });
+        } catch (RestClientException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+        }
+    }
+
     void verify(UUID store, String expectedRuc) {
         String key = "APISPERU_COMPANY_ID_" + store.toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
         String companyId = config.getProperty(key, "");
