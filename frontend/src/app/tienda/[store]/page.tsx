@@ -34,11 +34,16 @@ async function catalogView({params,searchParams}:Props) {
 }
 
 export async function generateMetadata(props:Props):Promise<Metadata> {
-  const {catalog,category}=await catalogView(props);
+  const {catalog,category,query,size,color}=await catalogView(props);
   const section=category && (catalog.categories.includes(category) || catalog.resource) ? category : "Catálogo de prendas";
   const title=section+" · "+catalog.storeName;
   const description="Consulta las prendas, tallas, colores y precios de "+catalog.storeName+".";
-  return {title,description,openGraph:{type:"website",locale:"es_PE",siteName:catalog.storeName,title,description}};
+  const indexable = !query && !size && !color && (!category || catalog.categories.includes(category) || Boolean(catalog.resource));
+  return {
+    title,description,
+    robots:{index:indexable,follow:true},
+    openGraph:{type:"website",locale:"es_PE",siteName:catalog.storeName,title,description}
+  };
 }
 
 export default async function StoreCatalog(props:Props) {
