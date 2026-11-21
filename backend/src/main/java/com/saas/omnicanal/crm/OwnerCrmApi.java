@@ -82,6 +82,43 @@ class OwnerCrmApi {
         return new FollowUpSaved(edit.date(),edit.revision()+1);
     }
 
+    enum Outcome { CONTACTED, NO_RESPONSE, DECLINED }
+    record Completion(@NotBlank @Size(max=160) String chat, @NotNull @Positive Long revision,
+                      @NotNull Outcome outcome, @NotNull @Size(max=500) String note) {}
+    record HistoryEntry(long revision, LocalDate scheduledDate, OffsetDateTime completedAt, Outcome outcome, String note) {}
+
+    @PutMapping("/follow-up/complete")
+    @org.springframework.transaction.annotation.Transactional
+    FollowUpSaved complete(@PathVariable UUID store, Principal owner, @Valid @RequestBody Completion input) {
+        requireOwner(store,owner);
+        LocalDate scheduled = db.query("""
+                SELECT follow_up_date FROM crm_contact_stage WHERE tenant_id=? AND chat_id=?
+                  AND revision=? AND follow_up_date IS NOT NULL FOR UPDATE
+                """,(rs,row)->rs.getObject(1,LocalDate.class),store,input.chat(),input.revision())
+                .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
+        long revision = input.revision()+1;
+        db.update("""
+                INSERT INTO crm_follow_up_history(tenant_id,chat_id,revision,scheduled_date,outcome,note)
+                VALUES (?,?,?,?,?,?)
+                """,store,input.chat(),revision,scheduled,input.outcome().name(),input.note().strip());
+        db.update("""
+                UPDATE crm_contact_stage SET follow_up_date=NULL,revision=? WHERE tenant_id=? AND chat_id=?
+                """,revision,store,input.chat());
+        return new FollowUpSaved(null,revision);
+    }
+
+    @GetMapping("/follow-up/history")
+    List<HistoryEntry> history(@PathVariable UUID store, Principal owner, @RequestParam String chat,
+                               @RequestParam(required=false) Long before) {
+        requireOwner(store,owner);
+        return db.query("""
+                SELECT revision,scheduled_date,completed_at,outcome,note FROM crm_follow_up_history
+                 WHERE tenant_id=? AND chat_id=? AND revision<? ORDER BY revision DESC LIMIT 10
+                """,(rs,row)->new HistoryEntry(rs.getLong(1),rs.getObject(2,LocalDate.class),
+                        rs.getObject(3,OffsetDateTime.class),Outcome.valueOf(rs.getString(4)),rs.getString(5)),
+                store,chat,before==null ? Long.MAX_VALUE : before);
+    }
+
     @PutMapping("/stage")
     Saved save(@PathVariable UUID store, Principal owner, @Valid @RequestBody Edit edit) {
         requireOwner(store,owner);
