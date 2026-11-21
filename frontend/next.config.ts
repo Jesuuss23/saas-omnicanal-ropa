@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    const base = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/, "");
+    return [{ source: "/api/superadmin/:path*", destination: base + "/superadmin/:path*" }];
+  },
   turbopack: {
     rules: {
       "*.css": {
