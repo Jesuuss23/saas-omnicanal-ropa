@@ -48,7 +48,18 @@ export default function CatalogReplyPicker({store,disabled,insert}:{
         const line=item.name+" · Talla "+item.size+(item.color?" · "+item.color:"")+" · "+money.format(item.price);
         return <li key={item.id} className="py-2"><p>{line}</p>
           <p className="text-sm">{item.sku} · Disponibles: {item.available}</p>
-          <button type="button" disabled={disabled} className="text-teal-800 underline" onClick={()=>insert(line)}>Agregar al mensaje</button>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" disabled={disabled} className="text-teal-800 underline"
+              onClick={()=>insert(line)}>Agregar al mensaje</button>
+            <button type="button" disabled={disabled} className="text-teal-800 underline"
+              onClick={()=>{
+                const url=new URL("/tienda/"+encodeURIComponent(store),window.location.origin);
+                url.searchParams.set("q",item.name.slice(0,150));
+                url.searchParams.set("size",item.size);
+                if (item.color) url.searchParams.set("color",item.color);
+                insert(line+"\n"+url.href);
+              }}>Agregar con enlace al catálogo</button>
+          </div>
         </li>;
       })}</ul>}
     <div className="flex gap-3">
