@@ -89,6 +89,9 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
   const selected=options.find(row=>row.category===category) || (insert && options.find(row=>activeUrl(row))) || options[0];
   const resourceUrl=selected ? activeUrl(selected) : null;
 
+  const shareUrl=selected?.active==="PDF" && resourceUrl?.startsWith("/catalogos/")
+    ? resourceUrl+"?view=1" : resourceUrl;
+
   const categoryPath=selected
     ? "/tienda/"+encodeURIComponent(store)+"?"+new URLSearchParams({category:selected.category})
     : "";
@@ -130,10 +133,15 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
           {options.map(row=><option key={row.category}>{row.category}</option>)}
         </select></label>
         {insert ? <div className="flex flex-wrap gap-3">
-          {resourceUrl && <button type="button" disabled={disabled} className="text-teal-800 underline"
-            onClick={()=>insert("Catálogo de "+selected.category+": "+new URL(resourceUrl,window.location.origin).href)}>
-            Agregar {labels[selected.active].toLowerCase()} al borrador
-          </button>}
+          {shareUrl && <>
+            <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">
+              Revisar {labels[selected.active].toLowerCase()} de {selected.category}
+            </a>
+            <button type="button" disabled={disabled} className="text-teal-800 underline"
+              onClick={()=>insert("Catálogo de "+selected.category+": "+new URL(shareUrl,window.location.origin).href)}>
+              Agregar {labels[selected.active].toLowerCase()} al borrador
+            </button>
+          </>}
           <button type="button" disabled={disabled} className="text-teal-800 underline" onClick={()=>{
             const url=new URL(categoryPath,window.location.origin);
             insert("Ver "+selected.category+" en la tienda: "+url.href);
