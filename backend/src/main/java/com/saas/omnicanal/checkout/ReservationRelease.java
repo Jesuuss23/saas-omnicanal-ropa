@@ -19,6 +19,12 @@ class ReservationRelease {
                 """, store, key);
         if (changed == 0) return;
         db.update("""
+                UPDATE web_checkout_order o SET status=CASE WHEN r.expires_at<=clock_timestamp()
+                        THEN 'EXPIRED' ELSE 'CANCELLED' END
+                FROM cart_reservation r WHERE r.tenant_id=? AND r.id=?
+                  AND (o.tenant_id,o.reservation_id)=(r.tenant_id,r.id) AND o.status='PENDING_PAYMENT'
+                """, store, key);
+        db.update("""
                 UPDATE product_variant v SET stock_reserved=v.stock_reserved-l.quantity
                   FROM cart_reservation_line l
                  WHERE l.tenant_id=? AND l.reservation_id=?
