@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function Home() {
@@ -18,6 +19,7 @@ export default function Home() {
       <div className="p-6 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
         <p className="text-xl text-green-400 font-semibold">{mensaje}</p>
       </div>
+      <Link className="mt-6 underline" href="/superadmin">Acceder a superadministración</Link>
     </div>
   );
 }

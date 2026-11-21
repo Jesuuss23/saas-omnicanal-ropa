@@ -36,25 +36,26 @@ class AdminLoginTests {
     void loginRequiresBothFactorsAndRejectsReplayAfterLogout() throws Exception {
         assertEquals("287082", AdminLogin.codeAt(SECRET, 1));
         var browser = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
-        assertEquals(302, get(browser, "/superadmin").statusCode());
-        String csrf = csrf(get(browser, "/superadmin/login"));
+        assertEquals(401, get(browser, "/api/superadmin/dashboard").statusCode());
+        String csrf = csrf(get(browser, "/api/superadmin/csrf"));
         String form = "username=" + EMAIL + "&password=" + PASSWORD + "&_csrf=" + csrf;
-        assertEquals(403, post(browser, "/superadmin/login", "username=x").statusCode());
-        assertTrue(post(browser, "/superadmin/login", form).headers().firstValue("location").orElseThrow().endsWith("?error"));
+        assertEquals(403, post(browser, "/api/superadmin/login", "username=x").statusCode());
+        assertEquals(401, post(browser, "/api/superadmin/login", form).statusCode());
         String code = AdminLogin.codeAt(SECRET, Instant.now().getEpochSecond() / 30);
-        var login = post(browser, "/superadmin/login", form + "&code=" + code);
-        assertTrue(login.headers().firstValue("location").orElseThrow().endsWith("/superadmin"));
-        var home = get(browser, "/superadmin");
+        var login = post(browser, "/api/superadmin/login", form + "&code=" + code);
+        assertEquals(200, login.statusCode());
+        var home = get(browser, "/api/superadmin/dashboard");
         assertEquals(200, home.statusCode());
-        post(browser, "/superadmin/logout", "_csrf=" + csrf(home));
-        assertEquals(302, get(browser, "/superadmin").statusCode());
-        csrf = csrf(get(browser, "/superadmin/login"));
-        var replay = post(browser, "/superadmin/login", "username=" + EMAIL + "&password=" + PASSWORD + "&_csrf=" + csrf + "&code=" + code);
-        assertTrue(replay.headers().firstValue("location").orElseThrow().endsWith("?error"));
+        assertTrue(home.body().contains(EMAIL));
+        post(browser, "/api/superadmin/logout", "_csrf=" + csrf(get(browser, "/api/superadmin/csrf")));
+        assertEquals(401, get(browser, "/api/superadmin/dashboard").statusCode());
+        csrf = csrf(get(browser, "/api/superadmin/csrf"));
+        var replay = post(browser, "/api/superadmin/login", "username=" + EMAIL + "&password=" + PASSWORD + "&_csrf=" + csrf + "&code=" + code);
+        assertEquals(401, replay.statusCode());
     }
 
     private String csrf(HttpResponse<String> page) {
-        var input = Pattern.compile("name='_csrf' value='([^']+)'").matcher(page.body());
+        var input = Pattern.compile("\"token\":\"([^\"]+)\"").matcher(page.body());
         assertTrue(input.find());
         return URLEncoder.encode(input.group(1), StandardCharsets.UTF_8);
     }
