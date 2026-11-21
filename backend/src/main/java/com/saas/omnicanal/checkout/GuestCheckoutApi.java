@@ -30,7 +30,7 @@ class GuestCheckoutApi {
     record Contact(@NotBlank @Size(max=150) String name,
                    @NotBlank @Pattern(regexp="[+]?[0-9]{7,15}") String phone) {}
 
-    record Order(UUID id, BigDecimal total, List<WebOrderItems.Item> items) {}
+    record Order(UUID id, BigDecimal total, List<WebOrderItems.Item> items, String trackingToken) {}
     record Header(UUID id, BigDecimal total) {}
     record GuestRow(String name, String phone, UUID orderId, BigDecimal total) {}
     record Checkout(String name, String phone, Order order) {}
@@ -59,11 +59,11 @@ class GuestCheckoutApi {
                 SELECT id,merchandise_total FROM web_checkout_order WHERE tenant_id=? AND reservation_id=?
                 """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2)),store,key)
                 .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,header.id(),header.total()));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,header.id(),header.total()));
     }
 
-    private Order order(UUID store, UUID id, BigDecimal total) {
-        return new Order(id,total,orderItems.list(store,id));
+    private Order order(UUID store, UUID key, UUID id, BigDecimal total) {
+        return new Order(id,total,orderItems.list(store,id),OrderTrackingApi.token(store,id,key));
     }
 
     @GetMapping
@@ -74,7 +74,7 @@ class GuestCheckoutApi {
                 WHERE r.tenant_id=? AND r.id=? AND NOT r.released AND r.expires_at>clock_timestamp()
                 """, (rs, n) -> new GuestRow(rs.getString(1),rs.getString(2),rs.getObject(3,UUID.class),rs.getBigDecimal(4)), store, key)
                 .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.GONE));
-        Order detail=contact.orderId()==null ? null : order(store,contact.orderId(),contact.total());
+        Order detail=contact.orderId()==null ? null : order(store,key,contact.orderId(),contact.total());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Checkout(contact.name(),contact.phone(),detail));
     }
 
