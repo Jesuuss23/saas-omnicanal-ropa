@@ -114,6 +114,62 @@ class OwnerWhatsAppApi {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(rows);
     }
 
+    record ReplyInput(@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max=160) String chat,
+                      @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max=4000) String text) {}
+    record Reply(String text, String status, java.time.OffsetDateTime createdAt) {}
+
+    @GetMapping("/replies")
+    ResponseEntity<java.util.List<Reply>> replies(@PathVariable UUID store, Principal owner, @RequestParam String chat) {
+        if (owner == null || !store.toString().equals(owner.getName())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var rows = db.query("""
+                SELECT body,status,created_at FROM whatsapp_manual_reply WHERE tenant_id=? AND chat_id=?
+                 ORDER BY created_at DESC,request_id DESC LIMIT 5
+                """,(rs,row)->new Reply(rs.getString(1),rs.getString(2),rs.getObject(3,java.time.OffsetDateTime.class)),store,chat);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(rows);
+    }
+
+    @PutMapping("/replies/{requestId}")
+    Map<String,String> reply(@PathVariable UUID store, @PathVariable UUID requestId, Principal owner,
+                             @jakarta.validation.Valid @RequestBody ReplyInput input) {
+        String instance = instanceName(store,owner);
+        String chat = input.chat();
+        String text = input.text().strip();
+        if (!chat.matches("[0-9]{5,15}@s[.]whatsapp[.]net")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        int claimed = db.update("""
+                INSERT INTO whatsapp_manual_reply(tenant_id,request_id,chat_id,body,status)
+                SELECT ?,?,?,?,'REVIEW' WHERE EXISTS (
+                    SELECT 1 FROM tenant t JOIN whatsapp_inbound_message m ON m.tenant_id=t.id
+                    WHERE t.id=? AND t.whatsapp_instance_id=? AND m.chat_id=?)
+                ON CONFLICT (tenant_id,request_id) DO NOTHING
+                """,store,requestId,chat,text,store,instance,chat);
+        if (claimed==0) {
+            String existing = db.query("""
+                    SELECT status FROM whatsapp_manual_reply WHERE tenant_id=? AND request_id=? AND chat_id=? AND body=?
+                    """,(rs,row)->rs.getString(1),store,requestId,chat,text).stream().findFirst()
+                    .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
+            return Map.of("status",existing);
+        }
+        String status = "REVIEW";
+        String providerId = null;
+        try {
+            JsonNode result = api.post().uri("/message/sendText/{name}",instance).contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("number",chat.substring(0,chat.indexOf('@')),"text",text))
+                    .retrieve().body(JsonNode.class);
+            if (result!=null && !result.path("key").path("id").asText("").isBlank()) {
+                providerId = result.path("key").path("id").asText();
+                status = "ACCEPTED";
+            }
+        } catch (RestClientResponseException ex) {
+            int code = ex.getStatusCode().value();
+            if (code==400 || code==401 || code==403 || code==404 || code==422) status="REJECTED";
+        } catch (RestClientException uncertain) {
+            // Evolution may have accepted the message before the connection failed.
+        }
+        db.update("UPDATE whatsapp_manual_reply SET status=?,provider_id=? WHERE tenant_id=? AND request_id=?",
+                status,providerId,store,requestId);
+        return Map.of("status",status);
+    }
+
     private String instanceName(UUID store, Principal owner) {
         if (owner == null || !store.toString().equals(owner.getName()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
