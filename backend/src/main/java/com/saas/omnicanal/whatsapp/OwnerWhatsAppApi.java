@@ -25,8 +25,14 @@ class OwnerWhatsAppApi {
     private final JdbcTemplate db;
     private final RestClient api;
 
+    private final EvolutionWebhook webhook;
+    private final String callbackBase;
+
     OwnerWhatsAppApi(JdbcTemplate db, @Value("${EVOLUTION_API_URL:}") String url,
-                     @Value("${EVOLUTION_API_KEY:}") String key) {
+                     @Value("${EVOLUTION_API_KEY:}") String key, EvolutionWebhook webhook,
+                     @Value("${EVOLUTION_CALLBACK_BASE_URL:}") String callbackBase) {
+        this.webhook = webhook;
+        this.callbackBase = callbackBase.replaceAll("/+$","");
         this.db = db;
         var factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5)).build());
@@ -76,6 +82,36 @@ class OwnerWhatsAppApi {
         } catch (RestClientException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
         }
+    }
+
+    @PostMapping("/inbox/enable")
+    Map<String,Boolean> enable(@PathVariable UUID store, Principal owner) {
+        String name = instanceName(store,owner);
+        if (callbackBase.isBlank()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        if (!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM tenant WHERE id=? AND whatsapp_instance_id=?)",
+                Boolean.class,store,name))) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        var settings = Map.of("enabled",true, "url",callbackBase + EvolutionWebhook.ROOT + "/" + store,
+                "headers",Map.of(EvolutionWebhook.HEADER,webhook.credential(store)),
+                "byEvents",false,"base64",false,"events",java.util.List.of("MESSAGES_UPSERT"));
+        try {
+            api.post().uri("/webhook/set/{name}",name).contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("webhook",settings)).retrieve().toBodilessEntity();
+        } catch (RestClientException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+        }
+        return Map.of("enabled",true);
+    }
+
+    record Incoming(String chat, String id, String text, java.time.OffsetDateTime receivedAt) {}
+
+    @GetMapping("/inbox")
+    ResponseEntity<java.util.List<Incoming>> inbox(@PathVariable UUID store, Principal owner) {
+        if (owner == null || !store.toString().equals(owner.getName())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var rows = db.query("""
+                SELECT chat_id,message_id,body,received_at FROM whatsapp_inbound_message
+                 WHERE tenant_id=? ORDER BY received_at DESC,chat_id,message_id LIMIT 20
+                """,(rs,row)->new Incoming(rs.getString(1),rs.getString(2),rs.getString(3),rs.getObject(4,java.time.OffsetDateTime.class)),store);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(rows);
     }
 
     private String instanceName(UUID store, Principal owner) {
