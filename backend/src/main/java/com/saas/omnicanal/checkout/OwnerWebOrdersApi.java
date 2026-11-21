@@ -5,7 +5,9 @@ import java.security.Principal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -44,6 +46,19 @@ class OwnerWebOrdersApi {
                 rs.getBigDecimal(4),rs.getString(5),rs.getTimestamp(6).toInstant()),
                 store,status==null ? null : status.name(),20L*page);
         return new Page(rows.stream().limit(20).toList(),rows.size()>20);
+    }
+
+    record Tracking(String token) {}
+
+    @GetMapping("/{order}/tracking")
+    ResponseEntity<Tracking> tracking(@PathVariable UUID store, @PathVariable UUID order, Principal principal) {
+        requireOwner(store, principal);
+        UUID reservation = db.query("""
+                SELECT reservation_id FROM web_checkout_order WHERE tenant_id=? AND id=?
+                """, (rs,n)->rs.getObject(1,UUID.class),store,order)
+                .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(new Tracking(OrderTrackingApi.token(store,order,reservation)));
     }
 
     @GetMapping("/{order}/items")

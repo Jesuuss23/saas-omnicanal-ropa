@@ -37,6 +37,37 @@ function Items({url}:{url:string}) {
   </li>)}</ul>;
 }
 
+function ShareTracking({store,order,path}:{store:string;order:Order;path:string}) {
+  const [open,setOpen]=useState(false);
+  const [notice,setNotice]=useState("");
+  const {data,failed,refresh}=useOrderData<{token:string}>(open ? path+"/"+order.id+"/tracking" : null);
+  const link=open && data ? new URL("/tienda/"+store+"/pedido/"+order.id+"#"+data.token,window.location.origin).href : "";
+  const phone=order.phone.replace(/^\+/,"");
+  const destination=/^9\d{8}$/.test(order.phone) ? "51"+phone :
+    (/^\+[1-9]\d{6,14}$/.test(order.phone) || /^519\d{8}$/.test(order.phone) ? phone : "");
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setNotice("Enlace copiado.");
+    } catch {setNotice("Selecciona y copia el enlace del campo.");}
+  }
+  return <div>
+    <button type="button" className="text-teal-800 underline" aria-expanded={open}
+      onClick={()=>{setOpen(!open);setNotice("");}}> {open?"Ocultar enlace":"Compartir seguimiento"} </button>
+    {open && (failed ? <p>No se pudo obtener el enlace. <button className="underline" onClick={refresh}>Reintentar</button></p> :
+      !link ? <p>Cargando enlace…</p> : <div className="my-2 grid max-w-xl gap-2">
+        <label>Enlace privado del pedido<input readOnly value={link} onFocus={e=>e.target.select()} className="block w-full rounded border p-2"/></label>
+        <div className="flex flex-wrap gap-4">
+          <button type="button" onClick={copy} className="underline">Copiar enlace</button>
+          {destination && <a target="_blank" rel="noopener noreferrer" className="text-teal-800 underline"
+            href={"https://wa.me/"+destination+"?"+new URLSearchParams({text:"Puedes consultar tu pedido aquí: "+link})}>
+            Preparar WhatsApp para +{destination}</a>}
+        </div>
+        <p role="status">{notice}</p>
+      </div>)}
+  </div>;
+}
+
 export default function WebOrders({store}:{store:string}) {
   const [open,setOpen]=useState(false);
   const [status,setStatus]=useState("");
@@ -63,6 +94,7 @@ export default function WebOrders({store}:{store:string}) {
           <p className="break-all text-sm">Pedido {o.id}</p>
           <button className="text-teal-800 underline" aria-expanded={expanded===o.id}
             onClick={()=>setExpanded(expanded===o.id?"":o.id)}>{expanded===o.id?"Ocultar prendas":"Ver prendas"}</button>
+          <ShareTracking store={store} order={o} path={path}/>
           {expanded===o.id && <Items url={path+"/"+o.id+"/items"}/>}
         </li>)}</ul>}
       <nav aria-label="Páginas de pedidos" className="mt-3 flex gap-4 underline">
