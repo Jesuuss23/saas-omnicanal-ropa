@@ -2,7 +2,7 @@
 
 import {useState} from "react";
 
-export default function ShareCatalog({path,storeName}:{path:string;storeName:string}) {
+export default function ShareCatalog({path,title,label}:{path:string;title:string;label:string}) {
   const [notice,setNotice]=useState("");
   const [manualUrl,setManualUrl]=useState("");
 
@@ -12,7 +12,7 @@ export default function ShareCatalog({path,storeName}:{path:string;storeName:str
     setManualUrl("");
     if (navigator.share) {
       try {
-        await navigator.share({title:"Catálogo · "+storeName,url});
+        await navigator.share({title,url});
         return;
       } catch (error) {
         if (error instanceof Error && error.name==="AbortError") return;
@@ -20,16 +20,16 @@ export default function ShareCatalog({path,storeName}:{path:string;storeName:str
     }
     try {
       await navigator.clipboard.writeText(url);
-      setNotice("Enlace del catálogo copiado.");
+      setNotice("Enlace copiado.");
     } catch {
       setManualUrl(url);
     }
   }
 
   return <div className="mt-3">
-    <button type="button" onClick={share} className="text-teal-800 underline">Compartir catálogo</button>
+    <button type="button" onClick={share} className="text-teal-800 underline">{label}</button>
     <p role="status" className="text-sm">{notice}</p>
-    {manualUrl && <label className="mt-2 block">Copia el enlace del catálogo
+    {manualUrl && <label className="mt-2 block">Copia el enlace
       <input readOnly value={manualUrl} onFocus={event=>event.target.select()}
         className="block w-full rounded border p-2"/>
     </label>}
