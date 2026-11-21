@@ -2,7 +2,8 @@ import Link from "next/link";
 import {notFound} from "next/navigation";
 
 import CatalogCart, {type Variant} from "./CatalogCart";
-type Catalog = {storeName:string; pickup?:{address:string;hours:string}|null; variants:Variant[]; hasNext:boolean; sizes:string[]; colors:string[]; categories:string[]};
+const resourceLabels = {LINK:"Ver catálogo",PDF:"Abrir catálogo PDF",IMAGE:"Ver imagen del catálogo"};
+type Catalog = {storeName:string; pickup?:{address:string;hours:string}|null; variants:Variant[]; hasNext:boolean; sizes:string[]; colors:string[]; categories:string[]; resource?:{kind:keyof typeof resourceLabels;url:string}|null};
 type Props = {
   params:Promise<{store:string}>;
   searchParams:Promise<{q?:string|string[]; page?:string|string[]; size?:string|string[]; color?:string|string[]; category?:string|string[]}>;
@@ -68,6 +69,11 @@ export default async function StoreCatalog({params,searchParams}:Props) {
       <Link href={{pathname:path,query:{q:query,category}}} className="text-teal-800 underline">
         Buscar «{query}» en todas las tallas y colores
       </Link>
+    </p>}
+    {category && catalog.resource?.url && <p className="mb-4">
+      <a href={catalog.resource.url} target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">
+        {resourceLabels[catalog.resource.kind]} de {category}
+      </a>
     </p>}
     <CatalogCart key={store} store={store} variants={catalog.variants} query={query}/>
     <nav aria-label="Páginas del catálogo" className="mt-6 flex gap-4 text-teal-800 underline">
