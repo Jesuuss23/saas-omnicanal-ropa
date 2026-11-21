@@ -46,12 +46,9 @@ class OwnerWebOrdersApi {
     List<Item> items(@PathVariable UUID store, @PathVariable UUID order, Principal principal) {
         requireOwner(store, principal);
         var rows = db.query("""
-                SELECT v.id,p.name,v.size,v.color,l.quantity,l.unit_price
-                FROM web_checkout_order o JOIN cart_reservation_line l
-                  ON (l.tenant_id,l.reservation_id)=(o.tenant_id,o.reservation_id)
-                JOIN product_variant v ON (v.tenant_id,v.id)=(l.tenant_id,l.variant_id)
-                JOIN product p ON (p.tenant_id,p.id)=(v.tenant_id,v.product_id)
-                WHERE o.tenant_id=? AND o.id=? ORDER BY p.name,v.size,v.color,v.id
+                SELECT variant_id,name,size,color,quantity,unit_price
+                FROM web_order_item WHERE tenant_id=? AND order_id=?
+                ORDER BY name,size,color,variant_id
                 """,(rs,n)->new Item(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),
                 rs.getString(4),rs.getInt(5),rs.getBigDecimal(6)),store,order);
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
