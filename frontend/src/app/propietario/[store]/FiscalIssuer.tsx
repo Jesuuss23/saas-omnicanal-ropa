@@ -31,6 +31,27 @@ export default function FiscalIssuer({store,send}:Props) {
     return ()=>controller.abort();
   },[path,reload]);
 
+  async function verify() {
+    if (!issuer || busy || retry) return;
+    setBusy(true);
+    setMessage("Consultando el RUC guardado en APIsPERU…");
+    try {
+      const res = await fetch("/api/owner/"+path+"/verification", {cache:"no-store"});
+      if (res.ok) {
+        const result:{ruc:string} = await res.json();
+        setMessage("APIsPERU confirmó la empresa asignada para el RUC " + result.ruc + ".");
+      } else {
+        const errors:Record<number,string> = {
+          409:"Revisa el RUC guardado y la empresa asignada a esta tienda.",
+          424:"APIsPERU no encontró la empresa asignada a esta tienda.",
+          503:"Falta configurar la conexión de esta tienda con APIsPERU.",
+        };
+        setMessage(errors[res.status] || "No se pudo verificar la empresa. Revisa la conexión y la vigencia del token.");
+      }
+    } catch {setMessage("No se pudo consultar APIsPERU. Intenta nuevamente.");}
+    finally {setBusy(false);}
+  }
+
   async function save(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!issuer || busy || retry) return;
@@ -60,6 +81,7 @@ export default function FiscalIssuer({store,send}:Props) {
         <label>Domicilio fiscal<input className={input} value={issuer.address} onChange={e=>change("address",e.target.value)} maxLength={250} required/></label>
         <label>Ubigeo<input className={input} value={issuer.ubigeo} onChange={e=>change("ubigeo",e.target.value)} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required/></label>
         <button className="rounded-lg bg-teal-800 px-4 py-2 text-white">{busy?"Guardando…":"Guardar datos del emisor"}</button>
+        {issuer.revision > 0 && <button type="button" className="rounded-lg border border-teal-800 px-4 py-2 text-teal-800" onClick={verify}>Verificar RUC guardado en APIsPERU</button>}
       </fieldset>
     </form>}
     <p role="status" className="mt-2 text-sm">{message}</p>

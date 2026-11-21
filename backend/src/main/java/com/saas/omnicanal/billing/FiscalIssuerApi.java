@@ -14,7 +14,10 @@ import org.springframework.web.server.ResponseStatusException;
 class FiscalIssuerApi {
     private final JdbcTemplate db;
 
-    FiscalIssuerApi(JdbcTemplate db) {
+    private final ApisPeruCompanyDirectory companies;
+
+    FiscalIssuerApi(JdbcTemplate db, ApisPeruCompanyDirectory companies) {
+        this.companies = companies;
         this.db = db;
     }
 
@@ -33,6 +36,18 @@ class FiscalIssuerApi {
                 """, (rs, row) -> new Profile(rs.getString("ruc"), rs.getString("legal_name"),
                 rs.getString("address"), rs.getString("ubigeo"), rs.getInt("revision")), store)
                 .stream().findFirst().orElse(new Profile("", "", "", "", 0));
+    }
+
+    record Verification(String ruc) {}
+
+    @GetMapping("/verification")
+    org.springframework.http.ResponseEntity<Verification> verify(@PathVariable UUID store, Principal owner) {
+        Profile profile = get(store, owner);
+        if (profile.revision() == 0) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        companies.verify(store, profile.ruc());
+        return org.springframework.http.ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new Verification(profile.ruc()));
     }
 
     @PutMapping
