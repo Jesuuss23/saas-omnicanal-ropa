@@ -65,6 +65,8 @@ export async function generateMetadata(props:Props):Promise<Metadata> {
 export default async function StoreCatalog(props:Props) {
   const {store,query,size,color,category,page,catalog}=await catalogView(props);
   const path="/tienda/"+store;
+  const resource=catalog.resource;
+  const uploadedFile=resource?.url.startsWith("/catalogos/");
   const pageLink = (n:number)=>path+"?"+new URLSearchParams({q:query,size,color,category,page:String(n)});
 
   return <main className="mx-auto max-w-5xl px-5 py-12 text-stone-900">
@@ -110,12 +112,14 @@ export default async function StoreCatalog(props:Props) {
         Buscar «{query}» en todas las tallas y colores
       </Link>
     </p>}
-    {category && catalog.resource?.url && <p className="mb-4 flex flex-wrap gap-4">
-      <a href={catalog.resource.url} target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">
-        {resourceLabels[catalog.resource.kind]} de {category}
+    {category && resource?.url && <p className="mb-4 flex flex-wrap gap-4">
+      <a href={uploadedFile && resource.kind==="PDF" ? resource.url+"?view=1" : resource.url} target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">
+        {resourceLabels[resource.kind]} de {category}
       </a>
-      {catalog.resource.kind==="IMAGE" && catalog.resource.url.startsWith("/catalogos/") &&
-        <a href={catalog.resource.url+"?download=1"} download className="text-teal-800 underline">Descargar imagen</a>}
+      {uploadedFile && (resource.kind==="IMAGE" || resource.kind==="PDF") &&
+        <a href={resource.url+"?download=1"} download className="text-teal-800 underline">
+          {resource.kind==="PDF" ? "Descargar PDF" : "Descargar imagen"}
+        </a>}
     </p>}
     <CatalogCart key={store} store={store} variants={catalog.variants} query={query}/>
     <nav aria-label="Páginas del catálogo" className="mt-6 flex gap-4 text-teal-800 underline">

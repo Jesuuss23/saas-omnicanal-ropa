@@ -9,8 +9,9 @@ export async function GET(request:Request,context:{params:Promise<{id:string}>})
     if (!result.ok) return new Response(null,{status:result.status===404?404:502});
     const file=await result.json();
     if (!Object.prototype.hasOwnProperty.call(extensions,file.mediaType) || typeof file.content!=="string") return new Response(null,{status:502});
-    const download=new URL(request.url).searchParams.get("download")==="1";
-    const disposition=file.mediaType==="application/pdf" || download ? "attachment" : "inline";
+    const params=new URL(request.url).searchParams;
+    const download=params.get("download")==="1" || (file.mediaType==="application/pdf" && params.get("view")!=="1");
+    const disposition=download ? "attachment" : "inline";
     return new Response(Uint8Array.from(Buffer.from(file.content,"base64")),{
       headers:{
         "Content-Type":file.mediaType,
