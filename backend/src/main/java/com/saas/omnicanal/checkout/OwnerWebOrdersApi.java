@@ -1,6 +1,11 @@
 package com.saas.omnicanal.checkout;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.math.BigDecimal;
+import org.springframework.transaction.annotation.Transactional;
 import java.security.Principal;
 import java.time.Instant;
 import java.util.List;
@@ -46,6 +51,31 @@ class OwnerWebOrdersApi {
                 rs.getBigDecimal(4),rs.getString(5),rs.getTimestamp(6).toInstant(),rs.getString(7),rs.getString(8),rs.getString(9),rs.getBoolean(10),rs.getBigDecimal(11),rs.getBigDecimal(12),rs.getBigDecimal(13)),
                 store,status==null ? null : status.name(),20L*page);
         return new Page(rows.stream().limit(20).toList(),rows.size()>20);
+    }
+
+    record DeliveryQuote(@NotNull @PositiveOrZero @Digits(integer=12, fraction=2) BigDecimal fee) {}
+
+    @PutMapping("/{order}/delivery-quote")
+    @Transactional
+    DeliveryQuote quote(@PathVariable UUID store, @PathVariable UUID order, Principal principal,
+                        @Valid @RequestBody DeliveryQuote quote) {
+        requireOwner(store,principal);
+        var reservations = db.query("""
+                SELECT r.id FROM cart_reservation r JOIN web_checkout_order o
+                  ON (o.tenant_id,o.reservation_id)=(r.tenant_id,r.id)
+                 WHERE o.tenant_id=? AND o.id=? FOR UPDATE OF r
+                """,(rs,n)->rs.getObject(1,UUID.class),store,order);
+        if (reservations.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        int changed=db.update("""
+                UPDATE web_checkout_order o SET delivery_fee=?
+                FROM cart_reservation r
+                WHERE o.tenant_id=? AND o.id=? AND (o.tenant_id,o.reservation_id)=(r.tenant_id,r.id)
+                  AND NOT r.released AND r.expires_at>clock_timestamp()
+                  AND o.delivery_method='DELIVERY' AND o.status='PENDING_PAYMENT' AND NOT o.free_delivery
+                  AND (o.delivery_fee IS NULL OR o.delivery_fee=?)
+                """,quote.fee(),store,order,quote.fee());
+        if (changed==0) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        return quote;
     }
 
     record Tracking(String token) {}

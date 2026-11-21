@@ -84,7 +84,31 @@ function ShareTracking({store,order,path}:{store:string;order:Order;path:string}
   </div>;
 }
 
-export default function WebOrders({store}:{store:string}) {
+type Send=(path:string,body:string,method:"PUT")=>Promise<Response>;
+
+function DeliveryQuote({store,order,send,refresh}:{store:string;order:Order;send:Send;refresh:()=>void}) {
+  const [amount,setAmount]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState("");
+  return <form className="my-2 flex flex-wrap items-end gap-2" onSubmit={async e=>{
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);setMessage("");
+    try {
+      const res=await send("stores/"+store+"/web-orders/"+order.id+"/delivery-quote",JSON.stringify({fee:amount}),"PUT");
+      if (!res.ok) throw new Error(res.status===409?"El pedido ya tiene tarifa o la reserva dejó de estar activa. Actualiza la lista.":"No se pudo guardar la tarifa.");
+      refresh();
+    } catch(err) {setMessage(err instanceof Error?err.message:"No se pudo guardar la tarifa.");}
+    finally {setBusy(false);}
+  }}>
+    <label>Tarifa de envío (S/)<input type="number" min="0" max="999999999999.99" step="0.01" required value={amount}
+      disabled={busy} onChange={e=>setAmount(e.target.value)} className="block rounded border p-2"/></label>
+    <button disabled={busy} className="rounded bg-teal-800 px-3 py-2 text-white">{busy?"Guardando…":"Confirmar tarifa"}</button>
+    <p role="status">{message}</p>
+  </form>;
+}
+
+export default function WebOrders({store,send}:{store:string;send:Send}) {
   const [open,setOpen]=useState(false);
   const [status,setStatus]=useState("");
   const [page,setPage]=useState(0);
@@ -109,6 +133,8 @@ export default function WebOrders({store}:{store:string}) {
           <p>{labels[o.status]} · {date.format(new Date(o.createdAt))}</p>
           <OrderAmounts merchandise={o.total} method={o.method} freeDelivery={o.freeDelivery} fee={o.fee}/>
           {o.method && <p>{o.method==="PICKUP"?"Recojo en tienda":"Delivery"} · {o.address}{o.pickupHours && " · "+o.pickupHours}</p>}
+          {o.method==="DELIVERY" && o.status==="PENDING_PAYMENT" && !o.freeDelivery && o.fee==null &&
+            <DeliveryQuote store={store} order={o} send={send} refresh={refresh}/>}
           <DeliveryDirections order={o}/>
           <p className="break-all text-sm">Pedido {o.id}</p>
           <button className="text-teal-800 underline" aria-expanded={expanded===o.id}
