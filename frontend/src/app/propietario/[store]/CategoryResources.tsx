@@ -81,12 +81,13 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
     return ()=>controller.abort();
   },[open,chat,store,refresh]);
 
-  const options=(rows || []).filter(row=>!insert || activeUrl(row));
+  const options=rows ?? [];
   const suggested=recent.flatMap(message=>options.filter(row=>{
     const phrase=normalizeWords(row.category);
     return phrase && (" "+message+" ").includes(" "+phrase+" ");
   })).filter((row,index,all)=>all.indexOf(row)===index);
-  const selected=options.find(row=>row.category===category) || options[0];
+  const selected=options.find(row=>row.category===category) || (insert && options.find(row=>activeUrl(row))) || options[0];
+  const resourceUrl=selected ? activeUrl(selected) : null;
 
   async function save(e:FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -124,9 +125,17 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
         <label>Categoría <select disabled={busy} value={selected.category} onChange={e=>{setCategory(e.target.value);setMessage("");}} className="rounded border p-1">
           {options.map(row=><option key={row.category}>{row.category}</option>)}
         </select></label>
-        {insert ? <button type="button" disabled={disabled} className="w-fit text-teal-800 underline"
-          onClick={()=>insert("Catálogo de "+selected.category+": "+new URL(activeUrl(selected)!,window.location.origin).href)}>
-          Agregar {labels[selected.active].toLowerCase()} al borrador</button> :
+        {insert ? <div className="flex flex-wrap gap-3">
+          {resourceUrl && <button type="button" disabled={disabled} className="text-teal-800 underline"
+            onClick={()=>insert("Catálogo de "+selected.category+": "+new URL(resourceUrl,window.location.origin).href)}>
+            Agregar {labels[selected.active].toLowerCase()} al borrador
+          </button>}
+          <button type="button" disabled={disabled} className="text-teal-800 underline" onClick={()=>{
+            const url=new URL("/tienda/"+encodeURIComponent(store),window.location.origin);
+            url.searchParams.set("category",selected.category);
+            insert("Ver "+selected.category+" en la tienda: "+url.href);
+          }}>Agregar enlace a la categoría en la tienda</button>
+        </div> :
           <form key={selected.category+":"+selected.revision} onSubmit={save} className="grid gap-2">
             {(["link","pdf","image"] as const).map((field,i)=><label key={field}>{["Enlace al catálogo","URL del PDF","URL de la imagen"][i]}
               <input type={selected[field]?.startsWith("/catalogos/")?"text":"url"} inputMode="url" name={field} maxLength={2048} placeholder="https://" defaultValue={selected[field] || ""}
@@ -139,7 +148,7 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
             </select></label>
             <button disabled={busy} className="rounded bg-teal-800 px-3 py-2 text-white">Guardar recursos</button>
           </form>}
-      </> : rows ? <p>{insert?"Aún no hay catálogos activos para compartir.":"Asigna una categoría a un producto para configurar sus recursos."}</p> :
+      </> : rows ? <p>{insert?"Aún no hay categorías para compartir.":"Asigna una categoría a un producto para configurar sus recursos."}</p> :
         !message && <p>Cargando categorías…</p>}
       <p role="status">{message}</p>
     </div>}
