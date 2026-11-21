@@ -5,8 +5,12 @@ import {useParams} from "next/navigation";
 import OrderSummary, {type Order} from "../../OrderSummary";
 
 const statuses={PENDING_PAYMENT:"Pendiente de pago",EXPIRED:"Vencido",CANCELLED:"Cancelado"};
+const limaDate=new Intl.DateTimeFormat("es-PE",{
+  timeZone:"America/Lima",dateStyle:"long",timeStyle:"medium"
+});
 type Detail=Pick<Order,"items"|"total"|"freeDelivery"|"deliveryFee"|"method"> & {
   status:keyof typeof statuses;
+  reservationExpiresAt?:string;
   pickup?:{address:string;hours:string}|null;
 };
 
@@ -86,6 +90,12 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
     {detail ? <>
       <p className="break-all">Pedido {order}</p>
       <p className="font-semibold">{statuses[detail.status]}</p>
+      {detail.status==="PENDING_PAYMENT" && detail.reservationExpiresAt && <p>
+        Tus prendas están reservadas hasta el <time dateTime={detail.reservationExpiresAt}>
+          {limaDate.format(new Date(detail.reservationExpiresAt))}
+        </time> (hora de Lima).
+      </p>}
+      {detail.status==="EXPIRED" && <p>La reserva de estas prendas ha vencido.</p>}
       {detail.pickup && <section className="rounded border p-3">
         <h2 className="font-semibold">Punto de recojo del pedido</h2>
         <p>{detail.pickup.address}</p>

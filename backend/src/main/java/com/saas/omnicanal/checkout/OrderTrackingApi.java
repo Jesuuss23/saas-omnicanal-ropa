@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -25,8 +26,8 @@ class OrderTrackingApi {
     }
 
     record Pickup(String address, String hours) {}
-    record Header(UUID reservation, String status, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee, Pickup pickup, String method) {}
-    record Detail(String status, BigDecimal total, List<WebOrderItems.Item> items, boolean freeDelivery, BigDecimal deliveryFee, Pickup pickup, String method) {}
+    record Header(UUID reservation, String status, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee, Pickup pickup, String method, Instant reservationExpiresAt) {}
+    record Detail(String status, BigDecimal total, List<WebOrderItems.Item> items, boolean freeDelivery, BigDecimal deliveryFee, Pickup pickup, String method, Instant reservationExpiresAt) {}
 
     static String token(UUID store, UUID order, UUID reservation) {
         String input = "order-tracking-v1/"+store+"/"+order+"/"+reservation;
@@ -43,17 +44,23 @@ class OrderTrackingApi {
             @RequestHeader(value="X-Order-Token",defaultValue="") String supplied) {
         if (supplied.length()!=64) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         Header header=db.query("""
-                SELECT reservation_id,status,merchandise_total,free_delivery,delivery_fee,
-                       CASE WHEN delivery_method='PICKUP' THEN fulfillment_address END AS pickup_address,
-                       pickup_hours, delivery_method
-                FROM web_checkout_order WHERE tenant_id=? AND id=?
+                SELECT o.reservation_id,
+                       CASE WHEN o.status='PENDING_PAYMENT' AND r.expires_at<=CURRENT_TIMESTAMP
+                            THEN 'EXPIRED' ELSE o.status END AS effective_status,
+                       o.merchandise_total,o.free_delivery,o.delivery_fee,
+                       CASE WHEN o.delivery_method='PICKUP' THEN o.fulfillment_address END AS pickup_address,
+                       o.pickup_hours, o.delivery_method, r.expires_at
+                FROM web_checkout_order o JOIN cart_reservation r
+                  ON (r.tenant_id,r.id)=(o.tenant_id,o.reservation_id)
+                WHERE o.tenant_id=? AND o.id=?
                 """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getString(2),rs.getBigDecimal(3),rs.getBoolean(4),rs.getBigDecimal(5),
-                        rs.getString("pickup_address")==null ? null : new Pickup(rs.getString("pickup_address"),rs.getString("pickup_hours")),rs.getString("delivery_method")),store,order)
+                        rs.getString("pickup_address")==null ? null : new Pickup(rs.getString("pickup_address"),rs.getString("pickup_hours")),rs.getString("delivery_method"),
+                        rs.getTimestamp("expires_at").toInstant()),store,order)
                 .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
         String expected=token(store,order,header.reservation());
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),supplied.getBytes(StandardCharsets.US_ASCII)))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(new Detail(header.status(),header.total(),items.list(store,order),header.freeDelivery(),header.deliveryFee(),header.pickup(),header.method()));
+                .body(new Detail(header.status(),header.total(),items.list(store,order),header.freeDelivery(),header.deliveryFee(),header.pickup(),header.method(),header.reservationExpiresAt()));
     }
 }
