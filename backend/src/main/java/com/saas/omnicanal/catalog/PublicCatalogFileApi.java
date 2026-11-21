@@ -23,7 +23,7 @@ class PublicCatalogFileApi {
         return http.securityMatcher("/api/public/catalog-files/*", "/api/public/stores/*/catalog", "/api/public/stores/*/availability", "/api/public/stores/*/reservation", guestPath)
                 .csrf(c->c.ignoringRequestMatchers("/api/public/stores/*/reservation", guestPath))
                 .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.GET,"/api/public/catalog-files/*", "/api/public/stores/*/catalog", "/api/public/stores/*/availability").permitAll()
-                        .requestMatchers(HttpMethod.POST,"/api/public/stores/*/reservation").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/public/stores/*/reservation",guestPath).permitAll()
                         .requestMatchers(HttpMethod.DELETE,"/api/public/stores/*/reservation").permitAll()
                         .requestMatchers(HttpMethod.GET,guestPath).permitAll()
                         .requestMatchers(HttpMethod.PUT,guestPath).permitAll()
