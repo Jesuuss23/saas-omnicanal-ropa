@@ -3,6 +3,7 @@ import {cache} from "react";
 import Link from "next/link";
 import {notFound} from "next/navigation";
 
+import ShareCatalog from "./ShareCatalog";
 import CatalogCart, {type Variant} from "./CatalogCart";
 const resourceLabels = {LINK:"Ver catálogo",PDF:"Abrir catálogo PDF",IMAGE:"Ver imagen del catálogo"};
 type Catalog = {storeName:string; pickup?:{address:string;hours:string}|null; variants:Variant[]; hasNext:boolean; sizes:string[]; colors:string[]; categories:string[]; resource?:{kind:keyof typeof resourceLabels;url:string}|null};
@@ -67,12 +68,22 @@ export default async function StoreCatalog(props:Props) {
   const path="/tienda/"+store;
   const resource=catalog.resource;
   const uploadedFile=resource?.url.startsWith("/catalogos/");
-  const pageLink = (n:number)=>path+"?"+new URLSearchParams({q:query,size,color,category,page:String(n)});
+  const pageLink = (n:number)=>{
+    const params=new URLSearchParams();
+    if (query) params.set("q",query);
+    if (category) params.set("category",category);
+    if (size) params.set("size",size);
+    if (color) params.set("color",color);
+    if (n>0) params.set("page",String(n));
+    return params.size ? path+"?"+params : path;
+  };
+  const sharePath=pageLink(page);
 
   return <main className="mx-auto max-w-5xl px-5 py-12 text-stone-900">
     <header className="border-b border-stone-300 pb-6">
       <p className="text-sm font-medium text-teal-800">Catálogo de prendas</p>
       <h1 className="mt-1 text-4xl font-semibold">{catalog.storeName}</h1>
+      <ShareCatalog key={sharePath} path={sharePath} storeName={catalog.storeName}/>
       {catalog.pickup && <section className="mt-4">
         <h2 className="font-semibold">Recojo en tienda</h2>
         <p>{catalog.pickup.address}</p>
