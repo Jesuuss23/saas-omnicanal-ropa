@@ -54,11 +54,9 @@ export default function CatalogReplyPicker({store,disabled,insert}:{
             <button type="button" disabled={disabled} className="text-teal-800 underline"
               onClick={()=>{
                 const url=new URL("/tienda/"+encodeURIComponent(store),window.location.origin);
-                url.searchParams.set("q",item.name.slice(0,150));
-                url.searchParams.set("size",item.size);
-                if (item.color) url.searchParams.set("color",item.color);
+                url.searchParams.set("variant",item.id);
                 insert(line+"\n"+url.href);
-              }}>Agregar con enlace al catálogo</button>
+              }}>Agregar con enlace a esta variante</button>
           </div>
         </li>;
       })}</ul>}
