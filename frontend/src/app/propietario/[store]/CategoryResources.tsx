@@ -89,6 +89,10 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
   const selected=options.find(row=>row.category===category) || (insert && options.find(row=>activeUrl(row))) || options[0];
   const resourceUrl=selected ? activeUrl(selected) : null;
 
+  const categoryPath=selected
+    ? "/tienda/"+encodeURIComponent(store)+"?"+new URLSearchParams({category:selected.category})
+    : "";
+
   async function save(e:FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selected || !send || busy) return;
@@ -131,12 +135,17 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
             Agregar {labels[selected.active].toLowerCase()} al borrador
           </button>}
           <button type="button" disabled={disabled} className="text-teal-800 underline" onClick={()=>{
-            const url=new URL("/tienda/"+encodeURIComponent(store),window.location.origin);
-            url.searchParams.set("category",selected.category);
+            const url=new URL(categoryPath,window.location.origin);
             insert("Ver "+selected.category+" en la tienda: "+url.href);
           }}>Agregar enlace a la categoría en la tienda</button>
         </div> :
           <form key={selected.category+":"+selected.revision} onSubmit={save} className="grid gap-2">
+            <div className="rounded border p-3">
+              <p>Recurso publicado: {labels[selected.active]}</p>
+              <a href={categoryPath} target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">
+                Ver categoría en la tienda pública
+              </a>
+            </div>
             {(["link","pdf","image"] as const).map((field,i)=><label key={field}>{["Enlace al catálogo","URL del PDF","URL de la imagen"][i]}
               <input type={selected[field]?.startsWith("/catalogos/")?"text":"url"} inputMode="url" name={field} maxLength={2048} placeholder="https://" defaultValue={selected[field] || ""}
                 disabled={busy} className="block w-full rounded border p-2"/></label>)}
