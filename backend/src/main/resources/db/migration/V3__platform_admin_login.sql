@@ -1,0 +1,6 @@
+CREATE TABLE platform_admin_login (
+    email VARCHAR(254) PRIMARY KEY,
+    last_step BIGINT NOT NULL DEFAULT -1,
+    failures INTEGER NOT NULL DEFAULT 0,
+    window_started TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
