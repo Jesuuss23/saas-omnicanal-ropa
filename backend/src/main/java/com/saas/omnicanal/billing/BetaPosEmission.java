@@ -99,11 +99,67 @@ class BetaPosEmission {
                 && !sunat.path("cdrZip").asText("").isBlank() && !reply.path("xml").asText("").isBlank())
             status=cdr.path("accepted").asBoolean() ? "BETA_ACCEPTED" : "BETA_REJECTED";
         String outcome=status;
-        tx.executeWithoutResult(t->{
+        return tx.execute(t->{
+            String current = lockStatus(store,sale);
+            if (!"BETA_REVIEW".equals(current)) {
+                // A concurrent status lookup already supplied the CDR. Keep it and add the original XML/hash.
+                db.update("""
+                        UPDATE beta_pos_document_number SET provider_response =
+                            (CAST(? AS jsonb) - 'sunatResponse') || provider_response
+                         WHERE tenant_id=? AND sale_id=?
+                        """,reply.toString(),store,sale);
+                return new Result(current);
+            }
             db.update("UPDATE beta_pos_document_number SET provider_response=CAST(? AS jsonb) WHERE tenant_id=? AND sale_id=?",reply.toString(),store,sale);
             db.update("UPDATE pos_fiscal_request SET status=? WHERE tenant_id=? AND sale_id=?",outcome,store,sale);
+            return new Result(outcome);
         });
-        return new Result(status);
+    }
+
+    private String lockStatus(UUID store, UUID sale) {
+        return db.queryForObject("SELECT status FROM pos_fiscal_request WHERE tenant_id=? AND sale_id=? FOR UPDATE",
+                String.class,store,sale);
+    }
+
+    private record Attempt(String status, String ruc, String kind, String series, int number, long company, byte[] encrypted) {}
+
+    @PostMapping("/{sale}/reconcile")
+    Result reconcile(@PathVariable UUID store, @PathVariable UUID sale, Principal owner) {
+        if (owner == null || !store.toString().equals(owner.getName()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        Attempt attempt = db.query("""
+                SELECT f.status,n.issuer_ruc,f.kind,n.series,n.number,b.company_id,b.emission_token_ciphertext
+                  FROM pos_fiscal_request f JOIN beta_pos_document_number n USING (tenant_id,sale_id)
+                  JOIN beta_company_registration b ON b.tenant_id=n.tenant_id AND b.registered_ruc=n.issuer_ruc
+                 WHERE f.tenant_id=? AND f.sale_id=? AND n.submitted_at IS NOT NULL AND b.company_id IS NOT NULL
+                """, (rs,row)->new Attempt(rs.getString(1),rs.getString(2),rs.getString(3),rs.getString(4),
+                        rs.getInt(5),rs.getLong(6),rs.getBytes(7)),store,sale).stream().findFirst()
+                .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (!"BETA_REVIEW".equals(attempt.status())) return new Result(attempt.status());
+        String token = cipher.decrypt(store,attempt.company(),attempt.ruc(),attempt.encrypted());
+        JsonNode reply;
+        try {
+            provider.requireBetaCompany(attempt.company(),attempt.ruc(),token);
+            String type = "FACTURA".equals(attempt.kind()) ? "01" : "03";
+            reply = provider.invoiceStatus(attempt.ruc(),type,attempt.series(),attempt.number(),token);
+        } catch (RestClientException unavailable) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+        }
+        if (reply == null || !reply.path("success").asBoolean(false)
+                || !reply.path("cdrResponse").path("accepted").isBoolean()
+                || reply.path("cdrZip").asText("").isBlank()) return new Result("BETA_REVIEW");
+        String outcome = reply.path("cdrResponse").path("accepted").asBoolean() ? "BETA_ACCEPTED" : "BETA_REJECTED";
+        return tx.execute(t -> {
+            String current = lockStatus(store,sale);
+            if (!"BETA_REVIEW".equals(current)) return new Result(current);
+            db.update("""
+                    UPDATE beta_pos_document_number SET provider_response =
+                        COALESCE(provider_response,'{}'::jsonb) || jsonb_build_object('sunatResponse',CAST(? AS jsonb))
+                     WHERE tenant_id=? AND sale_id=?
+                    """,reply.toString(),store,sale);
+            db.update("UPDATE pos_fiscal_request SET status=? WHERE tenant_id=? AND sale_id=?",outcome,store,sale);
+            return new Result(outcome);
+        });
     }
 
     private static Map<String,Object> invoice(Sale s,List<Line> lines) {

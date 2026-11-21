@@ -101,6 +101,23 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
     }
   }
 
+  async function reconcile(sale:string) {
+    setBusy(true);
+    setMessage("Consultando el CDR en APIsPERU…");
+    try {
+      const res = await send(path+"/"+sale+"/reconcile","{}");
+      if (res.status===412) throw new Error("Revisa el ambiente beta y el token de esta empresa.");
+      if (!res.ok) throw new Error("No se pudo consultar el CDR. Puedes volver a consultarlo.");
+      const result = await res.json();
+      setMessage(result.status==="BETA_REVIEW" ? "APIsPERU aún no confirmó un resultado con CDR." : statusLabels[result.status] || result.status);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "No se pudo consultar el CDR.");
+    } finally {
+      setBusy(false);
+      setRefresh(value=>value+1);
+    }
+  }
+
   return <details className="mt-6 rounded-lg border p-4" onToggle={e=>setOpen(e.currentTarget.open)}>
     <summary className="cursor-pointer font-semibold">Solicitudes de boletas y facturas del POS</summary>
     <div className="mt-3 flex items-center justify-between gap-2">
@@ -117,6 +134,7 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
         {row.number!==null ? <p>Serie beta {row.series}-{String(row.number).padStart(8,"0")}</p> :
           row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>assign(row.sale)}>Asignar número de pruebas</button>}
         {row.number!==null && row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>emit(row.sale)}>Enviar a APIsPERU en beta</button>}
+        {row.status==="BETA_REVIEW" && row.submission && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>reconcile(row.sale)}>Consultar CDR en APIsPERU</button>}
         {row.submission && <details className="my-2">
           <summary className="cursor-pointer text-teal-800">Detalle del envío</summary>
           <p>Intento registrado el {date.format(new Date(row.submission.attemptedAt))} (Lima).</p>
@@ -128,7 +146,7 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
           {row.submission.errorCode && <p>Código de error: {row.submission.errorCode}</p>}
           {row.submission.errorMessage && <p>{row.submission.errorMessage}</p>}
           {row.submission.httpStatus && <p>APIsPERU respondió con HTTP {row.submission.httpStatus}.</p>}
-          {row.status==="BETA_REVIEW" && <p>El resultado sigue pendiente. Consulta la serie y el correlativo en APIsPERU para confirmar qué ocurrió.</p>}
+          {row.status==="BETA_REVIEW" && <p>El resultado sigue pendiente. Usa «Consultar CDR en APIsPERU» para actualizar el resultado.</p>}
         </details>}
         {(row.hasXml || row.hasCdr) && <div className="mt-2 flex gap-4">
           {row.hasXml && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"xml")}>Descargar XML</button>}
