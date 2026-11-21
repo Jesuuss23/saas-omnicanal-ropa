@@ -9,12 +9,12 @@ const resourceLabels = {LINK:"Ver catálogo",PDF:"Abrir catálogo PDF",IMAGE:"Ve
 type Catalog = {storeName:string; pickup?:{address:string;hours:string}|null; variants:Variant[]; hasNext:boolean; sizes:string[]; colors:string[]; categories:string[]; resource?:{kind:keyof typeof resourceLabels;url:string}|null};
 type Props = {
   params:Promise<{store:string}>;
-  searchParams:Promise<{q?:string|string[]; page?:string|string[]; size?:string|string[]; color?:string|string[]; category?:string|string[]}>;
+  searchParams:Promise<{q?:string|string[]; page?:string|string[]; size?:string|string[]; color?:string|string[]; category?:string|string[]; variant?:string|string[]}>;
 };
 
-const loadCatalog = cache(async (store:string,query:string,size:string,color:string,category:string,page:number) => {
+const loadCatalog = cache(async (store:string,query:string,size:string,color:string,category:string,page:number,variant:string) => {
   const base = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/,"");
-  const response = await fetch(base+"/public/stores/"+store+"/catalog?"+new URLSearchParams({query,size,color,category,page:String(page)}),{cache:"no-store"});
+  const response = await fetch(base+"/public/stores/"+store+"/catalog?"+new URLSearchParams({query,size,color,category,page:String(page),...(variant ? {variant} : {})}),{cache:"no-store"});
   if (response.status===404) notFound();
   if (!response.ok) throw new Error("No se pudo cargar el catálogo.");
   return await response.json() as Catalog;
@@ -28,10 +28,12 @@ async function catalogView({params,searchParams}:Props) {
   const category = typeof filters.category==="string" ? filters.category : "";
   const size = typeof filters.size==="string" ? filters.size : "";
   const color = typeof filters.color==="string" ? filters.color : "";
+  const variant=filters.variant ?? "";
+  if (typeof variant!=="string" || (variant && !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(variant))) notFound();
   const page = Number(filters.page ?? 0);
   if (!Number.isInteger(page) || page<0 || page>2147483647) notFound();
-  const catalog = await loadCatalog(store,query,size,color,category,page);
-  return {store,query,size,color,category,page,catalog};
+  const catalog = await loadCatalog(store,query,size,color,category,page,variant);
+  return {store,query,size,color,category,page,variant,catalog};
 }
 
 function categoryImage(resource:Catalog["resource"]):URL|undefined {
@@ -49,12 +51,12 @@ function categoryImage(resource:Catalog["resource"]):URL|undefined {
 }
 
 export async function generateMetadata(props:Props):Promise<Metadata> {
-  const {catalog,category,query,size,color}=await catalogView(props);
+  const {catalog,category,query,size,color,variant}=await catalogView(props);
   const section=category && (catalog.categories.includes(category) || catalog.resource) ? category : "Catálogo de prendas";
-  const title=section+" · "+catalog.storeName;
+  const title=(variant && catalog.variants[0] ? catalog.variants[0].name+" · Talla "+catalog.variants[0].size : section)+" · "+catalog.storeName;
   const description="Consulta las prendas, tallas, colores y precios de "+catalog.storeName+".";
   const image=categoryImage(catalog.resource);
-  const indexable = !query && !size && !color && (!category || catalog.categories.includes(category) || Boolean(catalog.resource));
+  const indexable = !variant && !query && !size && !color && (!category || catalog.categories.includes(category) || Boolean(catalog.resource));
   return {
     title,description,
     robots:{index:indexable,follow:true},
@@ -64,12 +66,13 @@ export async function generateMetadata(props:Props):Promise<Metadata> {
 }
 
 export default async function StoreCatalog(props:Props) {
-  const {store,query,size,color,category,page,catalog}=await catalogView(props);
+  const {store,query,size,color,category,page,variant,catalog}=await catalogView(props);
   const path="/tienda/"+store;
   const resource=catalog.resource;
   const uploadedFile=resource?.url.startsWith("/catalogos/");
   const pageLink = (n:number)=>{
     const params=new URLSearchParams();
+    if (variant) params.set("variant",variant);
     if (query) params.set("q",query);
     if (category) params.set("category",category);
     if (size) params.set("size",size);
@@ -83,7 +86,7 @@ export default async function StoreCatalog(props:Props) {
     <header className="border-b border-stone-300 pb-6">
       <p className="text-sm font-medium text-teal-800">Catálogo de prendas</p>
       <h1 className="mt-1 text-4xl font-semibold">{catalog.storeName}</h1>
-      <ShareCatalog key={sharePath} path={sharePath} storeName={catalog.storeName}/>
+      <ShareCatalog key={sharePath} path={sharePath} title={"Catálogo · "+catalog.storeName} label="Compartir catálogo"/>
       {catalog.pickup && <section className="mt-4">
         <h2 className="font-semibold">Recojo en tienda</h2>
         <p>{catalog.pickup.address}</p>
@@ -131,6 +134,9 @@ export default async function StoreCatalog(props:Props) {
         <a href={resource.url+"?download=1"} download className="text-teal-800 underline">
           {resource.kind==="PDF" ? "Descargar PDF" : "Descargar imagen"}
         </a>}
+    </p>}
+    {variant && <p className="mb-3">{!catalog.variants.length && "Esta variante ya no está disponible. "}
+      <Link href={path} className="text-teal-800 underline">Ver catálogo completo</Link>
     </p>}
     <CatalogCart key={store} store={store} variants={catalog.variants} query={query}/>
     <nav aria-label="Páginas del catálogo" className="mt-6 flex gap-4 text-teal-800 underline">

@@ -1,5 +1,6 @@
 "use client";
 
+import ShareCatalog from "./ShareCatalog";
 import GuestContact from "./GuestContact";
 import {useEffect,useRef,useState} from "react";
 
@@ -168,6 +169,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         <p className="my-2">Talla {item.size}{item.color && " · "+item.color}</p>
         <p className="font-semibold">{currency.format(item.price)}</p>
         <button type="button" disabled={!ready || locked} onClick={()=>add(item)} className="mt-3 rounded bg-teal-800 px-3 py-2 text-white">Agregar al carrito</button>
+        <ShareCatalog path={"/tienda/"+store+"?variant="+item.id} title={item.name+" · Talla "+item.size+(item.color?" · "+item.color:"")} label="Compartir prenda"/>
       </li>)}
     </ul> : <p>{query?"No hay prendas disponibles para esta búsqueda.":"No hay prendas disponibles en esta página."}</p>}
     <p role="status" className="mt-2 text-sm">{notice}</p>

@@ -47,7 +47,8 @@ class PublicStoreCatalogApi {
                     @RequestParam(defaultValue = "0") int page,
                     @RequestParam(defaultValue = "") String size,
                     @RequestParam(defaultValue = "") String color,
-                    @RequestParam(defaultValue = "") String category) {
+                    @RequestParam(defaultValue = "") String category,
+                    @RequestParam(required=false) UUID variant) {
         if (page < 0 || query.length() > 150) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         Store details = db.query("""
                 SELECT name,pickup_enabled,pickup_address,pickup_hours FROM tenant WHERE id=?
@@ -70,9 +71,10 @@ class PublicStoreCatalogApi {
         var colors = db.queryForList("SELECT DISTINCT v.color " + matches + categoryFilter + sizeFilter
                 + " AND trim(v.color) <> '' ORDER BY v.color", String.class, store, search, category, category, size, size);
         var variants = db.query("SELECT v.id, p.name, p.category, v.size, v.color, v.price " + matches + categoryFilter + sizeFilter + colorFilter + """
+                   AND (CAST(? AS uuid) IS NULL OR v.id = ?)
                  ORDER BY p.name, p.id, v.size, v.color, v.id LIMIT 25 OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
-                rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, search, category, category, size, size, color, color, page * 24L);
+                rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, search, category, category, size, size, color, color, variant, variant, page * 24L);
         CategoryResource resource = category.isBlank() ? null : db.query("""
                 SELECT active, CASE active WHEN 'LINK' THEN link_url WHEN 'PDF' THEN pdf_url
                                            WHEN 'IMAGE' THEN image_url END AS url
