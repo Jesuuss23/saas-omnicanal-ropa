@@ -3,11 +3,13 @@
 import {useEffect, useState, type FormEvent} from "react";
 
 type Issuer = {ruc:string; legalName:string; address:string; ubigeo:string; revision:number};
-type Props = {store:string; send:(path:string, body:string, method:"PUT")=>Promise<Response>};
+type Props = {store:string; send:(path:string, body:string, method:"PUT"|"POST")=>Promise<Response>};
 const input = "mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2";
 
 export default function FiscalIssuer({store,send}:Props) {
   const [issuer,setIssuer] = useState<Issuer|null>(null);
+  const [savedRuc,setSavedRuc] = useState("");
+  const [password,setPassword] = useState("");
   const [reload,setReload] = useState(0);
   const [busy,setBusy] = useState(false);
   const [retry,setRetry] = useState(false);
@@ -22,7 +24,7 @@ export default function FiscalIssuer({store,send}:Props) {
         const res = await fetch("/api/owner/"+path,{cache:"no-store",signal:controller.signal});
         if (!res.ok) throw new Error();
         const profile:Issuer = await res.json();
-        if (!controller.signal.aborted) {setIssuer(profile); setMessage("");}
+        if (!controller.signal.aborted) {setIssuer(profile); setSavedRuc(profile.ruc); setMessage("");}
       } catch {
         if (!controller.signal.aborted) {setMessage("No se pudieron cargar los datos fiscales."); setRetry(true);}
       }
@@ -63,9 +65,46 @@ export default function FiscalIssuer({store,send}:Props) {
         return;
       }
       if (!res.ok) throw new Error();
-      setIssuer(await res.json()); setMessage("Datos del emisor guardados.");
+      const saved:Issuer = await res.json();
+      setIssuer(saved); setSavedRuc(saved.ruc); setMessage("Datos del emisor guardados.");
     } catch {setMessage("No se pudo confirmar el guardado. Recarga la ficha para verificar."); setRetry(true);}
     finally {setBusy(false);}
+  }
+
+  async function downloadCertificate(event:FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!issuer || busy || retry) return;
+    setBusy(true);
+    setMessage("Generando el certificado de pruebas…");
+    try {
+      const res = await send(path+"/test-certificate",JSON.stringify({revision:issuer.revision,password}),"POST");
+      if (res.status === 409) {
+        setRetry(true);
+        setMessage("La ficha fiscal cambió. Recárgala para usar el RUC vigente.");
+        return;
+      }
+      if (res.status === 503) {
+        setMessage("Falta configurar el acceso a APIsPERU en el servidor.");
+        return;
+      }
+      if (!res.ok) throw new Error();
+      const result:{ruc:string;pfx:string} = await res.json();
+      const bytes = Uint8Array.from(atob(result.pfx), char => char.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], {type:"application/x-pkcs12"}));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "pruebas-"+result.ruc+".pfx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url), 1000);
+      setMessage("Descarga iniciada para el RUC "+result.ruc+".");
+    } catch {
+      setMessage("No se pudo descargar el certificado. Revisa la conexión con APIsPERU.");
+    } finally {
+      setPassword("");
+      setBusy(false);
+    }
   }
 
   function change(key:keyof Omit<Issuer,"revision">, value:string) {
@@ -80,8 +119,18 @@ export default function FiscalIssuer({store,send}:Props) {
         <label>Razón social<input className={input} value={issuer.legalName} onChange={e=>change("legalName",e.target.value)} maxLength={200} required/></label>
         <label>Domicilio fiscal<input className={input} value={issuer.address} onChange={e=>change("address",e.target.value)} maxLength={250} required/></label>
         <label>Ubigeo<input className={input} value={issuer.ubigeo} onChange={e=>change("ubigeo",e.target.value)} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required/></label>
-        <button className="rounded-lg bg-teal-800 px-4 py-2 text-white">{busy?"Guardando…":"Guardar datos del emisor"}</button>
+        <button className="rounded-lg bg-teal-800 px-4 py-2 text-white">Guardar datos del emisor</button>
         {issuer.revision > 0 && <button type="button" className="rounded-lg border border-teal-800 px-4 py-2 text-teal-800" onClick={verify}>Verificar RUC guardado en APIsPERU</button>}
+      </fieldset>
+    </form>}
+    {issuer && issuer.revision > 0 && <form onSubmit={downloadCertificate} className="mt-5 border-t pt-4">
+      <fieldset disabled={busy || retry} className="grid max-w-md gap-3">
+        <legend className="font-semibold">Certificado de pruebas para el RUC {savedRuc}</legend>
+        <label>Elige una contraseña para proteger el archivo .pfx
+          <input className={input} type="password" autoComplete="new-password" minLength={8} maxLength={128}
+            required value={password} onChange={e=>setPassword(e.target.value)} />
+        </label>
+        <button className="rounded-lg border border-teal-800 px-4 py-2 text-teal-800">Descargar certificado de pruebas</button>
       </fieldset>
     </form>}
     <p role="status" className="mt-2 text-sm">{message}</p>

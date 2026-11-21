@@ -50,6 +50,21 @@ class FiscalIssuerApi {
                 .body(new Verification(profile.ruc()));
     }
 
+    record CertificateRequest(@NotNull @Positive Integer revision,
+                              @NotBlank @Size(min = 8, max = 128) String password) {}
+    record TestCertificate(String ruc, byte[] pfx) {}
+
+    @PostMapping("/test-certificate")
+    org.springframework.http.ResponseEntity<TestCertificate> testCertificate(
+            @PathVariable UUID store, Principal owner, @Valid @RequestBody CertificateRequest input) {
+        Profile profile = get(store, owner);
+        if (!input.revision().equals(profile.revision())) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        byte[] pfx = companies.generateTestCertificate(profile.ruc(), input.password());
+        return org.springframework.http.ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new TestCertificate(profile.ruc(), pfx));
+    }
+
     @PutMapping
     Profile save(@PathVariable UUID store, Principal owner, @Valid @RequestBody Profile input) {
         requireOwner(store, owner);
