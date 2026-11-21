@@ -13,6 +13,9 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
   const [ready,setReady]=useState(false);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
+  const [pickup,setPickup]=useState<{address:string;hours:string;revision:number}|null>(null);
+  const [method,setMethod]=useState("");
+  const [address,setAddress]=useState("");
   const [retry,setRetry]=useState(0);
 
   useEffect(()=>{
@@ -28,6 +31,8 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
           setName(contact.name ?? "");
           setPhone(contact.phone ?? "");
           setSaved(Boolean(contact.name && contact.phone));
+          setPickup(contact.pickup ?? null);
+          setMethod(contact.pickup?"":"DELIVERY");
           setOrder(contact.order);
           setReady(true);
         }
@@ -63,7 +68,12 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
     setBusy(true);
     setMessage("");
     try {
-      const response=await fetch(url,{method:"POST",headers:{"X-Reservation-Key":reservation}});
+      const response=await fetch(url,{method:"POST",headers:{"X-Reservation-Key":reservation,"Content-Type":"application/json"},
+        body:JSON.stringify({method,address:method==="DELIVERY"?address.trim():null,pickupRevision:pickup?.revision})});
+      if (response.status===409) {
+        setRetry(n=>n+1);
+        return;
+      }
       if (!response.ok) {
         setMessage(response.status===410?"La reserva venció.":"No se pudo confirmar el pedido. Puedes reintentar.");
         return;
@@ -90,7 +100,17 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
       <label>Teléfono de contacto <input type="tel" autoComplete="tel" required maxLength={30} value={phone}
         onChange={e=>{setPhone(e.target.value);setMessage("");setSaved(false);}} className="block w-full rounded border p-2"/></label>
       <button className="w-fit rounded bg-teal-800 px-3 py-2 text-white">{busy?"Guardando…":"Guardar contacto"}</button>
-      {saved && <button type="button" onClick={confirm} className="w-fit rounded border px-3 py-2">Confirmar pedido pendiente de pago</button>}
+      {saved && <>
+        <label>Forma de entrega <select value={method} onChange={e=>setMethod(e.target.value)} className="rounded border p-2">
+          {pickup && <option value="">Elige una opción</option>}
+          <option value="DELIVERY">Delivery</option>
+          {pickup && <option value="PICKUP">Recojo en tienda</option>}
+        </select></label>
+        {method==="PICKUP" && pickup && <p>{pickup.address} · {pickup.hours}</p>}
+        {method==="DELIVERY" && <label>Dirección de entrega<input value={address} maxLength={250} autoComplete="street-address"
+          onChange={e=>setAddress(e.target.value)} className="block w-full rounded border p-2"/>
+          <span className="text-sm">El importe de prendas aún no incluye el envío.</span></label>}
+        <button type="button" disabled={!method || (method==="DELIVERY" && !address.trim())} onClick={confirm} className="w-fit rounded border px-3 py-2">Confirmar pedido pendiente de pago</button></>}
     </fieldset>
     <p role="status">{message}</p>
     {!ready && message && <button type="button" onClick={()=>setRetry(n=>n+1)} className="w-fit underline">Reintentar consulta</button>}
