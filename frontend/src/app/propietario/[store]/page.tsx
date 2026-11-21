@@ -1,5 +1,6 @@
 "use client";
 import {useEffect,useState,type FormEvent} from "react";
+import Catalog from "./Catalog";
 import {useParams} from "next/navigation";
 
 type Profile = {id:string; name:string; email:string};
@@ -64,10 +65,10 @@ export default function Owner() {
   }
 
   return <main className="grid min-h-screen place-items-center bg-stone-50 p-6 text-stone-900">
-    <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-8">
+    <section className={`w-full ${profile ? "max-w-5xl" : "max-w-md"} rounded-xl border border-stone-200 bg-white p-8`}>
     <h1 className="text-2xl font-semibold">{profile?.name || (token ? "Activar acceso de propietario" : "Acceso del propietario")}</h1>
     {loading ? <p>Cargando…</p> : profile ? <><p className="my-4">{profile.email}</p>
-    <button disabled={busy} onClick={logout} className="text-teal-800 underline">Cerrar sesión</button></> :
+    <button disabled={busy} onClick={logout} className="text-teal-800 underline">Cerrar sesión</button><Catalog key={profile.id} store={profile.id} send={send}/></> :
     <form onSubmit={submit} className="mt-5 space-y-4"><label className="block">{token ? "Crea una contraseña de al menos 12 caracteres" : "Contraseña"}
     <input className="mt-2 w-full rounded-lg border border-stone-300 p-3" type="password" name="password" required minLength={token ? 12 : undefined}
       autoComplete={token ? "new-password" : "current-password"}/></label>
