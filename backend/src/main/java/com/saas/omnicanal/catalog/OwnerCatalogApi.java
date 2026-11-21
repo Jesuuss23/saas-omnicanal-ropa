@@ -29,7 +29,8 @@ public class OwnerCatalogApi {
                    @NotNull @PositiveOrZero Integer stock) {}
     record Product(@NotBlank @Size(max=150) String name, @Size(max=50) String category,
                    @NotEmpty @Size(max=100) List<@NotNull @Valid Variant> variants) {}
-    record Row(UUID id, String name, String sku, String size, String color, BigDecimal price, int available) {}
+    record Row(UUID id, String name, String sku, String size, String color, BigDecimal price, int available,
+               String category, int physical, int reserved, String productVersion, String variantVersion) {}
     record Page(List<Row> rows, boolean hasNext) {}
     record Created(UUID id) {}
 
@@ -43,13 +44,48 @@ public class OwnerCatalogApi {
         if (page < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         var rows = db.query("""
                 SELECT v.id, p.name, v.sku, v.size, v.color, v.price,
-                       coalesce(v.stock_physical, 0) - coalesce(v.stock_reserved, 0) AS available
+                       coalesce(v.stock_physical, 0) - coalesce(v.stock_reserved, 0) AS available,
+                       p.category, coalesce(v.stock_physical, 0) AS physical, coalesce(v.stock_reserved, 0) AS reserved,
+                       p.xmin::text AS product_version, v.xmin::text AS variant_version
                 FROM product_variant v JOIN product p ON (p.tenant_id, p.id) = (v.tenant_id, v.product_id)
                 WHERE v.tenant_id = ? ORDER BY p.created_at DESC NULLS LAST, p.id, v.sku, v.id LIMIT 26 OFFSET ?
                 """, (rs, n) -> new Row(rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("sku"),
-                rs.getString("size"), rs.getString("color"), rs.getBigDecimal("price"), rs.getInt("available")),
+                rs.getString("size"), rs.getString("color"), rs.getBigDecimal("price"), rs.getInt("available"),
+                rs.getString("category"), rs.getInt("physical"), rs.getInt("reserved"),
+                rs.getString("product_version"), rs.getString("variant_version")),
                 store, 25L * page);
         return new Page(rows.stream().limit(25).toList(), rows.size() > 25);
+    }
+
+    record Edit(@NotBlank @Size(max=150) String name, @Size(max=50) String category,
+                @NotNull @Valid Variant variant, @NotBlank String productVersion, @NotBlank String variantVersion) {}
+
+    @PutMapping("/variants/{id}")
+    @Transactional
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void edit(@PathVariable UUID store, @PathVariable UUID id, Principal principal, @Valid @RequestBody Edit edit) {
+        requireStore(store, principal);
+        Variant variant = edit.variant();
+        String sku = variant.sku().strip().toUpperCase(Locale.ROOT);
+        if (sku.length() > 50) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        int productRows = db.update("""
+                UPDATE product p SET name = ?, category = ?
+                FROM product_variant v
+                WHERE p.tenant_id = ? AND v.tenant_id = p.tenant_id AND v.product_id = p.id
+                  AND v.id = ? AND p.xmin::text = ?
+                """, edit.name().strip(), edit.category() == null ? null : edit.category().strip(),
+                store, id, edit.productVersion());
+        if (productRows == 0) throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
+        try {
+            int variantRows = db.update("""
+                    UPDATE product_variant SET sku = ?, size = ?, color = ?, price = ?, stock_physical = ?
+                    WHERE tenant_id = ? AND id = ? AND xmin::text = ? AND coalesce(stock_reserved, 0) <= ?
+                    """, sku, variant.size().strip(), variant.color().strip(), variant.price(), variant.stock(),
+                    store, id, edit.variantVersion(), variant.stock());
+            if (variantRows == 0) throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
+        } catch (DuplicateKeyException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "SKU repetido", ex);
+        }
     }
 
     @PostMapping
