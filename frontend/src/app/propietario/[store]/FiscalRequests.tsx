@@ -4,7 +4,7 @@ import {useEffect, useState} from "react";
 
 type DocumentRow = {
   sale:string; created:string; kind:string; total:number; customer:string|null;
-  status:string; series:string|null; number:number|null;
+  status:string; series:string|null; number:number|null; hasXml:boolean; hasCdr:boolean;
 };
 type Page = {documents:DocumentRow[]; more:boolean};
 type Props = {store:string; salesRevision:number; send:(path:string,body:string)=>Promise<Response>};
@@ -40,6 +40,29 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
     void load();
     return ()=>controller.abort();
   },[open,path,page,refresh,salesRevision]);
+
+  async function download(sale:string, kind:"xml"|"cdr") {
+    setBusy(true); setMessage("");
+    try {
+      const res = await fetch("/api/owner/"+path+"/"+sale+"/files/"+kind,{cache:"no-store"});
+      if (res.status===404) throw new Error("El archivo ya no está disponible. Actualiza la lista.");
+      if (res.status===422) throw new Error("El archivo guardado tiene un formato inválido.");
+      if (!res.ok) throw new Error("No se pudo descargar el archivo.");
+      const file:{filename:string; content:string} = await res.json();
+      const bytes = Uint8Array.from(atob(file.content), char=>char.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes],{type:kind==="xml"?"application/xml":"application/zip"}));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setMessage("Descarga iniciada: "+file.filename);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "No se pudo descargar el archivo.");
+    } finally {setBusy(false);}
+  }
 
   async function assign(sale:string) {
     setBusy(true); setMessage("");
@@ -89,6 +112,10 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
         {row.number!==null ? <p>Serie beta {row.series}-{String(row.number).padStart(8,"0")}</p> :
           row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>assign(row.sale)}>Asignar número de pruebas</button>}
         {row.number!==null && row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>emit(row.sale)}>Enviar a APIsPERU en beta</button>}
+        {(row.hasXml || row.hasCdr) && <div className="mt-2 flex gap-4">
+          {row.hasXml && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"xml")}>Descargar XML</button>}
+          {row.hasCdr && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"cdr")}>Descargar CDR (.zip)</button>}
+        </div>}
       </li>)}</ul>}
     <p role="status">{message}</p>
     <nav aria-label="Páginas de solicitudes" className="mt-3 flex gap-3">
