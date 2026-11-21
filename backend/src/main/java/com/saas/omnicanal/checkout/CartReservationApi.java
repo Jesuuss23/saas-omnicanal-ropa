@@ -16,7 +16,21 @@ import org.springframework.web.server.ResponseStatusException;
 class CartReservationApi {
     private final JdbcTemplate db;
 
-    CartReservationApi(JdbcTemplate db) { this.db = db; }
+    private final ReservationRelease release;
+
+    CartReservationApi(JdbcTemplate db, ReservationRelease release) {
+        this.db = db;
+        this.release = release;
+    }
+
+    record Cancellation(@NotNull UUID key) {}
+    record CancellationReceipt(boolean released) {}
+
+    @DeleteMapping
+    CancellationReceipt cancel(@PathVariable UUID store, @Valid @RequestBody Cancellation body) {
+        release.release(store, body.key());
+        return new CancellationReceipt(true);
+    }
 
     record Item(@NotNull UUID id, @Min(1) int quantity,
                 @NotNull @Positive @Digits(integer=8, fraction=2) BigDecimal price) {}

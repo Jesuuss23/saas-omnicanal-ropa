@@ -12,7 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 class ReservationExpiry {
     private final JdbcTemplate db;
 
-    ReservationExpiry(JdbcTemplate db) { this.db=db; }
+    private final ReservationRelease release;
+
+    ReservationExpiry(JdbcTemplate db, ReservationRelease release) {
+        this.db=db;
+        this.release=release;
+    }
 
     record Key(UUID store, UUID reservation) {}
 
@@ -24,12 +29,7 @@ class ReservationExpiry {
                 ORDER BY expires_at LIMIT 50 FOR UPDATE SKIP LOCKED
                 """,(rs,n)->new Key(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class)));
         for (var key : keys) {
-            db.update("""
-                    UPDATE product_variant v SET stock_reserved=v.stock_reserved-l.quantity
-                    FROM cart_reservation_line l WHERE l.tenant_id=? AND l.reservation_id=?
-                      AND (v.tenant_id,v.id)=(l.tenant_id,l.variant_id)
-                    """,key.store(),key.reservation());
-            db.update("UPDATE cart_reservation SET released=true WHERE tenant_id=? AND id=?",key.store(),key.reservation());
+            release.release(key.store(), key.reservation());
         }
     }
 }

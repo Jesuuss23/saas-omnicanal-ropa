@@ -85,6 +85,22 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
     finally {setReserving(false);}
   }
 
+  async function releaseReservation() {
+    if (!hold?.expiresAt || reserving) return;
+    setReserving(true);
+    try {
+      const response=await fetch("/api/public/stores/"+store+"/reservation",{
+        method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:hold.key})
+      });
+      if (!response.ok) throw new Error();
+      try {sessionStorage.removeItem(reservationKey);} catch {setStorageError(true);}
+      setHold(null);
+      setNotice("Reserva liberada. Puedes editar las prendas y cantidades.");
+    } catch {
+      setNotice("No se pudo confirmar la liberación. Vuelve a intentarlo.");
+    } finally {setReserving(false);}
+  }
+
   function save(next:Line[],message:string) {
     setIssues({});
     current.current=next;
@@ -171,7 +187,10 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         </li>)}</ul>
         <p className="mt-3 font-semibold">Subtotal estimado {currency.format(subtotal)}</p>
         <button type="button" disabled={checking || locked} onClick={verify} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
-        {hold?.expiresAt ? <p role="status">Prendas reservadas hasta las {new Date(hold.expiresAt).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}.</p> :
+        {hold?.expiresAt ? <><p role="status">Prendas reservadas hasta las {new Date(hold.expiresAt).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}.</p>
+          <button type="button" disabled={reserving} onClick={releaseReservation} className="my-2 rounded border px-3 py-2">
+            {reserving?"Liberando…":"Liberar reserva y editar carrito"}
+          </button></> :
           <button type="button" disabled={checking || reserving} onClick={reserve} className="ml-2 rounded bg-teal-800 px-3 py-2 text-white">
             {reserving?"Confirmando…":hold?"Reintentar reserva":"Reservar por 15 minutos"}
           </button>}
