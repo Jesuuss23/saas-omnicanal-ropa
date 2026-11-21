@@ -1,5 +1,6 @@
 "use client";
 
+import OrderAmounts from "../../components/OrderAmounts";
 import {useEffect,useState} from "react";
 
 const labels={PENDING_PAYMENT:"Pendiente de pago",CANCELLED:"Cancelado",EXPIRED:"Vencido"};
@@ -105,9 +106,8 @@ export default function WebOrders({store}:{store:string}) {
         data.orders.length===0 ? <p>No hay pedidos en esta página.</p> :
         <ul className="divide-y">{data.orders.map(o=><li key={o.id} className="space-y-1 py-3">
           <p><strong>{o.name}</strong> · {o.phone}</p>
-          <p>{labels[o.status]} · {money.format(o.total)} · {date.format(new Date(o.createdAt))}</p>
-          {o.fee!=null && <p>Envío {money.format(o.fee)} · Total {money.format(o.total+o.fee)}</p>}
-          {o.freeDelivery && <p>Delivery gratis · S/ 0.00</p>}
+          <p>{labels[o.status]} · {date.format(new Date(o.createdAt))}</p>
+          <OrderAmounts merchandise={o.total} method={o.method} freeDelivery={o.freeDelivery} fee={o.fee}/>
           {o.method && <p>{o.method==="PICKUP"?"Recojo en tienda":"Delivery"} · {o.address}{o.pickupHours && " · "+o.pickupHours}</p>}
           <DeliveryDirections order={o}/>
           <p className="break-all text-sm">Pedido {o.id}</p>

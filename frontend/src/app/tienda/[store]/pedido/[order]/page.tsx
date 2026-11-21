@@ -5,7 +5,7 @@ import {useParams} from "next/navigation";
 import OrderSummary, {type Order} from "../../OrderSummary";
 
 const statuses={PENDING_PAYMENT:"Pendiente de pago",EXPIRED:"Vencido",CANCELLED:"Cancelado"};
-type Detail=Pick<Order,"items"|"total"|"freeDelivery"|"deliveryFee"> & {
+type Detail=Pick<Order,"items"|"total"|"freeDelivery"|"deliveryFee"|"method"> & {
   status:keyof typeof statuses;
   pickup?:{address:string;hours:string}|null;
 };
