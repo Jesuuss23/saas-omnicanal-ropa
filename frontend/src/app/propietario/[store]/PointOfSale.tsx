@@ -1,6 +1,7 @@
 "use client";
 
 import {useCallback, useEffect, useReducer, useRef, useState, type FormEvent} from "react";
+import FiscalRequests from "./FiscalRequests";
 import QrCamera from "./QrCamera";
 
 type Item = {id:string;name:string;sku:string;size:string;color:string|null;price:number;available:number};
@@ -28,6 +29,7 @@ function reduce(cart:Cart, action:Action):Cart {
 }
 
 export default function PointOfSale({store,send}:{store:string;send:(path:string, body:string)=>Promise<Response>}) {
+  const [salesRevision,setSalesRevision] = useState(0);
   const [cart,dispatch] = useReducer(reduce,{lines:[],notice:""});
   const [sku,setSku] = useState("");
   const [camera,setCamera] = useState(false);
@@ -104,6 +106,7 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
       sessionStorage.removeItem(storageKey);
       setKind("BOLETA"); setBuyerType(""); setBuyerNumber(""); setBuyerName("");
       setUnconfirmed(false); setAmount(""); setReference("");
+      setSalesRevision(value=>value+1);
       dispatch({type:"paid",message:`Venta ${receipt.id} registrada por ${money.format(receipt.total)}. Vuelto: ${money.format(receipt.change)}.${receipt.fiscalStatus === "PENDING" ? " Comprobante pendiente de emisión." : ""}`});
     } catch {
       dispatch({type:"notice",message:"No se pudo confirmar el registro. Reintenta desde esta pestaña antes de iniciar otro cobro."});
@@ -151,5 +154,6 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
         </fieldset>
         {method==="CASH" && Number(amount)*100>=cents && <p>Vuelto: {money.format((Math.round(Number(amount)*100)-cents)/100)}</p>}
       </form>}
+    <FiscalRequests store={store} send={send} salesRevision={salesRevision}/>
   </section>;
 }
