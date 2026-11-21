@@ -3,7 +3,7 @@
 import {useEffect,useState} from "react";
 
 const labels={PENDING_PAYMENT:"Pendiente de pago",CANCELLED:"Cancelado",EXPIRED:"Vencido"};
-type Order={id:string;name:string;phone:string;total:number;status:keyof typeof labels;createdAt:string;method?:string;address?:string;pickupHours?:string;freeDelivery?:boolean;fee?:number|null;latitude?:number;longitude?:number};
+type Order={id:string;name:string;phone:string;total:number;status:keyof typeof labels;createdAt:string;method?:string;address?:string;pickupHours?:string;freeDelivery?:boolean;fee?:number|null;latitude?:number|null;longitude?:number|null};
 type Page={orders:Order[];more:boolean};
 type Item={variant:string;name:string;size:string;color:string|null;quantity:number;unitPrice:number};
 const money=new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
@@ -35,6 +35,21 @@ function Items({url}:{url:string}) {
   return <ul className="mt-2 space-y-1 border-l pl-3">{data.map(i=><li key={i.variant}>
     {i.name} · Talla {i.size}{i.color && " · "+i.color} · {i.quantity} × {money.format(i.unitPrice)}
   </li>)}</ul>;
+}
+
+function DeliveryDirections({order}:{order:Order}) {
+  if (order.method!=="DELIVERY") return null;
+  const {latitude,longitude}=order;
+  const hasPoint=typeof latitude==="number" && Math.abs(latitude)<=90 &&
+    typeof longitude==="number" && Math.abs(longitude)<=180;
+  const destination=hasPoint ? latitude+","+longitude : order.address?.trim();
+  if (!destination) return null;
+  const params=new URLSearchParams({api:"1",destination});
+  return <p>
+    {hasPoint && <span>Destino {destination} · </span>}
+    <a href={"https://www.google.com/maps/dir/?"+params} target="_blank" rel="noopener noreferrer"
+      className="text-teal-800 underline">{hasPoint?"Ver ruta al destino":"Buscar ruta por dirección"} en Google Maps</a>
+  </p>;
 }
 
 function ShareTracking({store,order,path}:{store:string;order:Order;path:string}) {
@@ -91,9 +106,10 @@ export default function WebOrders({store}:{store:string}) {
         <ul className="divide-y">{data.orders.map(o=><li key={o.id} className="space-y-1 py-3">
           <p><strong>{o.name}</strong> · {o.phone}</p>
           <p>{labels[o.status]} · {money.format(o.total)} · {date.format(new Date(o.createdAt))}</p>
-          {o.fee!=null && <p>Envío {money.format(o.fee)} · Total {money.format(o.total+o.fee)} · Destino {o.latitude}, {o.longitude}</p>}
+          {o.fee!=null && <p>Envío {money.format(o.fee)} · Total {money.format(o.total+o.fee)}</p>}
           {o.freeDelivery && <p>Delivery gratis · S/ 0.00</p>}
           {o.method && <p>{o.method==="PICKUP"?"Recojo en tienda":"Delivery"} · {o.address}{o.pickupHours && " · "+o.pickupHours}</p>}
+          <DeliveryDirections order={o}/>
           <p className="break-all text-sm">Pedido {o.id}</p>
           <button className="text-teal-800 underline" aria-expanded={expanded===o.id}
             onClick={()=>setExpanded(expanded===o.id?"":o.id)}>{expanded===o.id?"Ocultar prendas":"Ver prendas"}</button>
