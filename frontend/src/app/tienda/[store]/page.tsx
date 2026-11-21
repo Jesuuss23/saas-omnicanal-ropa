@@ -2,7 +2,7 @@ import Link from "next/link";
 import {notFound} from "next/navigation";
 
 import CatalogCart, {type Variant} from "./CatalogCart";
-type Catalog = {storeName:string; variants:Variant[]; hasNext:boolean};
+type Catalog = {storeName:string; pickup?:{address:string;hours:string}|null; variants:Variant[]; hasNext:boolean};
 type Props = {
   params:Promise<{store:string}>;
   searchParams:Promise<{q?:string|string[]; page?:string|string[]}>;
@@ -27,6 +27,11 @@ export default async function StoreCatalog({params,searchParams}:Props) {
     <header className="border-b border-stone-300 pb-6">
       <p className="text-sm font-medium text-teal-800">Catálogo de prendas</p>
       <h1 className="mt-1 text-4xl font-semibold">{catalog.storeName}</h1>
+      {catalog.pickup && <section className="mt-4">
+        <h2 className="font-semibold">Recojo en tienda</h2>
+        <p>{catalog.pickup.address}</p>
+        <p>Horario: {catalog.pickup.hours}</p>
+      </section>}
     </header>
     <form action={path} method="get" className="my-6 flex flex-wrap items-end gap-3">
       <label className="grid flex-1 gap-1">Buscar por prenda, categoría, talla o color
