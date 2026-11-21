@@ -124,6 +124,14 @@ class ApisPeruCompanyDirectory {
             throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
     }
 
+    tools.jackson.databind.JsonNode invoiceStatus(String ruc, String type, String series, int number, String token) {
+        return api.get().uri(uri -> uri.path("/invoice/status")
+                        .queryParam("ruc",ruc).queryParam("tipo",type)
+                        .queryParam("serie",series).queryParam("numero",number).build())
+                .headers(h -> h.setBearerAuth(token)).accept(MediaType.APPLICATION_JSON)
+                .retrieve().body(tools.jackson.databind.JsonNode.class);
+    }
+
     tools.jackson.databind.JsonNode sendInvoice(Object invoice, String token) {
         return api.post().uri("/invoice/send").headers(h -> h.setBearerAuth(token))
                 .contentType(MediaType.APPLICATION_JSON).body(invoice).retrieve().body(tools.jackson.databind.JsonNode.class);
