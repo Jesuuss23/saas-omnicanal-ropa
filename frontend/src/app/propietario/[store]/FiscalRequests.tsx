@@ -2,8 +2,13 @@
 
 import {useEffect, useState} from "react";
 
+type Submission = {
+  attemptedAt:string; cdrCode:string|null; description:string|null; notes:string[];
+  errorCode:string|null; errorMessage:string|null; httpStatus:number|null;
+};
+
 type DocumentRow = {
-  sale:string; created:string; kind:string; total:number; customer:string|null;
+  submission:Submission|null; sale:string; created:string; kind:string; total:number; customer:string|null;
   status:string; series:string|null; number:number|null; hasXml:boolean; hasCdr:boolean;
 };
 type Page = {documents:DocumentRow[]; more:boolean};
@@ -112,6 +117,19 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
         {row.number!==null ? <p>Serie beta {row.series}-{String(row.number).padStart(8,"0")}</p> :
           row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>assign(row.sale)}>Asignar número de pruebas</button>}
         {row.number!==null && row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>emit(row.sale)}>Enviar a APIsPERU en beta</button>}
+        {row.submission && <details className="my-2">
+          <summary className="cursor-pointer text-teal-800">Detalle del envío</summary>
+          <p>Intento registrado el {date.format(new Date(row.submission.attemptedAt))} (Lima).</p>
+          {row.submission.cdrCode && <p>Código CDR: {row.submission.cdrCode}</p>}
+          {row.submission.description && <p>{row.submission.description}</p>}
+          {row.submission.notes.length>0 && <ul aria-label="Observaciones del CDR" className="list-disc pl-5">
+            {row.submission.notes.map((note,index)=><li key={index}>{note}</li>)}
+          </ul>}
+          {row.submission.errorCode && <p>Código de error: {row.submission.errorCode}</p>}
+          {row.submission.errorMessage && <p>{row.submission.errorMessage}</p>}
+          {row.submission.httpStatus && <p>APIsPERU respondió con HTTP {row.submission.httpStatus}.</p>}
+          {row.status==="BETA_REVIEW" && <p>El resultado sigue pendiente. Consulta la serie y el correlativo en APIsPERU para confirmar qué ocurrió.</p>}
+        </details>}
         {(row.hasXml || row.hasCdr) && <div className="mt-2 flex gap-4">
           {row.hasXml && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"xml")}>Descargar XML</button>}
           {row.hasCdr && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"cdr")}>Descargar CDR (.zip)</button>}

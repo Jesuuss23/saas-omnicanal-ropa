@@ -25,7 +25,10 @@ class BetaPosDocumentsApi {
     }
 
     record Document(UUID sale, OffsetDateTime created, String kind, BigDecimal total,
-                    String customer, String status, String series, Integer number, boolean hasXml, boolean hasCdr) {}
+                    String customer, String status, String series, Integer number, boolean hasXml, boolean hasCdr,
+                    Submission submission) {}
+    record Submission(OffsetDateTime attemptedAt, String cdrCode, String description, List<String> notes,
+                      String errorCode, String errorMessage, Integer httpStatus) {}
     record Page(List<Document> documents, boolean more) {}
     record Numbered(String series, int number) {}
 
@@ -37,15 +40,33 @@ class BetaPosDocumentsApi {
         var rows = db.query("""
                 SELECT f.sale_id, f.created_at, f.kind, s.total, f.customer_name, f.status, n.series, n.number,
                        NULLIF(btrim(n.provider_response->>\'xml\'),\'\') IS NOT NULL,
-                       NULLIF(btrim(n.provider_response#>>\'{sunatResponse,cdrZip}\'),\'\') IS NOT NULL
+                       NULLIF(btrim(n.provider_response#>>\'{sunatResponse,cdrZip}\'),\'\') IS NOT NULL,
+                       n.submitted_at, n.provider_response#>>'{sunatResponse,cdrResponse,code}' AS cdr_code,
+                       n.provider_response#>>'{sunatResponse,cdrResponse,description}' AS description,
+                       ARRAY(SELECT note #>> '{}' FROM jsonb_array_elements(
+                           CASE WHEN jsonb_typeof(n.provider_response#>'{sunatResponse,cdrResponse,notes}')='array'
+                                THEN n.provider_response#>'{sunatResponse,cdrResponse,notes}' ELSE '[]'::jsonb END
+                       ) AS notes(note) WHERE jsonb_typeof(note)='string') AS notes,
+                       n.provider_response#>>'{sunatResponse,error,code}' AS error_code,
+                       n.provider_response#>>'{sunatResponse,error,message}' AS error_message,
+                       n.provider_response->>'transportHttpStatus' AS transport_status
                   FROM pos_fiscal_request f JOIN pos_sale s ON (s.tenant_id,s.id)=(f.tenant_id,f.sale_id)
                   LEFT JOIN beta_pos_document_number n ON (n.tenant_id,n.sale_id)=(f.tenant_id,f.sale_id)
                  WHERE f.tenant_id=? ORDER BY f.created_at DESC, f.sale_id DESC LIMIT 21 OFFSET ?
                 """,
                 (rs,row) -> new Document(rs.getObject(1,UUID.class),rs.getObject(2,OffsetDateTime.class),
                         rs.getString(3),rs.getBigDecimal(4),rs.getString(5),rs.getString(6),
-                        rs.getString(7),rs.getObject(8,Integer.class),rs.getBoolean(9),rs.getBoolean(10)), store, page * 20L);
+                        rs.getString(7),rs.getObject(8,Integer.class),rs.getBoolean(9),rs.getBoolean(10),submission(rs)), store, page * 20L);
         return new Page(rows.subList(0, Math.min(rows.size(),20)), rows.size()>20);
+    }
+
+    private static Submission submission(java.sql.ResultSet rs) throws java.sql.SQLException {
+        var attemptedAt = rs.getObject("submitted_at", OffsetDateTime.class);
+        if (attemptedAt == null) return null;
+        String http = rs.getString("transport_status");
+        return new Submission(attemptedAt, rs.getString("cdr_code"), rs.getString("description"),
+                List.of((String[])rs.getArray("notes").getArray()), rs.getString("error_code"),
+                rs.getString("error_message"), http != null && http.matches("[1-5][0-9]{2}") ? Integer.valueOf(http) : null);
     }
 
     record Download(String filename, byte[] content) {}

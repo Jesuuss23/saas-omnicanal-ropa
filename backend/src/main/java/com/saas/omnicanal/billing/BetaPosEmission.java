@@ -81,6 +81,13 @@ class BetaPosEmission {
         JsonNode reply;
         try {
             reply=provider.sendInvoice(invoice,token);
+        } catch (org.springframework.web.client.RestClientResponseException ex) {
+            db.update("""
+                    UPDATE beta_pos_document_number
+                       SET provider_response=jsonb_build_object('transportHttpStatus',CAST(? AS integer))
+                     WHERE tenant_id=? AND sale_id=? AND provider_response IS NULL
+                    """, ex.getStatusCode().value(), store, sale);
+            return new Result("BETA_REVIEW");
         } catch (RestClientException ex) {
             return new Result("BETA_REVIEW");
         }
