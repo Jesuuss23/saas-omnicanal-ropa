@@ -10,6 +10,10 @@ const money = new Intl.NumberFormat("es-PE", {style:"currency", currency:"PEN"})
 const field = "mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2";
 
 export default function Catalog({store, send}:Props) {
+  const [copies,setCopies] = useState<Record<string,number>>({});
+  const [labelBusy,setLabelBusy] = useState(false);
+  const [labelMessage,setLabelMessage] = useState("");
+  const totalLabels = Object.values(copies).reduce((a,b)=>a+b,0);
   const [editing,setEditing] = useState<Row|null>(null);
   const [page,setPage] = useState(0);
   const [refresh,setRefresh] = useState(0);
@@ -34,6 +38,28 @@ export default function Catalog({store, send}:Props) {
     void load();
     return ()=>controller.abort();
   },[page,path,refresh]);
+
+  async function downloadLabels() {
+    setLabelBusy(true);
+    setLabelMessage("");
+    try {
+      const items = Object.entries(copies).filter(([,count])=>count > 0).map(([id,count])=>({id,copies:count}));
+      const res = await send(path + "/labels", JSON.stringify({items}));
+      if (!res.ok) throw new Error();
+      const {pdf} = await res.json();
+      const bytes = Uint8Array.from(atob(pdf), char=>char.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], {type:"application/pdf"}));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "etiquetas-prendas.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url), 60000);
+      setLabelMessage("PDF generado. Imprime en A4 a tamaño real.");
+    } catch {setLabelMessage("No se pudo generar el PDF. Comprueba la sesión y la selección.");}
+    finally {setLabelBusy(false);}
+  }
 
   async function save(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,11 +104,21 @@ export default function Catalog({store, send}:Props) {
       </fieldset><p aria-live="polite" className="mt-2 text-sm">{message}</p>
     </form>
     <h3 className="mb-3 text-lg font-semibold">Inventario por variante</h3>
+    <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+      <span>Etiquetas seleccionadas: {totalLabels}</span>
+      <button disabled={!totalLabels || totalLabels>300 || Object.values(copies).filter(n=>n>0).length>100 || labelBusy} onClick={downloadLabels}
+        className="rounded-lg bg-teal-800 px-3 py-2 text-white disabled:opacity-50">{labelBusy ? "Generando…" : "Descargar etiquetas PDF"}</button>
+      {totalLabels>0 && <button disabled={labelBusy} className="underline" onClick={()=>{setCopies({});setLabelMessage("");}}>Limpiar selección</button>}
+      {(totalLabels>300 || Object.values(copies).filter(n=>n>0).length>100) && <span>Selecciona hasta 300 etiquetas y 100 variantes por PDF.</span>}
+      <span role="status">{labelMessage}</span>
+    </div>
     {editing && <EditVariant key={editing.id} row={editing} path={path} send={send} close={()=>setEditing(null)}
       reload={()=>{setEditing(null); setRefresh(v=>v+1);}}/>}
     {listError ? <button className="underline" onClick={()=>setRefresh(v=>v+1)}>Volver a cargar el inventario</button> : !data ? <p>Cargando inventario…</p> : !data.rows.length ? <p>Todavía no hay variantes en esta página.</p> :
-    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Prenda","SKU","Talla","Color","Precio","Disponible","Acciones"].map(label=><th className="p-2" key={label}>{label}</th>)}</tr></thead>
-    <tbody>{data.rows.map(row=><tr className="border-t border-stone-200" key={row.id}>{[row.name,row.sku,row.size,row.color || "—",money.format(row.price),row.available].map((value,i)=><td className="p-2" key={i}>{value}</td>)}<td className="p-2"><button disabled={!!editing} onClick={()=>setEditing(row)} className="text-teal-800 underline">Editar</button></td></tr>)}</tbody></table></div>}
+    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Prenda","SKU","Talla","Color","Precio","Disponible","Copias QR","Acciones"].map(label=><th className="p-2" key={label}>{label}</th>)}</tr></thead>
+    <tbody>{data.rows.map(row=><tr className="border-t border-stone-200" key={row.id}>{[row.name,row.sku,row.size,row.color || "—",money.format(row.price),row.available].map((value,i)=><td className="p-2" key={i}>{value}</td>)}<td className="p-2"><input type="number" min={0} max={300} disabled={labelBusy} value={copies[row.id] || ""}
+      placeholder="0" aria-label={`Copias de ${row.sku}`} className="w-16 rounded border p-1"
+      onChange={event=>{const n=Number(event.target.value); if(Number.isInteger(n) && n>=0 && n<=300) setCopies(old=>({...old,[row.id]:n}));}}/></td><td className="p-2"><button disabled={!!editing} onClick={()=>setEditing(row)} className="text-teal-800 underline">Editar</button></td></tr>)}</tbody></table></div>}
     {(page>0 || data?.hasNext) && <nav aria-label="Páginas del inventario" className="mt-4 flex gap-5"><button disabled={!page} onClick={()=>setPage(page-1)}>Anterior</button><span>Página {page+1}</span><button disabled={!data?.hasNext} onClick={()=>setPage(page+1)}>Siguiente</button></nav>}
   </section>;
 }
