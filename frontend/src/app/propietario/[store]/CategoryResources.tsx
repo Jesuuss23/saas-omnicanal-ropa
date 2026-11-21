@@ -5,7 +5,7 @@ import {useEffect,useState,type FormEvent} from "react";
 const labels={NONE:"Ninguno",LINK:"Enlace",PDF:"PDF",IMAGE:"Imagen"};
 type Kind=keyof typeof labels;
 type Resource={category:string;link:string|null;pdf:string|null;image:string|null;active:Kind;revision:number};
-type Props={store:string;disabled?:boolean;insert?:(line:string)=>void;
+type Props={store:string;chat?:string;disabled?:boolean;insert?:(line:string)=>void;
   send?:(path:string,body:string,method:"PUT")=>Promise<Response>};
 
 function activeUrl(resource:Resource) {
@@ -15,6 +15,11 @@ function activeUrl(resource:Resource) {
     case "IMAGE": return resource.image;
     default: return null;
   }
+}
+
+function normalizeWords(text:string) {
+  return text.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]+/g," ").trim();
 }
 
 async function fileData(field:FormDataEntryValue|null):Promise<string|null> {
@@ -28,10 +33,12 @@ async function fileData(field:FormDataEntryValue|null):Promise<string|null> {
   });
 }
 
-export default function CategoryResources({store,disabled,insert,send}:Props) {
+export default function CategoryResources({store,chat,disabled,insert,send}:Props) {
   const path="stores/"+store+"/catalog/resources";
   const [open,setOpen]=useState(false);
   const [rows,setRows]=useState<Resource[]|null>(null);
+  const [recent,setRecent]=useState<string[]>([]);
+  const [historyFailed,setHistoryFailed]=useState(false);
   const [category,setCategory]=useState("");
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
@@ -51,7 +58,34 @@ export default function CategoryResources({store,disabled,insert,send}:Props) {
     void load();
     return ()=>controller.abort();
   },[open,path,refresh]);
+  useEffect(()=>{
+    if (!open || !chat) return;
+    const controller=new AbortController();
+    setRecent([]);
+    setHistoryFailed(false);
+    async function loadHistory(contact:string) {
+      try {
+        const query=new URLSearchParams({chat:contact});
+        const response=await fetch("/api/owner/stores/"+store+"/crm/messages?"+query,{
+          cache:"no-store",signal:controller.signal
+        });
+        if (!response.ok) throw new Error();
+        const messages:{text:string;receivedAt:string}[]=await response.json();
+        messages.sort((a,b)=>Date.parse(b.receivedAt)-Date.parse(a.receivedAt));
+        if (!controller.signal.aborted) setRecent(messages.slice(0,5).map(m=>normalizeWords(m.text)));
+      } catch {
+        if (!controller.signal.aborted) setHistoryFailed(true);
+      }
+    }
+    void loadHistory(chat);
+    return ()=>controller.abort();
+  },[open,chat,store,refresh]);
+
   const options=(rows || []).filter(row=>!insert || activeUrl(row));
+  const suggested=recent.flatMap(message=>options.filter(row=>{
+    const phrase=normalizeWords(row.category);
+    return phrase && (" "+message+" ").includes(" "+phrase+" ");
+  })).filter((row,index,all)=>all.indexOf(row)===index);
   const selected=options.find(row=>row.category===category) || options[0];
 
   async function save(e:FormEvent<HTMLFormElement>) {
@@ -80,6 +114,13 @@ export default function CategoryResources({store,disabled,insert,send}:Props) {
     {open && <div className="mt-2 grid max-w-xl gap-2">
       <button type="button" disabled={busy} className="w-fit underline" onClick={()=>setRefresh(n=>n+1)}>Actualizar categorías</button>
       {selected ? <>
+        {insert && suggested.length>0 && <fieldset className="flex flex-wrap gap-2">
+          <legend className="text-sm font-medium">Categorías mencionadas por el cliente</legend>
+          {suggested.map(row=><button key={row.category} type="button" disabled={disabled}
+            aria-pressed={selected.category===row.category} onClick={()=>setCategory(row.category)}
+            className="rounded border px-2 py-1 aria-pressed:border-teal-800">{row.category}</button>)}
+        </fieldset>}
+        {historyFailed && <p role="status">No se pudieron leer los mensajes recientes. Puedes elegir la categoría manualmente.</p>}
         <label>Categoría <select disabled={busy} value={selected.category} onChange={e=>{setCategory(e.target.value);setMessage("");}} className="rounded border p-1">
           {options.map(row=><option key={row.category}>{row.category}</option>)}
         </select></label>
