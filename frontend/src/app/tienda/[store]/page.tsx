@@ -1,13 +1,12 @@
 import Link from "next/link";
 import {notFound} from "next/navigation";
 
-type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number};
+import CatalogCart, {type Variant} from "./CatalogCart";
 type Catalog = {storeName:string; variants:Variant[]; hasNext:boolean};
 type Props = {
   params:Promise<{store:string}>;
   searchParams:Promise<{q?:string|string[]; page?:string|string[]}>;
 };
-const currency = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 
 export default async function StoreCatalog({params,searchParams}:Props) {
   const {store} = await params;
@@ -36,14 +35,7 @@ export default async function StoreCatalog({params,searchParams}:Props) {
       <button className="rounded bg-teal-800 px-4 py-2 text-white">Buscar</button>
       {query && <Link href={path} className="p-2 underline">Limpiar</Link>}
     </form>
-    {catalog.variants.length ? <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {catalog.variants.map(item=><li key={item.id} className="rounded-xl border border-stone-200 p-5">
-        {item.category && <p className="text-sm text-stone-600">{item.category}</p>}
-        <h2 className="text-xl font-semibold">{item.name}</h2>
-        <p className="my-2">Talla {item.size}{item.color && " · "+item.color}</p>
-        <p className="font-semibold">{currency.format(item.price)}</p>
-      </li>)}
-    </ul> : <p>{query?"No hay prendas disponibles para esta búsqueda.":"No hay prendas disponibles en esta página."}</p>}
+    <CatalogCart key={store} store={store} variants={catalog.variants} query={query}/>
     <nav aria-label="Páginas del catálogo" className="mt-6 flex gap-4 text-teal-800 underline">
       {page>0 && <Link href={pageLink(page-1)}>Anterior</Link>}
       {catalog.hasNext && <Link href={pageLink(page+1)}>Siguiente</Link>}
