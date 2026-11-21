@@ -39,21 +39,25 @@ public class OwnerCatalogApi {
     }
 
     @GetMapping
-    Page list(@PathVariable UUID store, Principal principal, @RequestParam(defaultValue="0") int page) {
+    Page list(@PathVariable UUID store, Principal principal, @RequestParam(defaultValue="0") int page,
+              @RequestParam(defaultValue="") String query, @RequestParam(defaultValue="false") boolean availableOnly) {
         requireStore(store, principal);
-        if (page < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        if (page < 0 || query.length() > 150) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         var rows = db.query("""
                 SELECT v.id, p.name, v.sku, v.size, v.color, v.price,
                        coalesce(v.stock_physical, 0) - coalesce(v.stock_reserved, 0) AS available,
                        p.category, coalesce(v.stock_physical, 0) AS physical, coalesce(v.stock_reserved, 0) AS reserved,
                        p.xmin::text AS product_version, v.xmin::text AS variant_version
                 FROM product_variant v JOIN product p ON (p.tenant_id, p.id) = (v.tenant_id, v.product_id)
-                WHERE v.tenant_id = ? ORDER BY p.created_at DESC NULLS LAST, p.id, v.sku, v.id LIMIT 26 OFFSET ?
+                WHERE v.tenant_id = ?
+                  AND (NOT ? OR coalesce(v.stock_physical,0) > coalesce(v.stock_reserved,0))
+                  AND strpos(lower(concat_ws(' ',p.name,p.category,v.sku,v.size,v.color)),lower(?)) > 0
+                ORDER BY p.created_at DESC NULLS LAST, p.id, v.sku, v.id LIMIT 26 OFFSET ?
                 """, (rs, n) -> new Row(rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("sku"),
                 rs.getString("size"), rs.getString("color"), rs.getBigDecimal("price"), rs.getInt("available"),
                 rs.getString("category"), rs.getInt("physical"), rs.getInt("reserved"),
                 rs.getString("product_version"), rs.getString("variant_version")),
-                store, 25L * page);
+                store, availableOnly, query.strip(), 25L * page);
         return new Page(rows.stream().limit(25).toList(), rows.size() > 25);
     }
 
