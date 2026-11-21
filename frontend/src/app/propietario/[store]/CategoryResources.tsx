@@ -17,6 +17,17 @@ function activeUrl(resource:Resource) {
   }
 }
 
+async function fileData(field:FormDataEntryValue|null):Promise<string|null> {
+  if (!(field instanceof File) || !field.name) return null;
+  if (!field.size || field.size>2*1024*1024) throw new Error("Elige un archivo de hasta 2 MiB con contenido.");
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result).split(",")[1]);
+    reader.onerror=()=>reject(new Error("No se pudo leer el archivo."));
+    reader.readAsDataURL(field);
+  });
+}
+
 export default function CategoryResources({store,disabled,insert,send}:Props) {
   const path="stores/"+store+"/catalog/resources";
   const [open,setOpen]=useState(false);
@@ -49,8 +60,12 @@ export default function CategoryResources({store,disabled,insert,send}:Props) {
     const fields=new FormData(e.currentTarget);
     setBusy(true);setMessage("");
     try {
-      const res=await send(path,JSON.stringify({...selected,link:fields.get("link"),pdf:fields.get("pdf"),
-        image:fields.get("image"),active:fields.get("active")}),"PUT");
+      const resource={...selected,link:fields.get("link"),pdf:fields.get("pdf"),image:fields.get("image"),active:fields.get("active")};
+      const [pdfData,imageData]=await Promise.all([fileData(fields.get("pdfFile")),fileData(fields.get("imageFile"))]);
+      const uploading=Boolean(pdfData || imageData);
+      const res=await send(uploading?path+"/files":path,JSON.stringify(uploading?{resource,pdfData,imageData}:resource),"PUT");
+      if (res.status===415) throw new Error("El contenido debe corresponder a un PDF, PNG o JPEG.");
+      if (res.status===413) throw new Error("El archivo supera el límite de carga.");
       if (res.status===409) throw new Error("La categoría cambió. Pulsa Actualizar para cargar la versión vigente.");
       if (!res.ok) throw new Error("Revisa las URL HTTPS y comprueba que el recurso activo tenga una dirección.");
       const saved:Resource=await res.json();
@@ -69,12 +84,15 @@ export default function CategoryResources({store,disabled,insert,send}:Props) {
           {options.map(row=><option key={row.category}>{row.category}</option>)}
         </select></label>
         {insert ? <button type="button" disabled={disabled} className="w-fit text-teal-800 underline"
-          onClick={()=>insert("Catálogo de "+selected.category+": "+activeUrl(selected))}>
+          onClick={()=>insert("Catálogo de "+selected.category+": "+new URL(activeUrl(selected)!,window.location.origin).href)}>
           Agregar {labels[selected.active].toLowerCase()} al borrador</button> :
           <form key={selected.category+":"+selected.revision} onSubmit={save} className="grid gap-2">
             {(["link","pdf","image"] as const).map((field,i)=><label key={field}>{["Enlace al catálogo","URL del PDF","URL de la imagen"][i]}
-              <input type="url" name={field} maxLength={2048} placeholder="https://" defaultValue={selected[field] || ""}
+              <input type={selected[field]?.startsWith("/catalogos/")?"text":"url"} inputMode="url" name={field} maxLength={2048} placeholder="https://" defaultValue={selected[field] || ""}
                 disabled={busy} className="block w-full rounded border p-2"/></label>)}
+            <p>Para reemplazar una URL por un archivo, selecciónalo aquí. Máximo 2 MiB por archivo.</p>
+            <label>Subir PDF <input type="file" name="pdfFile" accept="application/pdf" disabled={busy}/></label>
+            <label>Subir imagen <input type="file" name="imageFile" accept="image/png,image/jpeg" disabled={busy}/></label>
             <label>Recurso para compartir <select name="active" defaultValue={selected.active} disabled={busy} className="rounded border p-1">
               {Object.entries(labels).map(([key,label])=><option key={key} value={key}>{label}</option>)}
             </select></label>

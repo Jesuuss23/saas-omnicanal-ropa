@@ -36,10 +36,12 @@ class CategoryResourceApi {
                 Kind.valueOf(rs.getString(5)),rs.getLong(6)),store,store,store);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @PutMapping
     Resource save(@PathVariable UUID store, Principal owner,@Valid @RequestBody Resource input) {
         requireOwner(store,owner);
-        String link=url(input.link()), pdf=url(input.pdf()), image=url(input.image());
+        String link=url(input.link()), pdf=resourceUrl(store,input.category(),Kind.PDF,input.pdf()),
+                image=resourceUrl(store,input.category(),Kind.IMAGE,input.image());
         if (switch (input.active()) {
             case LINK -> link==null;
             case PDF -> pdf==null;
@@ -60,7 +62,60 @@ class CategoryResourceApi {
                     """,link,pdf,image,input.active().name(),store,input.category(),input.revision());
         }
         if (changed!=1) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        db.update("""
+                DELETE FROM category_catalog_file WHERE tenant_id=? AND category=? AND
+                ('/catalogos/' || id::text) IS DISTINCT FROM (CASE WHEN kind='PDF' THEN CAST(? AS text) ELSE CAST(? AS text) END)
+                """,store,input.category(),pdf,image);
         return new Resource(input.category(),link,pdf,image,input.active(),input.revision()+1);
+    }
+
+    record Upload(@NotNull @Valid Resource resource, String pdfData, String imageData) {}
+
+    @PutMapping("/files")
+    @org.springframework.transaction.annotation.Transactional
+    Resource upload(@PathVariable UUID store, Principal owner, @Valid @RequestBody Upload input) {
+        requireOwner(store,owner);
+        Resource r=input.resource();
+        if (input.pdfData()==null && input.imageData()==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        // Save the category revision first; validation or file failures roll back this entire edit.
+        Resource saved=save(store,owner,new Resource(r.category(),r.link(),
+                input.pdfData()==null?r.pdf():null,input.imageData()==null?r.image():null,Kind.NONE,r.revision()));
+        String pdf=input.pdfData()==null?saved.pdf():writeFile(store,r.category(),Kind.PDF,input.pdfData());
+        String image=input.imageData()==null?saved.image():writeFile(store,r.category(),Kind.IMAGE,input.imageData());
+        if ((r.active()==Kind.PDF && pdf==null) || (r.active()==Kind.IMAGE && image==null) ||
+                (r.active()==Kind.LINK && saved.link()==null)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        db.update("UPDATE category_catalog_resource SET pdf_url=?,image_url=?,active=? WHERE tenant_id=? AND category=?",
+                pdf,image,r.active().name(),store,r.category());
+        return new Resource(r.category(),saved.link(),pdf,image,r.active(),saved.revision());
+    }
+
+    private String writeFile(UUID store,String category,Kind kind,String data) {
+        if (data.length()>2796204) throw new ResponseStatusException(HttpStatus.valueOf(413));
+        byte[] bytes;
+        try { bytes=java.util.Base64.getDecoder().decode(data); }
+        catch (IllegalArgumentException invalid) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST); }
+        if (bytes.length>2097152) throw new ResponseStatusException(HttpStatus.valueOf(413));
+        String signature=java.util.HexFormat.of().formatHex(bytes,0,Math.min(bytes.length,8));
+        String mime;
+        if (kind==Kind.PDF && signature.startsWith("255044462d")) mime="application/pdf";
+        else if (kind==Kind.IMAGE && signature.equals("89504e470d0a1a0a")) mime="image/png";
+        else if (kind==Kind.IMAGE && signature.startsWith("ffd8ff")) mime="image/jpeg";
+        else throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        UUID id=UUID.randomUUID();
+        db.update("INSERT INTO category_catalog_file(id,tenant_id,category,kind,media_type,content) VALUES (?,?,?,?,?,?)",
+                id,store,category,kind.name(),mime,bytes);
+        return "/catalogos/"+id;
+    }
+
+    private String resourceUrl(UUID store,String category,Kind kind,String value) {
+        if (value!=null && value.startsWith("/catalogos/")) {
+            if (Boolean.TRUE.equals(db.queryForObject("""
+                    SELECT EXISTS(SELECT 1 FROM category_catalog_file WHERE tenant_id=? AND category=? AND kind=?
+                    AND '/catalogos/' || id::text=?)
+                    """,Boolean.class,store,category,kind.name(),value))) return value;
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        }
+        return url(value);
     }
 
     private static String url(String value) {
