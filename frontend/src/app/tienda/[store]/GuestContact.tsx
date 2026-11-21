@@ -13,6 +13,8 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
   const [ready,setReady]=useState(false);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
+  const [minimum,setMinimum]=useState<number|null>(null);
+  const [subtotal,setSubtotal]=useState(0);
   const [pickup,setPickup]=useState<{address:string;hours:string;revision:number}|null>(null);
   const [method,setMethod]=useState("");
   const [address,setAddress]=useState("");
@@ -31,6 +33,8 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
           setName(contact.name ?? "");
           setPhone(contact.phone ?? "");
           setSaved(Boolean(contact.name && contact.phone));
+          setMinimum(contact.freeDeliveryMinimum ?? null);
+          setSubtotal(contact.subtotal);
           setPickup(contact.pickup ?? null);
           setMethod(contact.pickup?"":"DELIVERY");
           setOrder(contact.order);
@@ -69,7 +73,7 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
     setMessage("");
     try {
       const response=await fetch(url,{method:"POST",headers:{"X-Reservation-Key":reservation,"Content-Type":"application/json"},
-        body:JSON.stringify({method,address:method==="DELIVERY"?address.trim():null,pickupRevision:pickup?.revision})});
+        body:JSON.stringify({method,address:method==="DELIVERY"?address.trim():null,pickupRevision:pickup?.revision,freeDeliveryMinimum:minimum})});
       if (response.status===409) {
         setRetry(n=>n+1);
         return;
@@ -109,7 +113,8 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
         {method==="PICKUP" && pickup && <p>{pickup.address} · {pickup.hours}</p>}
         {method==="DELIVERY" && <label>Dirección de entrega<input value={address} maxLength={250} autoComplete="street-address"
           onChange={e=>setAddress(e.target.value)} className="block w-full rounded border p-2"/>
-          <span className="text-sm">El importe de prendas aún no incluye el envío.</span></label>}
+          <span className="text-sm">{minimum!==null && subtotal>=minimum ? "Delivery gratis para este pedido." :
+            minimum!==null ? "Delivery gratis desde S/ "+minimum.toFixed(2)+". Tarifa de este pedido pendiente." : "Tarifa de envío pendiente."}</span></label>}
         <button type="button" disabled={!method || (method==="DELIVERY" && !address.trim())} onClick={confirm} className="w-fit rounded border px-3 py-2">Confirmar pedido pendiente de pago</button></>}
     </fieldset>
     <p role="status">{message}</p>

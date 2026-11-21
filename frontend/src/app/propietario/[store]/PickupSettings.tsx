@@ -2,7 +2,7 @@
 
 import {useEffect,useState,type FormEvent} from "react";
 
-type Settings={enabled:boolean;address:string;hours:string;revision:number};
+type Settings={enabled:boolean;address:string;hours:string;revision:number;freeDeliveryMinimum:number|null};
 type Props={store:string;send:(path:string,body:string,method:"PUT")=>Promise<Response>};
 
 export default function PickupSettings({store,send}:Props) {
@@ -39,7 +39,7 @@ export default function PickupSettings({store,send}:Props) {
   }
 
   return <details className="my-4 rounded-xl border p-4" onToggle={e=>setOpen(e.currentTarget.open)}>
-    <summary className="cursor-pointer font-semibold">Recojo en tienda</summary>
+    <summary className="cursor-pointer font-semibold">Recojo y delivery</summary>
     {open && <>
       {settings && <form onSubmit={save} className="my-3 grid max-w-lg gap-2">
         <fieldset disabled={busy} className="grid gap-2">
@@ -48,6 +48,11 @@ export default function PickupSettings({store,send}:Props) {
             onChange={e=>setSettings({...settings,address:e.target.value})} className="block w-full rounded border p-2"/></label>
           <label>Horario de recojo<input value={settings.hours} required={settings.enabled} maxLength={160}
             onChange={e=>setSettings({...settings,hours:e.target.value})} className="block w-full rounded border p-2"/></label>
+          <label>Compra mínima para delivery gratis (S/)<input type="number" min="0" max="99999999.99" step="0.01"
+            defaultValue={settings.freeDeliveryMinimum ?? ""} key={settings.revision}
+            onChange={e=>setSettings({...settings,freeDeliveryMinimum:e.target.value===""?null:e.target.valueAsNumber})}
+            className="block w-full rounded border p-2"/></label>
+          <p className="text-sm">Deja el campo vacío para desactivar el beneficio. Con cero, todo pedido con delivery califica.</p>
           <button className="w-fit rounded bg-teal-800 px-3 py-2 text-white">Guardar</button>
         </fieldset>
       </form>}
