@@ -25,7 +25,7 @@ class OwnerWebOrdersApi {
     }
 
     enum Status { PENDING_PAYMENT, CANCELLED, EXPIRED }
-    record Summary(UUID id, String name, String phone, BigDecimal total, String status, Instant createdAt, String method, String address, String pickupHours) {}
+    record Summary(UUID id, String name, String phone, BigDecimal total, String status, Instant createdAt, String method, String address, String pickupHours, boolean freeDelivery) {}
     record Page(List<Summary> orders, boolean more) {}
 
     private static void requireOwner(UUID store, Principal principal) {
@@ -39,11 +39,11 @@ class OwnerWebOrdersApi {
         requireOwner(store, principal);
         if (page < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         var rows = db.query("""
-                SELECT id, guest_name, guest_phone, merchandise_total, status, created_at, delivery_method, fulfillment_address, pickup_hours
+                SELECT id, guest_name, guest_phone, merchandise_total, status, created_at, delivery_method, fulfillment_address, pickup_hours, free_delivery
                 FROM web_checkout_order WHERE tenant_id=? AND status=coalesce(?,status)
                 ORDER BY created_at DESC,id DESC LIMIT 21 OFFSET ?
                 """, (rs,n)->new Summary(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),
-                rs.getBigDecimal(4),rs.getString(5),rs.getTimestamp(6).toInstant(),rs.getString(7),rs.getString(8),rs.getString(9)),
+                rs.getBigDecimal(4),rs.getString(5),rs.getTimestamp(6).toInstant(),rs.getString(7),rs.getString(8),rs.getString(9),rs.getBoolean(10)),
                 store,status==null ? null : status.name(),20L*page);
         return new Page(rows.stream().limit(20).toList(),rows.size()>20);
     }
