@@ -1,5 +1,6 @@
 "use client";
 
+import GuestContact from "./GuestContact";
 import {useEffect,useRef,useState} from "react";
 
 export type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number};
@@ -188,6 +189,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         <p className="mt-3 font-semibold">Subtotal estimado {currency.format(subtotal)}</p>
         <button type="button" disabled={checking || locked} onClick={verify} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
         {hold?.expiresAt ? <><p role="status">Prendas reservadas hasta las {new Date(hold.expiresAt).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}.</p>
+          <GuestContact key={hold.key} store={store} reservation={hold.key} disabled={reserving}/>
           <button type="button" disabled={reserving} onClick={releaseReservation} className="my-2 rounded border px-3 py-2">
             {reserving?"Liberando…":"Liberar reserva y editar carrito"}
           </button></> :
