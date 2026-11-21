@@ -44,7 +44,12 @@ class FiscalIssuerApi {
     org.springframework.http.ResponseEntity<Verification> verify(@PathVariable UUID store, Principal owner) {
         Profile profile = get(store, owner);
         if (profile.revision() == 0) throw new ResponseStatusException(HttpStatus.CONFLICT);
-        companies.verify(store, profile.ruc());
+        String companyId = companies.configuredCompanyId(store);
+        if (companyId.isBlank()) {
+            companyId = db.query("SELECT company_id FROM beta_company_registration WHERE tenant_id=? AND registered_ruc=? AND company_id IS NOT NULL",
+                    (rs, row) -> rs.getString(1), store, profile.ruc()).stream().findFirst().orElse("");
+        }
+        companies.verify(companyId, profile.ruc());
         return org.springframework.http.ResponseEntity.ok()
                 .cacheControl(org.springframework.http.CacheControl.noStore())
                 .body(new Verification(profile.ruc()));
@@ -63,6 +68,74 @@ class FiscalIssuerApi {
         return org.springframework.http.ResponseEntity.ok()
                 .cacheControl(org.springframework.http.CacheControl.noStore())
                 .body(new TestCertificate(profile.ruc(), pfx));
+    }
+
+    record BetaRequest(@NotNull @Positive Integer revision,
+                       @NotBlank @Size(max=128) String password,
+                       @NotBlank @Size(max=273068) String pfx,
+                       @NotBlank @Size(max=273068) String logo) {}
+    record Registration(String status) {}
+
+    @GetMapping("/beta-company")
+    Registration registration(@PathVariable UUID store, Principal owner) {
+        requireOwner(store, owner);
+        if (!companies.configuredCompanyId(store).isBlank()) return new Registration("CONFIGURED");
+        return db.query("SELECT company_id FROM beta_company_registration WHERE tenant_id=?",
+                (rs, row) -> new Registration(rs.getObject(1) == null ? "REVIEW" : "REGISTERED"), store)
+                .stream().findFirst().orElse(new Registration("AVAILABLE"));
+    }
+
+    @PostMapping("/beta-company")
+    Registration register(@PathVariable UUID store, Principal owner, @Valid @RequestBody BetaRequest input) {
+        Profile profile = get(store, owner);
+        Registration current = registration(store, owner);
+        if (!current.status().equals("AVAILABLE")) return current;
+        if (!input.revision().equals(profile.revision())) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        byte[] logo = decodeUpload(input.logo());
+        byte[] signature = {(byte)137,80,78,71,13,10,26,10};
+        if (logo.length < signature.length || !java.util.Arrays.equals(signature,
+                java.util.Arrays.copyOf(logo, signature.length))) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        decodeUpload(input.pfx());
+        String token = companies.accountToken();
+        String pem = companies.convert(input.pfx(), input.password(), token);
+        // Commit the claim before contacting the non-idempotent creation endpoint.
+        int claimed = db.update("""
+                INSERT INTO beta_company_registration(tenant_id,registered_ruc)
+                SELECT tenant_id,ruc FROM tenant_fiscal_issuer WHERE tenant_id=? AND revision=?
+                ON CONFLICT (tenant_id) DO NOTHING
+                """, store, profile.revision());
+        if (claimed == 0) {
+            current = registration(store, owner);
+            if (current.status().equals("AVAILABLE")) throw new ResponseStatusException(HttpStatus.CONFLICT);
+            return current;
+        }
+        try {
+            Long id = companies.registerBeta(profile, pem, input.logo(), token);
+            if (id != null) {
+                db.update("UPDATE beta_company_registration SET company_id=? WHERE tenant_id=?", id, store);
+                return new Registration("REGISTERED");
+            }
+        } catch (org.springframework.web.client.RestClientResponseException ex) {
+            int code = ex.getStatusCode().value();
+            if (code == 400 || code == 401 || code == 403 || code == 422) {
+                db.update("DELETE FROM beta_company_registration WHERE tenant_id=? AND company_id IS NULL", store);
+                throw new ResponseStatusException(code == 400 || code == 422
+                        ? HttpStatus.UNPROCESSABLE_ENTITY : HttpStatus.BAD_GATEWAY);
+            }
+        } catch (org.springframework.web.client.RestClientException | ResponseStatusException uncertain) {
+            // A remote company may already exist. Keep the claim for reconciliation.
+        }
+        return new Registration("REVIEW");
+    }
+
+    private static byte[] decodeUpload(String value) {
+        try {
+            byte[] bytes = java.util.Base64.getDecoder().decode(value);
+            if (bytes.length == 0 || bytes.length > 204800) throw new IllegalArgumentException();
+            return bytes;
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        }
     }
 
     @PutMapping

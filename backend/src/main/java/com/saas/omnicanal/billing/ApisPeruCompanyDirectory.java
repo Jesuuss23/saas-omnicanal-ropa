@@ -64,9 +64,52 @@ class ApisPeruCompanyDirectory {
         }
     }
 
-    void verify(UUID store, String expectedRuc) {
+    String accountToken() {
+        String token = config.getProperty("APISPERU_ACCOUNT_TOKEN", "");
+        if (token.isBlank()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        return token;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record Converted(String pem) {}
+
+    String convert(String pfx, String password, String token) {
+        try {
+            Converted converted = api.post().uri("/companies/certificate")
+                    .headers(h -> h.setBearerAuth(token))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(java.util.Map.of("cert", pfx, "cert_pass", password, "base64", true))
+                    .retrieve().body(Converted.class);
+            if (converted == null || converted.pem() == null || converted.pem().isBlank()
+                    || converted.pem().length() > 273068) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+            return converted.pem();
+        } catch (RestClientResponseException ex) {
+            throw new ResponseStatusException(ex.getStatusCode().value() == 400
+                    ? HttpStatus.UNPROCESSABLE_ENTITY : HttpStatus.BAD_GATEWAY);
+        } catch (RestClientException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+        }
+    }
+
+    Long registerBeta(FiscalIssuerApi.Profile profile, String pem, String logo, String token) {
+        var payload = java.util.Map.of("plan", "free", "environment", "beta",
+                "sol_user", "MODDATOS", "sol_pass", "moddatos", "ruc", profile.ruc(),
+                "razon_social", profile.legalName(), "direccion", profile.address(),
+                "certificado", pem, "logo", logo);
+        Company company = api.post().uri("/companies").headers(h -> h.setBearerAuth(token))
+                .contentType(MediaType.APPLICATION_JSON).body(payload).retrieve().body(Company.class);
+        if (company == null || company.id() == null || company.id() <= 0
+                || (company.ruc() != null && !profile.ruc().equals(company.ruc()))) return null;
+        verify(company.id().toString(), profile.ruc());
+        return company.id();
+    }
+
+    String configuredCompanyId(UUID store) {
         String key = "APISPERU_COMPANY_ID_" + store.toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
-        String companyId = config.getProperty(key, "");
+        return config.getProperty(key, "");
+    }
+
+    void verify(String companyId, String expectedRuc) {
         String token = config.getProperty("APISPERU_ACCOUNT_TOKEN", "");
         if (!companyId.matches("[1-9][0-9]{0,17}") || token.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
