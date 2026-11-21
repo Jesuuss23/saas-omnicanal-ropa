@@ -1,6 +1,6 @@
 "use client";
 
-import OrderAmounts from "../../components/OrderAmounts";
+import OrderAmounts, {getOrderAmounts} from "../../components/OrderAmounts";
 import {useEffect,useState} from "react";
 
 const labels={PENDING_PAYMENT:"Pendiente de pago",CANCELLED:"Cancelado",EXPIRED:"Vencido"};
@@ -58,6 +58,16 @@ function ShareTracking({store,order,path}:{store:string;order:Order;path:string}
   const [notice,setNotice]=useState("");
   const {data,failed,refresh}=useOrderData<{token:string}>(open ? path+"/"+order.id+"/tracking" : null);
   const link=open && data ? new URL("/tienda/"+store+"/pedido/"+order.id+"#"+data.token,window.location.origin).href : "";
+  const [draft,setDraft]=useState<string|null>(null);
+  const {label,total}=getOrderAmounts({merchandise:order.total,method:order.method,freeDelivery:order.freeDelivery,fee:order.fee});
+  const summary = [
+    `Hola, ${order.name}. Tu pedido figura como ${labels[order.status].toLowerCase()}.`,
+    `Prendas: ${money.format(order.total)}.`,
+    label,
+    total===null ? "" : `Total del pedido: ${money.format(total)}.`
+  ].filter(Boolean).join("\n");
+  const message = (draft ?? summary).trim();
+  const withTracking = [message,link].filter(Boolean).join("\n\n");
   const phone=order.phone.replace(/^\+/,"");
   const destination=/^9\d{8}$/.test(order.phone) ? "51"+phone :
     (/^\+[1-9]\d{6,14}$/.test(order.phone) || /^519\d{8}$/.test(order.phone) ? phone : "");
@@ -73,10 +83,21 @@ function ShareTracking({store,order,path}:{store:string;order:Order;path:string}
     {open && (failed ? <p>No se pudo obtener el enlace. <button className="underline" onClick={refresh}>Reintentar</button></p> :
       !link ? <p>Cargando enlace…</p> : <div className="my-2 grid max-w-xl gap-2">
         <label>Enlace privado del pedido<input readOnly value={link} onFocus={e=>e.target.select()} className="block w-full rounded border p-2"/></label>
+        <label>Mensaje para el cliente
+          <textarea rows={5} value={draft ?? summary} onChange={e=>setDraft(e.target.value)}
+            className="block w-full rounded border p-2"/>
+        </label>
+        <small>El enlace privado se incluye al final del mensaje.</small>
         <div className="flex flex-wrap gap-4">
+          <button type="button" className="underline" onClick={async ()=>{
+            try {
+              await navigator.clipboard.writeText(withTracking);
+              setNotice("Mensaje con enlace copiado.");
+            } catch {setNotice("Copia el texto del mensaje y el enlace desde sus campos.");}
+          }}>Copiar mensaje</button>
           <button type="button" onClick={copy} className="underline">Copiar enlace</button>
           {destination && <a target="_blank" rel="noopener noreferrer" className="text-teal-800 underline"
-            href={"https://wa.me/"+destination+"?"+new URLSearchParams({text:"Puedes consultar tu pedido aquí: "+link})}>
+            href={"https://wa.me/"+destination+"?"+new URLSearchParams({text:withTracking})}>
             Preparar WhatsApp para +{destination}</a>}
         </div>
         <p role="status">{notice}</p>
