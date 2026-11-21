@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect,useState} from "react";
+import Link from "next/link";
 import {useParams} from "next/navigation";
 import OrderSummary, {type Order} from "../../OrderSummary";
 
@@ -84,6 +85,9 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
     };
   },[store,order,token,version]);
 
+  const catalogPath=detail && (detail.status==="EXPIRED" || detail.status==="CANCELLED")
+    ? "/tienda/"+encodeURIComponent(store) : undefined;
+
   return <main className="mx-auto max-w-xl space-y-3 px-5 py-10">
     <h1 className="text-2xl font-semibold">Consulta de pedido</h1>
     {error && <p role="alert">{error}{detail && " Se muestran los últimos datos recibidos."}</p>}
@@ -103,7 +107,10 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
         <a href={"https://www.google.com/maps/dir/?"+new URLSearchParams({api:"1",destination:detail.pickup.address})}
           target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">Ver ruta al local en Google Maps</a>
       </section>}
-      <OrderSummary order={detail}/>
+      <OrderSummary order={detail} catalogPath={catalogPath}/>
+      {catalogPath && <Link href={catalogPath} className="inline-block rounded bg-teal-800 px-4 py-2 text-white">
+        Volver al catálogo de la tienda
+      </Link>}
     </> : !error && <p>Cargando pedido…</p>}
     <button type="button" className="text-teal-800 underline" onClick={()=>setVersion(v=>v+1)}>Actualizar</button>
   </main>;
