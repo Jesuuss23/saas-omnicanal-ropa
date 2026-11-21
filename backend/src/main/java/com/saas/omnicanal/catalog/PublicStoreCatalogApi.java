@@ -23,7 +23,8 @@ class PublicStoreCatalogApi {
     record Variant(UUID id, String name, String category, String size, String color, BigDecimal price) {}
     record Pickup(String address, String hours) {}
     record Store(String name, Pickup pickup) {}
-    record Catalog(String storeName, List<Variant> variants, boolean hasNext, Pickup pickup, List<String> sizes, List<String> colors, List<String> categories) {}
+    record CategoryResource(String kind, String url) {}
+    record Catalog(String storeName, List<Variant> variants, boolean hasNext, Pickup pickup, List<String> sizes, List<String> colors, List<String> categories, CategoryResource resource) {}
 
     record Availability(UUID id, BigDecimal price, int available) {}
 
@@ -72,6 +73,13 @@ class PublicStoreCatalogApi {
                  ORDER BY p.name, p.id, v.size, v.color, v.id LIMIT 25 OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
                 rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, search, category, category, size, size, color, color, page * 24L);
-        return new Catalog(details.name(), variants.stream().limit(24).toList(), variants.size() > 24, details.pickup(), sizes, colors, categories);
+        CategoryResource resource = category.isBlank() ? null : db.query("""
+                SELECT active, CASE active WHEN 'LINK' THEN link_url WHEN 'PDF' THEN pdf_url
+                                           WHEN 'IMAGE' THEN image_url END AS url
+                  FROM category_catalog_resource
+                 WHERE tenant_id = ? AND category = ? AND active IN ('LINK','PDF','IMAGE')
+                """, (rs,n) -> new CategoryResource(rs.getString("active"),rs.getString("url")),store,category)
+                .stream().findFirst().orElse(null);
+        return new Catalog(details.name(), variants.stream().limit(24).toList(), variants.size() > 24, details.pickup(), sizes, colors, categories, resource);
     }
 }
