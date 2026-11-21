@@ -2,9 +2,7 @@
 
 import {useEffect,useState,type FormEvent} from "react";
 
-type OrderItem={variant:string;name:string;size:string;color:string|null;quantity:number;unitPrice:number};
-type Order={id:string;total:number;items?:OrderItem[]};
-const money=new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
+import OrderSummary, {type Order} from "./OrderSummary";
 
 export default function GuestContact({store,reservation,disabled}:{store:string;reservation:string;disabled:boolean}) {
   const url="/api/public/stores/"+store+"/reservation/guest";
@@ -78,14 +76,9 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
   if (order) return <section className="my-4 rounded border p-3" role="status">
     <h3 className="font-semibold">Pedido pendiente de pago</h3>
     <p>Código de pedido: {order.id}</p>
-    {order.items && <ul aria-label="Prendas del pedido" className="my-3 divide-y">
-      {order.items.map(item=><li key={item.variant} className="py-2">
-        <strong>{item.name}</strong>
-        <p>Talla {item.size}{item.color && " · "+item.color}</p>
-        <p>{item.quantity} × {money.format(item.unitPrice)} = {money.format(Math.round(item.unitPrice*100)*item.quantity/100)}</p>
-      </li>)}
-    </ul>}
-    <p>Importe de prendas: {money.format(order.total)}</p>
+    <OrderSummary order={order}/>
+    {order.trackingToken && <a href={"/tienda/"+store+"/pedido/"+order.id+"#"+order.trackingToken}
+      className="my-2 inline-block text-teal-800 underline">Abrir enlace privado del pedido</a>}
     <p>Al liberar la reserva o llegar a su vencimiento, este pedido se cierra.</p>
   </section>;
 

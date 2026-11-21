@@ -20,12 +20,13 @@ class PublicCatalogFileApi {
     @Order(-1)
     static SecurityFilterChain publicCatalogFiles(HttpSecurity http) throws Exception {
         String guestPath="/api/public/stores/*/reservation/guest";
-        return http.securityMatcher("/api/public/catalog-files/*", "/api/public/stores/*/catalog", "/api/public/stores/*/availability", "/api/public/stores/*/reservation", guestPath)
+        String trackingPath="/api/public/stores/*/orders/*";
+        return http.securityMatcher("/api/public/catalog-files/*", "/api/public/stores/*/catalog", "/api/public/stores/*/availability", "/api/public/stores/*/reservation", guestPath, trackingPath)
                 .csrf(c->c.ignoringRequestMatchers("/api/public/stores/*/reservation", guestPath))
                 .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.GET,"/api/public/catalog-files/*", "/api/public/stores/*/catalog", "/api/public/stores/*/availability").permitAll()
                         .requestMatchers(HttpMethod.POST,"/api/public/stores/*/reservation",guestPath).permitAll()
                         .requestMatchers(HttpMethod.DELETE,"/api/public/stores/*/reservation").permitAll()
-                        .requestMatchers(HttpMethod.GET,guestPath).permitAll()
+                        .requestMatchers(HttpMethod.GET,guestPath,trackingPath).permitAll()
                         .requestMatchers(HttpMethod.PUT,guestPath).permitAll()
                         .anyRequest().denyAll()).build();
     }
