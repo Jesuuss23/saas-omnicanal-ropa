@@ -5,12 +5,12 @@ import {useParams} from "next/navigation";
 
 type Profile = {id:string; name:string; email:string};
 
-async function send(path:string, body?:URLSearchParams|string) {
+async function send(path:string, body?:URLSearchParams|string, method: "POST" | "PUT" = "POST") {
   const csrf = await fetch("/api/owner/csrf",{cache:"no-store"});
   if (!csrf.ok) throw new Error();
   const headers = new Headers({"X-CSRF-TOKEN":(await csrf.json()).token});
   if (typeof body === "string") headers.set("Content-Type","application/json");
-  return fetch("/api/owner/"+path,{method:"POST",headers,body});
+  return fetch("/api/owner/"+path,{method,headers,body});
 }
 
 export default function Owner() {

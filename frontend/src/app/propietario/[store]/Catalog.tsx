@@ -2,13 +2,15 @@
 
 import {useEffect, useState, useRef, type FormEvent} from "react";
 
-type Props = {store:string; send:(path:string, body:string)=>Promise<Response>};
-type Row = {id:string; name:string; sku:string; size:string; color:string|null; price:number; available:number};
+import EditVariant, {type InventoryRow as Row, type Send} from "./EditVariant";
+
+type Props = {store:string; send:Send};
 type Page = {rows:Row[]; hasNext:boolean};
 const money = new Intl.NumberFormat("es-PE", {style:"currency", currency:"PEN"});
 const field = "mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2";
 
 export default function Catalog({store, send}:Props) {
+  const [editing,setEditing] = useState<Row|null>(null);
   const [page,setPage] = useState(0);
   const [refresh,setRefresh] = useState(0);
   const [data,setData] = useState<Page|null>(null);
@@ -76,9 +78,11 @@ export default function Catalog({store, send}:Props) {
       </fieldset><p aria-live="polite" className="mt-2 text-sm">{message}</p>
     </form>
     <h3 className="mb-3 text-lg font-semibold">Inventario por variante</h3>
+    {editing && <EditVariant key={editing.id} row={editing} path={path} send={send} close={()=>setEditing(null)}
+      reload={()=>{setEditing(null); setRefresh(v=>v+1);}}/>}
     {listError ? <button className="underline" onClick={()=>setRefresh(v=>v+1)}>Volver a cargar el inventario</button> : !data ? <p>Cargando inventario…</p> : !data.rows.length ? <p>Todavía no hay variantes en esta página.</p> :
-    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Prenda","SKU","Talla","Color","Precio","Disponible"].map(label=><th className="p-2" key={label}>{label}</th>)}</tr></thead>
-    <tbody>{data.rows.map(row=><tr className="border-t border-stone-200" key={row.id}>{[row.name,row.sku,row.size,row.color || "—",money.format(row.price),row.available].map((value,i)=><td className="p-2" key={i}>{value}</td>)}</tr>)}</tbody></table></div>}
+    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Prenda","SKU","Talla","Color","Precio","Disponible","Acciones"].map(label=><th className="p-2" key={label}>{label}</th>)}</tr></thead>
+    <tbody>{data.rows.map(row=><tr className="border-t border-stone-200" key={row.id}>{[row.name,row.sku,row.size,row.color || "—",money.format(row.price),row.available].map((value,i)=><td className="p-2" key={i}>{value}</td>)}<td className="p-2"><button disabled={!!editing} onClick={()=>setEditing(row)} className="text-teal-800 underline">Editar</button></td></tr>)}</tbody></table></div>}
     {(page>0 || data?.hasNext) && <nav aria-label="Páginas del inventario" className="mt-4 flex gap-5"><button disabled={!page} onClick={()=>setPage(page-1)}>Anterior</button><span>Página {page+1}</span><button disabled={!data?.hasNext} onClick={()=>setPage(page+1)}>Siguiente</button></nav>}
   </section>;
 }
