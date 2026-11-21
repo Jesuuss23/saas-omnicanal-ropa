@@ -29,7 +29,9 @@ class ApisPeruCompanyDirectory {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record Company(Long id, String ruc) {}
+    record Company(Long id, String ruc, String token) {
+        @Override public String toString() { return "Company[id=" + id + "]"; }
+    }
 
     byte[] generateTestCertificate(String ruc, String password) {
         String token = config.getProperty("APISPERU_ACCOUNT_TOKEN", "");
@@ -91,7 +93,7 @@ class ApisPeruCompanyDirectory {
         }
     }
 
-    Long registerBeta(FiscalIssuerApi.Profile profile, String pem, String logo, String token) {
+    Company registerBeta(FiscalIssuerApi.Profile profile, String pem, String logo, String token) {
         var payload = java.util.Map.of("plan", "free", "environment", "beta",
                 "sol_user", "MODDATOS", "sol_pass", "moddatos", "ruc", profile.ruc(),
                 "razon_social", profile.legalName(), "direccion", profile.address(),
@@ -101,7 +103,7 @@ class ApisPeruCompanyDirectory {
         if (company == null || company.id() == null || company.id() <= 0
                 || (company.ruc() != null && !profile.ruc().equals(company.ruc()))) return null;
         verify(company.id().toString(), profile.ruc());
-        return company.id();
+        return company;
     }
 
     String configuredCompanyId(UUID store) {

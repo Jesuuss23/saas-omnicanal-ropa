@@ -4,7 +4,7 @@ import {useEffect, useState, type FormEvent} from "react";
 
 type Props = {
   path:string; ruc:string; revision:number;
-  send:(path:string, body:string, method:"POST")=>Promise<Response>;
+  send:(path:string, body:string, method:"POST"|"PUT")=>Promise<Response>;
 };
 
 const descriptions:Record<string,string> = {
@@ -42,6 +42,46 @@ export default function BetaCompany({path,ruc,revision,send}:Props) {
     return ()=>controller.abort();
   },[endpoint,reload]);
 
+  const [stored,setStored] = useState<boolean|null>(null);
+  const [tokenMessage,setTokenMessage] = useState("");
+  useEffect(()=>{
+    if (status !== "REGISTERED") return;
+    const controller = new AbortController();
+    async function loadTokenStatus() {
+      try {
+        const res = await fetch("/api/owner/"+endpoint+"/token",{cache:"no-store",signal:controller.signal});
+        if (!res.ok) throw new Error();
+        const result = await res.json();
+        if (!controller.signal.aborted) setStored(result.stored);
+      } catch {
+        if (!controller.signal.aborted) setTokenMessage("No se pudo consultar el estado del token.");
+      }
+    }
+    void loadTokenStatus();
+    return ()=>controller.abort();
+  },[endpoint,status]);
+
+  async function saveToken(event:FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const form = event.currentTarget;
+    const token = new FormData(form).get("token");
+    setBusy(true); setTokenMessage("");
+    try {
+      const res = await send(endpoint+"/token",JSON.stringify({token,revision}),"PUT");
+      if (res.status === 503) throw new Error("Falta configurar la clave de cifrado en el servidor.");
+      if (res.status === 409) throw new Error("Revisa la empresa asignada y recarga la ficha fiscal.");
+      if (!res.ok) throw new Error("No se pudo guardar el token.");
+      setStored(true);
+      setTokenMessage("Token de emisión guardado.");
+    } catch (err) {
+      setTokenMessage(err instanceof Error ? err.message : "No se pudo guardar el token.");
+    } finally {
+      form.reset();
+      setBusy(false);
+    }
+  }
+
   async function submit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || status !== "AVAILABLE") return;
@@ -75,6 +115,15 @@ export default function BetaCompany({path,ruc,revision,send}:Props) {
       </fieldset>
     </form>}
     <p role="status" className="mt-2 text-sm">{message || descriptions[status] || (!status && "Consultando estado…")}</p>
+    {status === "REGISTERED" && <form onSubmit={saveToken} className="mt-4 grid max-w-md gap-2">
+      <label className="font-semibold">Token de emisión de la empresa en beta
+        <input className="mt-1 block w-full rounded-lg border p-2" type="password" name="token"
+          autoComplete="off" maxLength={16384} required />
+      </label>
+      <p className="text-sm">Usa el token de empresa del RUC {ruc} que figura en APIsPERU.</p>
+      <button disabled={busy} className="rounded-lg border border-teal-800 p-2">{stored ? "Reemplazar token" : "Guardar token"}</button>
+      <p role="status" className="text-sm">{tokenMessage || (stored === true ? "Token almacenado." : stored === false ? "Pendiente de configurar." : "")}</p>
+    </form>}
     {(message || status === "REVIEW") && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>setReload(value=>value+1)}>Consultar estado</button>}
   </section>;
 }
