@@ -1,3 +1,5 @@
+import type {Metadata} from "next";
+import {cache} from "react";
 import Link from "next/link";
 import {notFound} from "next/navigation";
 
@@ -9,7 +11,15 @@ type Props = {
   searchParams:Promise<{q?:string|string[]; page?:string|string[]; size?:string|string[]; color?:string|string[]; category?:string|string[]}>;
 };
 
-export default async function StoreCatalog({params,searchParams}:Props) {
+const loadCatalog = cache(async (store:string,query:string,size:string,color:string,category:string,page:number) => {
+  const base = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/,"");
+  const response = await fetch(base+"/public/stores/"+store+"/catalog?"+new URLSearchParams({query,size,color,category,page:String(page)}),{cache:"no-store"});
+  if (response.status===404) notFound();
+  if (!response.ok) throw new Error("No se pudo cargar el catálogo.");
+  return await response.json() as Catalog;
+});
+
+async function catalogView({params,searchParams}:Props) {
   const {store} = await params;
   const filters = await searchParams;
   if (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(store)) notFound();
@@ -19,12 +29,21 @@ export default async function StoreCatalog({params,searchParams}:Props) {
   const color = typeof filters.color==="string" ? filters.color : "";
   const page = Number(filters.page ?? 0);
   if (!Number.isInteger(page) || page<0 || page>2147483647) notFound();
-  const path = "/tienda/"+store;
-  const base = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/,"");
-  const response = await fetch(base+"/public/stores/"+store+"/catalog?"+new URLSearchParams({query,size,color,category,page:String(page)}),{cache:"no-store"});
-  if (response.status===404) notFound();
-  if (!response.ok) throw new Error("No se pudo cargar el catálogo.");
-  const catalog:Catalog = await response.json();
+  const catalog = await loadCatalog(store,query,size,color,category,page);
+  return {store,query,size,color,category,page,catalog};
+}
+
+export async function generateMetadata(props:Props):Promise<Metadata> {
+  const {catalog,category}=await catalogView(props);
+  const section=category && (catalog.categories.includes(category) || catalog.resource) ? category : "Catálogo de prendas";
+  const title=section+" · "+catalog.storeName;
+  const description="Consulta las prendas, tallas, colores y precios de "+catalog.storeName+".";
+  return {title,description,openGraph:{type:"website",locale:"es_PE",siteName:catalog.storeName,title,description}};
+}
+
+export default async function StoreCatalog(props:Props) {
+  const {store,query,size,color,category,page,catalog}=await catalogView(props);
+  const path="/tienda/"+store;
   const pageLink = (n:number)=>path+"?"+new URLSearchParams({q:query,size,color,category,page:String(n)});
 
   return <main className="mx-auto max-w-5xl px-5 py-12 text-stone-900">
