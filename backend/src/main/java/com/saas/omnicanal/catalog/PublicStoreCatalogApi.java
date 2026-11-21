@@ -23,7 +23,7 @@ class PublicStoreCatalogApi {
     record Variant(UUID id, String name, String category, String size, String color, BigDecimal price) {}
     record Pickup(String address, String hours) {}
     record Store(String name, Pickup pickup) {}
-    record Catalog(String storeName, List<Variant> variants, boolean hasNext, Pickup pickup) {}
+    record Catalog(String storeName, List<Variant> variants, boolean hasNext, Pickup pickup, List<String> sizes) {}
 
     record Availability(UUID id, BigDecimal price, int available) {}
 
@@ -43,21 +43,27 @@ class PublicStoreCatalogApi {
 
     @GetMapping("/api/public/stores/{store}/catalog")
     Catalog catalog(@PathVariable UUID store, @RequestParam(defaultValue = "") String query,
-                    @RequestParam(defaultValue = "0") int page) {
+                    @RequestParam(defaultValue = "0") int page,
+                    @RequestParam(defaultValue = "") String size) {
         if (page < 0 || query.length() > 150) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         Store details = db.query("""
                 SELECT name,pickup_enabled,pickup_address,pickup_hours FROM tenant WHERE id=?
                 """,(rs,n)->new Store(rs.getString(1),rs.getBoolean(2)
                     ? new Pickup(rs.getString(3),rs.getString(4)) : null),store)
                 .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        var variants = db.query("""
-                SELECT v.id, p.name, p.category, v.size, v.color, v.price
+        String matches = """
                   FROM product p JOIN product_variant v ON (v.tenant_id, v.product_id) = (p.tenant_id, p.id)
                  WHERE p.tenant_id = ? AND coalesce(v.stock_physical, 0) > coalesce(v.stock_reserved, 0)
                    AND strpos(lower(concat_ws(' ', p.name, p.category, v.size, v.color)), lower(?)) > 0
+                """;
+        String search = query.strip();
+        var sizes = db.queryForList("SELECT DISTINCT v.size " + matches + " AND v.size IS NOT NULL AND v.size <> '' ORDER BY v.size",
+                String.class, store, search);
+        var variants = db.query("SELECT v.id, p.name, p.category, v.size, v.color, v.price " + matches + """
+                   AND (? = '' OR v.size = ?)
                  ORDER BY p.name, p.id, v.size, v.color, v.id LIMIT 25 OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
-                rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, query.strip(), page * 24L);
-        return new Catalog(details.name(), variants.stream().limit(24).toList(), variants.size() > 24, details.pickup());
+                rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, search, size, size, page * 24L);
+        return new Catalog(details.name(), variants.stream().limit(24).toList(), variants.size() > 24, details.pickup(), sizes);
     }
 }
