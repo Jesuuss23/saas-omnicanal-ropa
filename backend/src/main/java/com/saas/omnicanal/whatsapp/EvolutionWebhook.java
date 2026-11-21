@@ -60,14 +60,43 @@ class EvolutionWebhook {
         if (!instance.equals(event.path("instance").asText("")) || !Boolean.TRUE.equals(db.queryForObject(
                 "SELECT EXISTS(SELECT 1 FROM tenant WHERE id=? AND whatsapp_instance_id=?)",Boolean.class,store,instance)))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        if (!"messages.upsert".equalsIgnoreCase(event.path("event").asText("").replace('_','.')))
-            return Map.of("inserted",0);
+        String name = event.path("event").asText("").replace('_','.');
+        boolean update = "messages.update".equalsIgnoreCase(name);
+        if (!update && !"messages.upsert".equalsIgnoreCase(name)) return Map.of("inserted",0);
         JsonNode data = event.path("data");
         int count = 0;
-        if (data.isArray()) {
-            for (JsonNode item:data) count += save(store,item);
-        } else count = save(store,data);
-        return Map.of("inserted",count);
+        Iterable<JsonNode> items = data.isArray() ? data : java.util.List.of(data);
+        for (JsonNode item : items) {
+            count += update ? receipt(store,item) : save(store,item);
+        }
+        return Map.of(update ? "updated" : "inserted",count);
+    }
+
+    private int receipt(UUID store, JsonNode item) {
+        JsonNode key = item.path("key");
+        JsonNode outgoing = item.has("fromMe") ? item.path("fromMe") : key.path("fromMe");
+        if (!outgoing.isBoolean() || !outgoing.asBoolean()) return 0;
+        String id = item.path("keyId").asText(key.path("id").asText(""));
+        String chat = item.path("remoteJid").asText(key.path("remoteJid").asText(""));
+        chat = chat.replaceFirst(":[0-9]+@s[.]whatsapp[.]net$", "@s.whatsapp.net");
+        if (id.isBlank() || id.length()>200 || !chat.matches("[0-9]{5,15}@s[.]whatsapp[.]net")) return 0;
+        String rawStatus = item.path("status").asText(item.path("update").path("status").asText(""));
+        String status = switch (rawStatus) {
+            case "DELIVERY_ACK","3" -> "DELIVERED";
+            case "READ","4" -> "READ";
+            default -> null;
+        };
+        if (status==null) return 0;
+        // The receipt can arrive before sendText returns the provider ID to the CRM.
+        return db.update("""
+                INSERT INTO whatsapp_reply_receipt(tenant_id,chat_id,provider_id,status)
+                SELECT ?,?,?,? WHERE EXISTS (
+                    SELECT 1 FROM whatsapp_manual_reply WHERE tenant_id=? AND chat_id=?
+                      AND (provider_id=? OR (provider_id IS NULL AND status='REVIEW'
+                           AND created_at>=now()-interval '5 minutes')))
+                ON CONFLICT (tenant_id,chat_id,provider_id) DO UPDATE SET status=excluded.status
+                 WHERE whatsapp_reply_receipt.status='DELIVERED' AND excluded.status='READ'
+                """,store,chat,id,status,store,chat,id);
     }
 
     private int save(UUID store, JsonNode item) {

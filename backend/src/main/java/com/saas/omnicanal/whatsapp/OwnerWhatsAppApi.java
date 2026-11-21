@@ -92,7 +92,7 @@ class OwnerWhatsAppApi {
                 Boolean.class,store,name))) throw new ResponseStatusException(HttpStatus.CONFLICT);
         var settings = Map.of("enabled",true, "url",callbackBase + EvolutionWebhook.ROOT + "/" + store,
                 "headers",Map.of(EvolutionWebhook.HEADER,webhook.credential(store)),
-                "byEvents",false,"base64",false,"events",java.util.List.of("MESSAGES_UPSERT"));
+                "byEvents",false,"base64",false,"events",java.util.List.of("MESSAGES_UPSERT","MESSAGES_UPDATE"));
         try {
             api.post().uri("/webhook/set/{name}",name).contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of("webhook",settings)).retrieve().toBodilessEntity();
@@ -122,8 +122,11 @@ class OwnerWhatsAppApi {
     ResponseEntity<java.util.List<Reply>> replies(@PathVariable UUID store, Principal owner, @RequestParam String chat) {
         if (owner == null || !store.toString().equals(owner.getName())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var rows = db.query("""
-                SELECT body,status,created_at FROM whatsapp_manual_reply WHERE tenant_id=? AND chat_id=?
-                 ORDER BY created_at DESC,request_id DESC LIMIT 5
+                SELECT m.body,coalesce(r.status,m.status),m.created_at
+                  FROM whatsapp_manual_reply m LEFT JOIN whatsapp_reply_receipt r
+                    ON r.tenant_id=m.tenant_id AND r.chat_id=m.chat_id AND r.provider_id=m.provider_id
+                 WHERE m.tenant_id=? AND m.chat_id=?
+                 ORDER BY m.created_at DESC,m.request_id DESC LIMIT 5
                 """,(rs,row)->new Reply(rs.getString(1),rs.getString(2),rs.getObject(3,java.time.OffsetDateTime.class)),store,chat);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(rows);
     }
