@@ -148,7 +148,9 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
           {row.submission.httpStatus && <p>APIsPERU respondió con HTTP {row.submission.httpStatus}.</p>}
           {row.status==="BETA_REVIEW" && <p>El resultado sigue pendiente. Usa «Consultar CDR en APIsPERU» para actualizar el resultado.</p>}
         </details>}
-        {(row.hasXml || row.hasCdr) && <div className="mt-2 flex gap-4">
+        {(row.hasXml || row.hasCdr) && <div className="mt-2 flex flex-wrap gap-4">
+          {row.hasXml && <a className="text-teal-800 underline" target="_blank" rel="noopener noreferrer"
+            href={"/propietario/"+store+"/comprobantes/"+row.sale}>Ver para imprimir</a>}
           {row.hasXml && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"xml")}>Descargar XML</button>}
           {row.hasCdr && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"cdr")}>Descargar CDR (.zip)</button>}
         </div>}
