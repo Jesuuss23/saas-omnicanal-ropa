@@ -3,7 +3,11 @@ package com.saas.omnicanal.billing;
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.OffsetDateTime;
+import java.util.Base64;
 import java.util.List;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,7 +25,7 @@ class BetaPosDocumentsApi {
     }
 
     record Document(UUID sale, OffsetDateTime created, String kind, BigDecimal total,
-                    String customer, String status, String series, Integer number) {}
+                    String customer, String status, String series, Integer number, boolean hasXml, boolean hasCdr) {}
     record Page(List<Document> documents, boolean more) {}
     record Numbered(String series, int number) {}
 
@@ -31,15 +35,59 @@ class BetaPosDocumentsApi {
         requireOwner(store, principal);
         if (page < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         var rows = db.query("""
-                SELECT f.sale_id, f.created_at, f.kind, s.total, f.customer_name, f.status, n.series, n.number
+                SELECT f.sale_id, f.created_at, f.kind, s.total, f.customer_name, f.status, n.series, n.number,
+                       NULLIF(btrim(n.provider_response->>\'xml\'),\'\') IS NOT NULL,
+                       NULLIF(btrim(n.provider_response#>>\'{sunatResponse,cdrZip}\'),\'\') IS NOT NULL
                   FROM pos_fiscal_request f JOIN pos_sale s ON (s.tenant_id,s.id)=(f.tenant_id,f.sale_id)
                   LEFT JOIN beta_pos_document_number n ON (n.tenant_id,n.sale_id)=(f.tenant_id,f.sale_id)
                  WHERE f.tenant_id=? ORDER BY f.created_at DESC, f.sale_id DESC LIMIT 21 OFFSET ?
                 """,
                 (rs,row) -> new Document(rs.getObject(1,UUID.class),rs.getObject(2,OffsetDateTime.class),
                         rs.getString(3),rs.getBigDecimal(4),rs.getString(5),rs.getString(6),
-                        rs.getString(7),rs.getObject(8,Integer.class)), store, page * 20L);
+                        rs.getString(7),rs.getObject(8,Integer.class),rs.getBoolean(9),rs.getBoolean(10)), store, page * 20L);
         return new Page(rows.subList(0, Math.min(rows.size(),20)), rows.size()>20);
+    }
+
+    record Download(String filename, byte[] content) {}
+
+    @GetMapping("/{sale}/files/{kind}")
+    ResponseEntity<Download> download(@PathVariable UUID store, @PathVariable UUID sale,
+                                      @PathVariable String kind, Principal principal) {
+        requireOwner(store, principal);
+        boolean xml = "xml".equals(kind);
+        if (!xml && !"cdr".equals(kind)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        Download file = db.query("""
+                SELECT n.issuer_ruc, f.kind, n.series, n.number,
+                       CASE WHEN ? THEN n.provider_response->>'xml'
+                            ELSE n.provider_response#>>'{sunatResponse,cdrZip}' END AS content
+                  FROM beta_pos_document_number n JOIN pos_fiscal_request f USING (tenant_id,sale_id)
+                 WHERE n.tenant_id=? AND n.sale_id=?
+                """, (rs,row) -> {
+                    String stored = rs.getString("content");
+                    if (stored == null || stored.isBlank()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+                    String docType = "FACTURA".equals(rs.getString("kind")) ? "01" : "03";
+                    String stem = String.join("-", rs.getString("issuer_ruc"),docType,
+                            rs.getString("series"),rs.getString("number"));
+                    String filename = xml ? stem + ".xml" : "R-" + stem + ".zip";
+                    return new Download(filename, fileBytes(stored, xml));
+                }, xml,store,sale).stream().findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(file);
+    }
+
+    private static byte[] fileBytes(String stored, boolean xml) {
+        String start = stored.stripLeading();
+        if (xml && (start.startsWith("<") || start.startsWith("\uFEFF<"))) {
+            return stored.getBytes(StandardCharsets.UTF_8);
+        }
+        try {
+            byte[] bytes = Base64.getDecoder().decode(stored.replaceAll("\\s+", ""));
+            if (bytes.length == 0 || (!xml && (bytes.length < 4 || bytes[0] != 'P' || bytes[1] != 'K')))
+                throw new IllegalArgumentException();
+            return bytes;
+        } catch (IllegalArgumentException malformed) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY);
+        }
     }
 
     @PostMapping("/{sale}/number")
