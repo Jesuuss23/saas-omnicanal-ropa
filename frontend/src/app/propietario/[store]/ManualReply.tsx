@@ -4,7 +4,7 @@ import {useEffect,useRef,useState,type FormEvent} from "react";
 
 type Props={store:string; chat:string; send:(path:string,body:string,method:"PUT")=>Promise<Response>};
 type Row={text:string;status:string;createdAt:string};
-const labels:Record<string,string>={ACCEPTED:"Aceptado por Evolution API",REJECTED:"Rechazado por Evolution API",REVIEW:"Pendiente de confirmación"};
+const labels:Record<string,string>={DELIVERED:"Entregado",READ:"Leído",ACCEPTED:"Aceptado por Evolution API",REJECTED:"Rechazado por Evolution API",REVIEW:"Pendiente de confirmación"};
 const date=new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
 
 export default function ManualReply({store,chat,send}:Props) {
