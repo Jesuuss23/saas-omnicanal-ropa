@@ -1,5 +1,6 @@
 "use client";
 
+import ManualReply from "./ManualReply";
 import FollowUpLog from "./FollowUpLog";
 import {reviewMessages} from "./reviewMessages";
 import {useEffect,useState} from "react";
@@ -123,6 +124,7 @@ export default function ContactsCrm({store,send}:Props) {
           {contact.followUpDate && <button type="button" disabled={busy} className="underline"
             onClick={()=>schedule(contact,null)}>Retirar de la agenda</button>}
         </form>
+        <ManualReply store={store} chat={contact.chat} send={send}/>
         <FollowUpLog path={path} contact={contact} send={send} disabled={busy} onSaved={()=>{
           setNotice("Resultado registrado. El seguimiento salió de la agenda.");
           setRefresh(n=>n+1);
