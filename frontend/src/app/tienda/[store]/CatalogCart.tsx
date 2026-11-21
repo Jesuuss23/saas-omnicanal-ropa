@@ -24,6 +24,10 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
   const [notice,setNotice]=useState("");
   const [checking,setChecking]=useState(false);
   const [issues,setIssues]=useState<Record<string,string>>({});
+  const reservationKey=storageKey+":reservation";
+  const [hold,setHold]=useState<{key:string;expiresAt:string|null}|null>(null);
+  const [reserving,setReserving]=useState(false);
+  const locked=Boolean(hold) || reserving;
   const current=useRef<Line[]>([]);
 
   useEffect(()=>{
@@ -32,9 +36,54 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
       const data:unknown=raw ? JSON.parse(raw) : [];
       current.current=Array.isArray(data) ? data.filter(isLine) : [];
       setLines(current.current);
+      const saved=sessionStorage.getItem(reservationKey);
+      if (saved) {
+        const reservation=JSON.parse(saved);
+        if (typeof reservation.key==="string" && (reservation.expiresAt===null || Date.parse(reservation.expiresAt)>Date.now()))
+          setHold(reservation);
+        else sessionStorage.removeItem(reservationKey);
+      }
     } catch {setStorageError(true);}
     setReady(true);
-  },[storageKey]);
+  },[storageKey,reservationKey]);
+
+  useEffect(()=>{
+    if (!hold?.expiresAt) return;
+    const timer=setTimeout(()=>{
+      setHold(null);
+      try {sessionStorage.removeItem(reservationKey);} catch {setStorageError(true);}
+      setNotice("La reserva venció. Puedes revisar el carrito y reservar otra vez.");
+    },Math.max(0,Date.parse(hold.expiresAt)-Date.now()));
+    return ()=>clearTimeout(timer);
+  },[hold,reservationKey]);
+
+  async function reserve() {
+    if (reserving || checking || hold?.expiresAt) return;
+    if (lines.length>100) {setNotice("Puedes reservar hasta 100 variantes por carrito.");return;}
+    setReserving(true);
+    try {
+      const pending=hold ?? {key:crypto.randomUUID(),expiresAt:null};
+      sessionStorage.setItem(reservationKey,JSON.stringify(pending));
+      setHold(pending);
+      const response=await fetch("/api/public/stores/"+store+"/reservation",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({key:pending.key,items:lines.map(({id,quantity,price})=>({id,quantity,price}))})
+      });
+      if ([400,404,409,410].includes(response.status)) {
+        sessionStorage.removeItem(reservationKey);
+        setHold(null);
+        setNotice(response.status===410?"La reserva venció. Puedes reservar otra vez.":"Revisa precios y stock antes de volver a reservar.");
+        return;
+      }
+      if (!response.ok) throw new Error();
+      const {expiresAt}=await response.json();
+      const confirmed={...pending,expiresAt};
+      setHold(confirmed);
+      sessionStorage.setItem(reservationKey,JSON.stringify(confirmed));
+      setNotice("Stock reservado.");
+    } catch {setNotice("No se pudo confirmar la reserva. Reintenta desde esta pestaña.");}
+    finally {setReserving(false);}
+  }
 
   function save(next:Line[],message:string) {
     setIssues({});
@@ -101,7 +150,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         <h2 className="text-xl font-semibold">{item.name}</h2>
         <p className="my-2">Talla {item.size}{item.color && " · "+item.color}</p>
         <p className="font-semibold">{currency.format(item.price)}</p>
-        <button type="button" disabled={!ready} onClick={()=>add(item)} className="mt-3 rounded bg-teal-800 px-3 py-2 text-white">Agregar al carrito</button>
+        <button type="button" disabled={!ready || locked} onClick={()=>add(item)} className="mt-3 rounded bg-teal-800 px-3 py-2 text-white">Agregar al carrito</button>
       </li>)}
     </ul> : <p>{query?"No hay prendas disponibles para esta búsqueda.":"No hay prendas disponibles en esta página."}</p>}
     <p role="status" className="mt-2 text-sm">{notice}</p>
@@ -114,15 +163,18 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
             <p>{currency.format(line.price)} por unidad</p>
             {issues[line.id] && <p className="text-sm text-amber-800">{issues[line.id]}</p>}</div>
           <div className="flex items-center gap-3">
-            <button type="button" aria-label={"Restar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,-1)} className="rounded border px-3 py-1">−</button>
+            <button type="button" disabled={locked} aria-label={"Restar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,-1)} className="rounded border px-3 py-1">−</button>
             <span>{line.quantity}</span>
-            <button type="button" aria-label={"Sumar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,1)} className="rounded border px-3 py-1">+</button>
-            <button type="button" className="underline" onClick={()=>save(current.current.filter(row=>row.id!==line.id),"Prenda retirada.")}>Retirar</button>
+            <button type="button" disabled={locked} aria-label={"Sumar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,1)} className="rounded border px-3 py-1">+</button>
+            <button type="button" disabled={locked} className="underline" onClick={()=>save(current.current.filter(row=>row.id!==line.id),"Prenda retirada.")}>Retirar</button>
           </div>
         </li>)}</ul>
         <p className="mt-3 font-semibold">Subtotal estimado {currency.format(subtotal)}</p>
-        <button type="button" disabled={checking} onClick={verify} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
-        <p className="text-sm text-stone-600">Agregar prendas al carrito no reserva stock.</p>
+        <button type="button" disabled={checking || locked} onClick={verify} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
+        {hold?.expiresAt ? <p role="status">Prendas reservadas hasta las {new Date(hold.expiresAt).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}.</p> :
+          <button type="button" disabled={checking || reserving} onClick={reserve} className="ml-2 rounded bg-teal-800 px-3 py-2 text-white">
+            {reserving?"Confirmando…":hold?"Reintentar reserva":"Reservar por 15 minutos"}
+          </button>}
       </>}
     </section>
   </>;
