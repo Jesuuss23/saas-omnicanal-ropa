@@ -24,8 +24,8 @@ class OrderTrackingApi {
         this.items = items;
     }
 
-    record Header(UUID reservation, String status, BigDecimal total, boolean freeDelivery) {}
-    record Detail(String status, BigDecimal total, List<WebOrderItems.Item> items, boolean freeDelivery) {}
+    record Header(UUID reservation, String status, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee) {}
+    record Detail(String status, BigDecimal total, List<WebOrderItems.Item> items, boolean freeDelivery, BigDecimal deliveryFee) {}
 
     static String token(UUID store, UUID order, UUID reservation) {
         String input = "order-tracking-v1/"+store+"/"+order+"/"+reservation;
@@ -42,13 +42,13 @@ class OrderTrackingApi {
             @RequestHeader(value="X-Order-Token",defaultValue="") String supplied) {
         if (supplied.length()!=64) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         Header header=db.query("""
-                SELECT reservation_id,status,merchandise_total,free_delivery FROM web_checkout_order WHERE tenant_id=? AND id=?
-                """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getString(2),rs.getBigDecimal(3),rs.getBoolean(4)),store,order)
+                SELECT reservation_id,status,merchandise_total,free_delivery,delivery_fee FROM web_checkout_order WHERE tenant_id=? AND id=?
+                """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getString(2),rs.getBigDecimal(3),rs.getBoolean(4),rs.getBigDecimal(5)),store,order)
                 .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
         String expected=token(store,order,header.reservation());
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),supplied.getBytes(StandardCharsets.US_ASCII)))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(new Detail(header.status(),header.total(),items.list(store,order),header.freeDelivery()));
+                .body(new Detail(header.status(),header.total(),items.list(store,order),header.freeDelivery(),header.deliveryFee()));
     }
 }

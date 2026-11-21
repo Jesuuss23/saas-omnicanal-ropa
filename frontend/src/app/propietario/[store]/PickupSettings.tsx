@@ -2,7 +2,7 @@
 
 import {useEffect,useState,type FormEvent} from "react";
 
-type Settings={enabled:boolean;address:string;hours:string;revision:number;freeDeliveryMinimum:number|null};
+type Settings={enabled:boolean;address:string;hours:string;revision:number;freeDeliveryMinimum:number|null;latitude:number|null;longitude:number|null;perKm:number|null};
 type Props={store:string;send:(path:string,body:string,method:"PUT")=>Promise<Response>};
 
 export default function PickupSettings({store,send}:Props) {
@@ -53,6 +53,13 @@ export default function PickupSettings({store,send}:Props) {
             onChange={e=>setSettings({...settings,freeDeliveryMinimum:e.target.value===""?null:e.target.valueAsNumber})}
             className="block w-full rounded border p-2"/></label>
           <p className="text-sm">Deja el campo vacío para desactivar el beneficio. Con cero, todo pedido con delivery califica.</p>
+          <p>Para cobrar por distancia en línea recta, completa el origen de despacho y la tarifa. Deja los tres campos vacíos para desactivarla.</p>
+          {(["latitude","longitude","perKm"] as const).map(field=><label key={field}>
+            {{latitude:"Latitud de tienda o almacén",longitude:"Longitud de tienda o almacén",perKm:"Tarifa por km (S/)"}[field]}
+            <input type="number" step={field==="perKm"?"0.01":"0.000001"} min={field==="perKm"?0.01:field==="latitude"?-90:-180}
+              max={field==="perKm"?999999.99:field==="latitude"?90:180} defaultValue={settings[field] ?? ""} key={settings.revision}
+              onChange={e=>setSettings({...settings,[field]:e.target.value===""?null:e.target.valueAsNumber})} className="block w-full rounded border p-2"/>
+          </label>)}
           <button className="w-fit rounded bg-teal-800 px-3 py-2 text-white">Guardar</button>
         </fieldset>
       </form>}
