@@ -1,5 +1,9 @@
 package com.saas.omnicanal.catalog;
 
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -18,6 +22,22 @@ class PublicStoreCatalogApi {
 
     record Variant(UUID id, String name, String category, String size, String color, BigDecimal price) {}
     record Catalog(String storeName, List<Variant> variants, boolean hasNext) {}
+
+    record Availability(UUID id, BigDecimal price, int available) {}
+
+    @GetMapping("/api/public/stores/{store}/availability")
+    ResponseEntity<List<Availability>> availability(@PathVariable UUID store,
+            @RequestParam List<UUID> ids) {
+        if (ids.isEmpty() || ids.size() > 24) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        var params = new MapSqlParameterSource()
+                .addValue("store", store).addValue("ids", ids);
+        var jdbc = new NamedParameterJdbcTemplate(db);
+        var rows = jdbc.query("""
+                SELECT id, price, greatest(0, coalesce(stock_physical, 0) - coalesce(stock_reserved, 0))
+                  FROM product_variant WHERE tenant_id = :store AND id IN (:ids)
+                """, params, (rs, n) -> new Availability(rs.getObject(1, UUID.class), rs.getBigDecimal(2), rs.getInt(3)));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(rows);
+    }
 
     @GetMapping("/api/public/stores/{store}/catalog")
     Catalog catalog(@PathVariable UUID store, @RequestParam(defaultValue = "") String query,

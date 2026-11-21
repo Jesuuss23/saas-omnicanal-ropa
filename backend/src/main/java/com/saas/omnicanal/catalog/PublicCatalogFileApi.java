@@ -19,8 +19,8 @@ class PublicCatalogFileApi {
     @Bean
     @Order(-1)
     static SecurityFilterChain publicCatalogFiles(HttpSecurity http) throws Exception {
-        return http.securityMatcher("/api/public/catalog-files/*", "/api/public/stores/*/catalog")
-                .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.GET,"/api/public/catalog-files/*", "/api/public/stores/*/catalog").permitAll()
+        return http.securityMatcher("/api/public/catalog-files/*", "/api/public/stores/*/catalog", "/api/public/stores/*/availability")
+                .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.GET,"/api/public/catalog-files/*", "/api/public/stores/*/catalog", "/api/public/stores/*/availability").permitAll()
                         .anyRequest().denyAll()).build();
     }
 

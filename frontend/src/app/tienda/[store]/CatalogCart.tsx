@@ -3,6 +3,7 @@
 import {useEffect,useRef,useState} from "react";
 
 export type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number};
+type Availability = {id:string; price:number; available:number};
 type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number};
 const currency = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 
@@ -21,6 +22,8 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
   const [ready,setReady]=useState(false);
   const [storageError,setStorageError]=useState(false);
   const [notice,setNotice]=useState("");
+  const [checking,setChecking]=useState(false);
+  const [issues,setIssues]=useState<Record<string,string>>({});
   const current=useRef<Line[]>([]);
 
   useEffect(()=>{
@@ -34,6 +37,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
   },[storageKey]);
 
   function save(next:Line[],message:string) {
+    setIssues({});
     current.current=next;
     setLines(next);
     setNotice(message);
@@ -56,6 +60,39 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
       .filter(line=>line.quantity>0),"Carrito actualizado.");
   }
 
+  async function verify() {
+    const snapshot=current.current;
+    setChecking(true);
+    setIssues({});
+    setNotice("");
+    try {
+      const available=new Map<string,Availability>();
+      for (let i=0;i<snapshot.length;i+=24) {
+        const query=new URLSearchParams();
+        for (const line of snapshot.slice(i,i+24)) query.append("ids",line.id);
+        const response=await fetch("/api/public/stores/"+store+"/availability?"+query,{cache:"no-store"});
+        if (!response.ok) throw new Error();
+        const rows:Availability[]=await response.json();
+        for (const row of rows) available.set(row.id,row);
+        if (current.current!==snapshot) return;
+      }
+      const warnings:Record<string,string>={};
+      const next=snapshot.map(line=>{
+        const row=available.get(line.id);
+        const notes:string[]=[];
+        if (!row || row.available===0) notes.push("Agotado o retirado del catálogo.");
+        else if (line.quantity>row.available) notes.push("Solo hay "+row.available+" unidades disponibles.");
+        if (row && row.price!==line.price) notes.push("Precio anterior: "+currency.format(line.price)+".");
+        if (notes.length) warnings[line.id]=notes.join(" ");
+        return row ? {...line,price:row.price} : line;
+      });
+      save(next,Object.keys(warnings).length ? "Revisa las prendas marcadas." : "Precios y cantidades verificados.");
+      setIssues(warnings);
+    } catch {
+      if (current.current===snapshot) setNotice("No se pudo verificar el carrito. Vuelve a intentarlo.");
+    } finally {setChecking(false);}
+  }
+
   const subtotal=lines.reduce((sum,line)=>sum+Math.round(line.price*100)*line.quantity,0)/100;
   return <>
     {variants.length ? <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -74,7 +111,8 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
       {!ready ? <p>Cargando carrito…</p> : lines.length===0 ? <p>Tu carrito está vacío.</p> : <>
         <ul className="divide-y">{lines.map(line=><li key={line.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
           <div><strong>{line.name}</strong><p>Talla {line.size}{line.color && " · "+line.color}</p>
-            <p>{currency.format(line.price)} por unidad</p></div>
+            <p>{currency.format(line.price)} por unidad</p>
+            {issues[line.id] && <p className="text-sm text-amber-800">{issues[line.id]}</p>}</div>
           <div className="flex items-center gap-3">
             <button type="button" aria-label={"Restar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,-1)} className="rounded border px-3 py-1">−</button>
             <span>{line.quantity}</span>
@@ -83,6 +121,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
           </div>
         </li>)}</ul>
         <p className="mt-3 font-semibold">Subtotal estimado {currency.format(subtotal)}</p>
+        <button type="button" disabled={checking} onClick={verify} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
         <p className="text-sm text-stone-600">Agregar prendas al carrito no reserva stock.</p>
       </>}
     </section>
