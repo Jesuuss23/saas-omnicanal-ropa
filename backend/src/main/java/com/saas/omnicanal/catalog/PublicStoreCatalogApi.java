@@ -20,7 +20,7 @@ class PublicStoreCatalogApi {
         this.db = db;
     }
 
-    record Variant(UUID id, String name, String category, String size, String color, BigDecimal price) {}
+    record Variant(UUID id, String name, String category, String size, String color, BigDecimal price, int available) {}
     record Pickup(String address, String hours) {}
     record Store(String name, Pickup pickup) {}
     record CategoryResource(String kind, String url) {}
@@ -70,11 +70,14 @@ class PublicStoreCatalogApi {
                 + " AND v.size <> '' ORDER BY v.size", String.class, store, search, category, category, color, color);
         var colors = db.queryForList("SELECT DISTINCT v.color " + matches + categoryFilter + sizeFilter
                 + " AND trim(v.color) <> '' ORDER BY v.color", String.class, store, search, category, category, size, size);
-        var variants = db.query("SELECT v.id, p.name, p.category, v.size, v.color, v.price " + matches + categoryFilter + sizeFilter + colorFilter + """
+        var variants = db.query("""
+                SELECT v.id, p.name, p.category, v.size, v.color, v.price,
+                       coalesce(v.stock_physical, 0) - coalesce(v.stock_reserved, 0) AS available
+                """ + matches + categoryFilter + sizeFilter + colorFilter + """
                    AND (CAST(? AS uuid) IS NULL OR v.id = ?)
                  ORDER BY p.name, p.id, v.size, v.color, v.id LIMIT 25 OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
-                rs.getString(4), rs.getString(5), rs.getBigDecimal(6)), store, search, category, category, size, size, color, color, variant, variant, page * 24L);
+                rs.getString(4), rs.getString(5), rs.getBigDecimal(6), rs.getInt("available")), store, search, category, category, size, size, color, color, variant, variant, page * 24L);
         CategoryResource resource = category.isBlank() ? null : db.query("""
                 SELECT active, CASE active WHEN 'LINK' THEN link_url WHEN 'PDF' THEN pdf_url
                                            WHEN 'IMAGE' THEN image_url END AS url

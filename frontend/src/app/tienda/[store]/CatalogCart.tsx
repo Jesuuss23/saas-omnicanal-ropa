@@ -4,7 +4,7 @@ import ShareCatalog from "./ShareCatalog";
 import GuestContact from "./GuestContact";
 import {useEffect,useRef,useState} from "react";
 
-export type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number};
+export type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number; available:number};
 type Availability = {id:string; price:number; available:number};
 type StockIssue = {message:string; available:number};
 type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number};
@@ -185,6 +185,9 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         <h2 className="text-xl font-semibold">{item.name}</h2>
         <p className="my-2">Talla {item.size}{item.color && " · "+item.color}</p>
         <p className="font-semibold">{currency.format(item.price)}</p>
+        <p className="text-sm text-stone-600">
+          {item.available===1 ? "1 unidad disponible" : item.available+" unidades disponibles"}
+        </p>
         <button type="button" disabled={!ready || locked} onClick={()=>add(item)} className="mt-3 rounded bg-teal-800 px-3 py-2 text-white">Agregar al carrito</button>
         <ShareCatalog path={"/tienda/"+store+"?variant="+item.id} title={item.name+" · Talla "+item.size+(item.color?" · "+item.color:"")} label="Compartir prenda"/>
       </li>)}
