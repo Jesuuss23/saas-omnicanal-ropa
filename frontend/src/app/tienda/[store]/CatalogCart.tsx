@@ -75,6 +75,10 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
       if ([400,404,409,410].includes(response.status)) {
         sessionStorage.removeItem(reservationKey);
         setHold(null);
+        if (response.status===409) {
+          await verify(true);
+          return;
+        }
         setNotice(response.status===410?"La reserva venció. Puedes reservar otra vez.":"Revisa precios y stock antes de volver a reservar.");
         return;
       }
@@ -128,11 +132,12 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
       .filter(line=>line.quantity>0),"Carrito actualizado.");
   }
 
-  async function verify() {
+  async function verify(afterConflict=false) {
+    const prefix=afterConflict ? "La reserva no se confirmó. " : "";
     const snapshot=current.current;
     setChecking(true);
     setIssues({});
-    setNotice("");
+    setNotice(afterConflict ? prefix+"Verificando precios y stock…" : "");
     try {
       const available=new Map<string,Availability>();
       for (let i=0;i<snapshot.length;i+=24) {
@@ -154,10 +159,11 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         if (notes.length) warnings[line.id]={message:notes.join(" "),available:row?.available ?? 0};
         return row ? {...line,price:row.price} : line;
       });
-      save(next,Object.keys(warnings).length ? "Revisa las prendas marcadas." : "Precios y cantidades verificados.");
+      const message=Object.keys(warnings).length ? "Revisa las prendas marcadas." : "Precios y cantidades verificados.";
+      save(next,prefix+message);
       setIssues(warnings);
     } catch {
-      if (current.current===snapshot) setNotice("No se pudo verificar el carrito. Vuelve a intentarlo.");
+      if (current.current===snapshot) setNotice(prefix+"No se pudo verificar el carrito. Vuelve a intentarlo.");
     } finally {setChecking(false);}
   }
 
@@ -200,7 +206,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
           </div>
         </li>)}</ul>
         <p className="mt-3 font-semibold">Subtotal estimado {currency.format(subtotal)}</p>
-        <button type="button" disabled={checking || locked} onClick={verify} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
+        <button type="button" disabled={checking || locked} onClick={()=>verify()} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
         {hasShortage && !locked && <button type="button" disabled={checking} onClick={applyAvailableQuantities}
           className="my-2 rounded border px-3 py-2">Ajustar cantidades y retirar prendas agotadas</button>}
         {hold?.expiresAt ? <><p role="status">Prendas reservadas hasta las {new Date(hold.expiresAt).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}.</p>
