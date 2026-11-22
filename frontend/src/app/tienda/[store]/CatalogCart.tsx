@@ -6,6 +6,7 @@ import {useEffect,useRef,useState} from "react";
 
 export type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number};
 type Availability = {id:string; price:number; available:number};
+type StockIssue = {message:string; available:number};
 type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number};
 const currency = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 
@@ -25,7 +26,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
   const [storageError,setStorageError]=useState(false);
   const [notice,setNotice]=useState("");
   const [checking,setChecking]=useState(false);
-  const [issues,setIssues]=useState<Record<string,string>>({});
+  const [issues,setIssues]=useState<Record<string,StockIssue>>({});
   const reservationKey=storageKey+":reservation";
   const [hold,setHold]=useState<{key:string;expiresAt:string|null}|null>(null);
   const [reserving,setReserving]=useState(false);
@@ -143,14 +144,14 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         for (const row of rows) available.set(row.id,row);
         if (current.current!==snapshot) return;
       }
-      const warnings:Record<string,string>={};
+      const warnings:Record<string,StockIssue>={};
       const next=snapshot.map(line=>{
         const row=available.get(line.id);
         const notes:string[]=[];
         if (!row || row.available===0) notes.push("Agotado o retirado del catálogo.");
         else if (line.quantity>row.available) notes.push("Solo hay "+row.available+" unidades disponibles.");
         if (row && row.price!==line.price) notes.push("Precio anterior: "+currency.format(line.price)+".");
-        if (notes.length) warnings[line.id]=notes.join(" ");
+        if (notes.length) warnings[line.id]={message:notes.join(" "),available:row?.available ?? 0};
         return row ? {...line,price:row.price} : line;
       });
       save(next,Object.keys(warnings).length ? "Revisa las prendas marcadas." : "Precios y cantidades verificados.");
@@ -158,6 +159,16 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
     } catch {
       if (current.current===snapshot) setNotice("No se pudo verificar el carrito. Vuelve a intentarlo.");
     } finally {setChecking(false);}
+  }
+
+  const hasShortage=lines.some(line=>issues[line.id] && issues[line.id].available<line.quantity);
+  function applyAvailableQuantities() {
+    if (locked || checking || !hasShortage) return;
+    const next=current.current.map(line=>{
+      const issue=issues[line.id];
+      return issue && issue.available<line.quantity ? {...line,quantity:issue.available} : line;
+    }).filter(line=>line.quantity>0);
+    save(next,"Carrito ajustado al stock de la última verificación.");
   }
 
   const subtotal=lines.reduce((sum,line)=>sum+Math.round(line.price*100)*line.quantity,0)/100;
@@ -180,7 +191,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         <ul className="divide-y">{lines.map(line=><li key={line.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
           <div><strong>{line.name}</strong><p>Talla {line.size}{line.color && " · "+line.color}</p>
             <p>{currency.format(line.price)} por unidad</p>
-            {issues[line.id] && <p className="text-sm text-amber-800">{issues[line.id]}</p>}</div>
+            {issues[line.id] && <p className="text-sm text-amber-800">{issues[line.id].message}</p>}</div>
           <div className="flex items-center gap-3">
             <button type="button" disabled={locked} aria-label={"Restar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,-1)} className="rounded border px-3 py-1">−</button>
             <span>{line.quantity}</span>
@@ -190,6 +201,8 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         </li>)}</ul>
         <p className="mt-3 font-semibold">Subtotal estimado {currency.format(subtotal)}</p>
         <button type="button" disabled={checking || locked} onClick={verify} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
+        {hasShortage && !locked && <button type="button" disabled={checking} onClick={applyAvailableQuantities}
+          className="my-2 rounded border px-3 py-2">Ajustar cantidades y retirar prendas agotadas</button>}
         {hold?.expiresAt ? <><p role="status">Prendas reservadas hasta las {new Date(hold.expiresAt).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}.</p>
           <GuestContact key={hold.key} store={store} reservation={hold.key} disabled={reserving}/>
           <button type="button" disabled={reserving} onClick={releaseReservation} className="my-2 rounded border px-3 py-2">
