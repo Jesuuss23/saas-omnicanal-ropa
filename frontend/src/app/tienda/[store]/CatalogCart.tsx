@@ -7,7 +7,7 @@ import {useEffect,useRef,useState} from "react";
 export type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number; available:number};
 type Availability = {id:string; price:number; available:number};
 type StockIssue = {message:string; available:number};
-type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number};
+type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number; available?:number};
 const currency = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 
 function isLine(value:unknown):value is Line {
@@ -27,6 +27,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
   const [notice,setNotice]=useState("");
   const [checking,setChecking]=useState(false);
   const [issues,setIssues]=useState<Record<string,StockIssue>>({});
+  const [verifiedStock,setVerifiedStock]=useState<Record<string,number>>({});
   const reservationKey=storageKey+":reservation";
   const [hold,setHold]=useState<{key:string;expiresAt:string|null}|null>(null);
   const [reserving,setReserving]=useState(false);
@@ -119,15 +120,27 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
     } catch {setStorageError(true);}
   }
 
+  function canIncrease(id:string,quantity:number,knownStock?:number) {
+    const limit=verifiedStock[id] ?? variants.find(item=>item.id===id)?.available ?? knownStock;
+    if (typeof limit==="number" && quantity>=limit) {
+      setNotice("Has alcanzado el stock disponible para esta variante. Puedes volver a verificarlo.");
+      return false;
+    }
+    return true;
+  }
+
   function add(item:Variant) {
     const cart=current.current;
     const existing=cart.find(line=>line.id===item.id);
-    const next={...item,quantity:(existing?.quantity ?? 0)+1};
+    if (!canIncrease(item.id,existing?.quantity ?? 0,item.available)) return;
+    const next={...item,available:verifiedStock[item.id] ?? item.available,quantity:(existing?.quantity ?? 0)+1};
     save(existing ? cart.map(line=>line.id===item.id ? next : line) : [...cart,next],
       item.name+" agregado al carrito.");
   }
 
   function changeQuantity(id:string,delta:number) {
+    const selected=current.current.find(line=>line.id===id);
+    if (!selected || (delta>0 && !canIncrease(id,selected.quantity,selected.available))) return;
     save(current.current.map(line=>line.id===id ? {...line,quantity:line.quantity+delta} : line)
       .filter(line=>line.quantity>0),"Carrito actualizado.");
   }
@@ -157,10 +170,11 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         else if (line.quantity>row.available) notes.push("Solo hay "+row.available+" unidades disponibles.");
         if (row && row.price!==line.price) notes.push("Precio anterior: "+currency.format(line.price)+".");
         if (notes.length) warnings[line.id]={message:notes.join(" "),available:row?.available ?? 0};
-        return row ? {...line,price:row.price} : line;
+        return {...line,price:row?.price ?? line.price,available:row?.available ?? 0};
       });
       const message=Object.keys(warnings).length ? "Revisa las prendas marcadas." : "Precios y cantidades verificados.";
       save(next,prefix+message);
+      setVerifiedStock(stock=>({...stock,...Object.fromEntries(next.map(line=>[line.id,line.available]))}));
       setIssues(warnings);
     } catch {
       if (current.current===snapshot) setNotice(prefix+"No se pudo verificar el carrito. Vuelve a intentarlo.");
@@ -186,7 +200,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
         <p className="my-2">Talla {item.size}{item.color && " · "+item.color}</p>
         <p className="font-semibold">{currency.format(item.price)}</p>
         <p className="text-sm text-stone-600">
-          {item.available===1 ? "1 unidad disponible" : item.available+" unidades disponibles"}
+          {(verifiedStock[item.id] ?? item.available)===1 ? "1 unidad disponible" : (verifiedStock[item.id] ?? item.available)+" unidades disponibles"}
         </p>
         <button type="button" disabled={!ready || locked} onClick={()=>add(item)} className="mt-3 rounded bg-teal-800 px-3 py-2 text-white">Agregar al carrito</button>
         <ShareCatalog path={"/tienda/"+store+"?variant="+item.id} title={item.name+" · Talla "+item.size+(item.color?" · "+item.color:"")} label="Compartir prenda"/>
