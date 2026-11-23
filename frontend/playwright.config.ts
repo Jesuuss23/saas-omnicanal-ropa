@@ -6,7 +6,8 @@ import {defineConfig, devices} from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // Las pruebas con la tienda sembrada cambian su estado (2FA), por eso corren en orden.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
   use: {
