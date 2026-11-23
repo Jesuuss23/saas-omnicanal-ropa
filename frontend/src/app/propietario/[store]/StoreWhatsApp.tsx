@@ -61,11 +61,12 @@ export default function StoreWhatsApp({store,send}:Props) {
     } finally {setBusy(false);}
   }
 
-  return <details className="mt-6 rounded-xl border border-stone-200 p-5" onToggle={e=>{
+  return <details className="mt-4 rounded-xl border border-stone-200 p-5" onToggle={e=>{
     setOpen(e.currentTarget.open);
     if (!e.currentTarget.open) {generation.current++;setChannel(null);setError("");}
   }}>
-    <summary className="cursor-pointer font-semibold">WhatsApp de la tienda</summary>
+    <summary className="cursor-pointer font-semibold">Conexión rápida por QR (Evolution API)</summary>
+    <p className="mt-2 text-sm text-stone-600">Ideal para empezar o para bajo volumen. Al ser una conexión no oficial, WhatsApp puede bloquear el número si se usa para envíos masivos.</p>
     <p role="status" className="my-3">{error || (channel ? labels[channel.state] : "Consultando conexión…")}</p>
     {channel?.qr && <div className="mb-4">
       <p>En el WhatsApp de la tienda, abre Dispositivos vinculados y escanea el código.</p>

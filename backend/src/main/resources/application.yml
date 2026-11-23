@@ -1,3 +1,8 @@
+server:
+  error:
+    # Los mensajes de ResponseStatusException son textos para el usuario (nunca incluyen secretos).
+    include-message: always
+
 spring:
   autoconfigure:
     exclude: org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
@@ -7,6 +12,7 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
     properties:
@@ -15,8 +21,34 @@ spring:
         format_sql: true
   flyway:
     enabled: true
-    baseline-on-migrate: true
+    locations: classpath:db/migration
+    # Las migraciones aplicadas son inmutables: si alguien edita un V__ ya ejecutado, el arranque falla.
+    validate-on-migrate: true
+    out-of-order: false
+    clean-disabled: true
+    # Solo para adoptar una base existente sin historial de Flyway. En una base nueva no tiene efecto.
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
   ai:
     google:
       genai:
-        api-key: PON_TU_API_KEY_AQUI_O_CUALQUIER_TEXTO_TEMPORAL
+        api-key: ${GOOGLE_GENAI_API_KEY:sin-configurar}
+
+# Integraciones. Todos los secretos llegan por variables de entorno (ver docs/configuracion.md).
+whatsapp:
+  cloud:
+    graph-url: https://graph.facebook.com
+    graph-version: ${WHATSAPP_GRAPH_VERSION:v23.0}
+
+culqi:
+  api-url: https://api.culqi.com
+  subscriptions:
+    create-path: /v2/recurrent/subscriptions/create
+    get-path: /v2/recurrent/subscriptions/{id}
+
+mercadopago:
+  api-url: https://api.mercadopago.com
+  auth-url: https://auth.mercadopago.com/authorization
+
+subscription:
+  trial-days: 14
+  grace-days: 5
