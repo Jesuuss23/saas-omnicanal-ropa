@@ -71,6 +71,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with: {name: backend-jar, path: backend-jar}
       - name: Levantar backend (aplica migraciones)
+        env:
+          # Credenciales solo para CI (contraseña e2e-superadmin-2026); el secreto TOTP es público a propósito.
+          SUPERADMIN_EMAIL: admin@e2e.test
+          SUPERADMIN_PASSWORD_HASH: "$2a$10$5Dopu6VqOemoyqJvWOvMIOVYlfWZCX/z3XCJ1oOV1O6IBG/4ZxeGq"
+          SUPERADMIN_TOTP_SECRET: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
         run: |
           nohup java -jar backend-jar/*.jar > backend.log 2>&1 &
           for i in $(seq 1 60); do curl -fs localhost:8080/api/owner/csrf > /dev/null && exit 0; sleep 2; done

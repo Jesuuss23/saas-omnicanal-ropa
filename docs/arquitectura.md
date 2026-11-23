@@ -9,7 +9,7 @@ com.saas.omnicanal
 ├── shared/            # transversal: config de seguridad, OwnerAccess, SecretCipher, Hmac, HttpClients
 ├── tenant/            # tiendas (tenant)
 ├── owner/             # acceso del dueño (invitación, login)
-├── platformadmin/     # superadmin con 2FA
+├── platformadmin/     # superadmin con 2FA, consola, auditoría y suspensión de tiendas
 ├── catalog/           # productos, variantes, recursos, etiquetas
 ├── checkout/          # reservas, pedidos web, seguimiento
 ├── pos/               # punto de venta
@@ -39,6 +39,10 @@ Cada módulo se divide en:
 | `/api/public/**` | `PublicApiSecurityConfig.publicStoreApi` | Pública, con tokens de reserva o de seguimiento |
 | `/api/superadmin/**` | `AdminSecurity` | Contraseña + TOTP |
 | `/api/owner/**` | `OwnerSecurity` | Sesión del dueño + CSRF; `OwnerAccess.requireOwner` en cada endpoint |
+
+`SuspendedStoreFilter` responde 423 en `/api/owner/stores/{id}/**` y `/api/public/stores/{id}/**` cuando el
+superadmin suspendió la tienda (solo deja `GET .../subscription` para que el dueño vea su estado). Toda acción de la
+consola se registra con `AuditService` en `platform_audit_log`.
 
 ## Secretos
 

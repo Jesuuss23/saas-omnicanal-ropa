@@ -4,7 +4,7 @@
  * - Adjunta el token CSRF de la sesión en cada escritura.
  * - Convierte las respuestas de error en ApiError con el mensaje que manda el backend.
  * - Avisa por eventos de ventana cuando la sesión expiró (401) o el plan no alcanza (402),
- *   para que el layout de cada sección decida qué mostrar.
+ *   o la tienda está suspendida (423), para que el layout de cada sección decida qué mostrar.
  */
 
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -13,7 +13,7 @@ export type Body = string | URLSearchParams | FormData | undefined;
 /** Firma que usan los componentes del panel para escribir en /api/owner. */
 export type Send = (path: string, body?: Body, method?: Exclude<Method, "GET">) => Promise<Response>;
 
-export const API_EVENTS = {unauthorized: "api:unauthorized", quota: "api:quota"} as const;
+export const API_EVENTS = {unauthorized: "api:unauthorized", quota: "api:quota", suspended: "api:suspended"} as const;
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -29,6 +29,7 @@ const fallbackMessages: Record<number, string> = {
   403: "No tienes permiso para esta acción.",
   404: "No encontramos lo que buscabas.",
   409: "Los datos cambiaron mientras trabajabas. Recarga e inténtalo otra vez.",
+  423: "La tienda está suspendida. Escríbenos para reactivarla.",
   429: "Demasiados intentos. Espera un momento.",
   503: "El servicio no está disponible por ahora.",
 };
@@ -50,6 +51,7 @@ function notify(res: Response, url: string) {
     window.dispatchEvent(new CustomEvent(API_EVENTS.unauthorized, {detail: url}));
   }
   if (res.status === 402) window.dispatchEvent(new CustomEvent(API_EVENTS.quota, {detail: url}));
+  if (res.status === 423) window.dispatchEvent(new CustomEvent(API_EVENTS.suspended, {detail: url}));
 }
 
 /** fetch con los avisos globales de sesión y plan. Nunca usa caché. */

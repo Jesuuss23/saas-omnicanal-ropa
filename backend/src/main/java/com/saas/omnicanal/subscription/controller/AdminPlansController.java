@@ -1,5 +1,6 @@
 package com.saas.omnicanal.subscription.controller;
 
+import com.saas.omnicanal.platformadmin.service.AuditService;
 import com.saas.omnicanal.subscription.repository.PlanRepository;
 import com.saas.omnicanal.subscription.repository.SubscriptionRepository;
 import jakarta.validation.Valid;
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.security.Principal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -22,8 +24,10 @@ import org.springframework.web.server.ResponseStatusException;
 class AdminPlansController {
     private final PlanRepository plans;
     private final SubscriptionRepository subscriptions;
+    private final AuditService audit;
 
-    AdminPlansController(PlanRepository plans, SubscriptionRepository subscriptions) {
+    AdminPlansController(PlanRepository plans, SubscriptionRepository subscriptions, AuditService audit) {
+        this.audit = audit;
         this.plans = plans;
         this.subscriptions = subscriptions;
     }
@@ -36,8 +40,9 @@ class AdminPlansController {
     record CulqiPlan(@NotBlank @Pattern(regexp = "pln_[A-Za-z0-9_]{4,60}") String culqiPlanId) {}
 
     @PutMapping("/plans/{code}/culqi")
-    Map<String, String> linkCulqi(@PathVariable String code, @Valid @RequestBody CulqiPlan input) {
+    Map<String, String> linkCulqi(@PathVariable String code, @Valid @RequestBody CulqiPlan input, Principal admin) {
         if (!plans.setCulqiPlanId(code, input.culqiPlanId())) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        audit.record(admin, AuditService.PLAN_CULQI_LINKED, null, code + " → " + input.culqiPlanId());
         return Map.of("code", code, "culqiPlanId", input.culqiPlanId());
     }
 
@@ -46,15 +51,18 @@ class AdminPlansController {
 
     @PutMapping("/tenants/{tenant}/entitlements/{key}")
     Map<String, Object> override(@PathVariable UUID tenant, @PathVariable @Pattern(regexp = "[a-z][a-z0-9_.]{1,63}") String key,
-                                 @Valid @RequestBody Override input) {
+                                 @Valid @RequestBody Override input, Principal admin) {
         if (!key.matches("[a-z][a-z0-9_.]{1,63}")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         plans.upsertOverride(tenant, key, input.enabled(), input.limit(), input.expiresAt(), input.reason().strip());
+        audit.record(admin, AuditService.ENTITLEMENT_OVERRIDE, tenant, key + (input.enabled() ? " activo" : " desactivado")
+                + (input.limit() == null ? "" : ", límite " + input.limit()) + ". " + input.reason().strip());
         return Map.of("tenant", tenant, "key", key, "enabled", input.enabled());
     }
 
     @DeleteMapping("/tenants/{tenant}/entitlements/{key}")
-    void removeOverride(@PathVariable UUID tenant, @PathVariable String key) {
+    void removeOverride(@PathVariable UUID tenant, @PathVariable String key, Principal admin) {
         plans.deleteOverride(tenant, key);
+        audit.record(admin, AuditService.ENTITLEMENT_OVERRIDE_REMOVED, tenant, key);
     }
 
     @GetMapping("/subscriptions/summary")

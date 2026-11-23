@@ -62,6 +62,16 @@ public class PlanRepository {
         return result;
     }
 
+    public record OverrideRow(String key, boolean enabled, Long limit, java.time.OffsetDateTime expiresAt, String reason) {}
+
+    public List<OverrideRow> overrides(UUID tenant) {
+        return db.query("""
+                SELECT entitlement_key,enabled,limit_value,expires_at,reason FROM tenant_entitlement_override
+                 WHERE tenant_id=? ORDER BY entitlement_key
+                """, (rs, n) -> new OverrideRow(rs.getString(1), rs.getBoolean(2), (Long) rs.getObject(3),
+                rs.getObject(4, java.time.OffsetDateTime.class), rs.getString(5)), tenant);
+    }
+
     public void upsertOverride(UUID tenant, String key, boolean enabled, Long limit, java.time.OffsetDateTime expiresAt, String reason) {
         db.update("""
                 INSERT INTO tenant_entitlement_override(tenant_id,entitlement_key,enabled,limit_value,expires_at,reason)

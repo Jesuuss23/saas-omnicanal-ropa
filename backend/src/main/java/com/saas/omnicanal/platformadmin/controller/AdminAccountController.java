@@ -6,6 +6,7 @@ import com.saas.omnicanal.auth.model.MfaSubject;
 import com.saas.omnicanal.auth.service.MfaService;
 import com.saas.omnicanal.auth.service.SessionUpgrade;
 import com.saas.omnicanal.platformadmin.service.AdminLogin;
+import com.saas.omnicanal.platformadmin.service.AuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -29,8 +30,10 @@ class AdminAccountController {
     private final MfaService mfa;
     private final AdminLogin login;
     private final SessionUpgrade sessions;
+    private final AuditService audit;
 
-    AdminAccountController(MfaService mfa, AdminLogin login, SessionUpgrade sessions) {
+    AdminAccountController(MfaService mfa, AdminLogin login, SessionUpgrade sessions, AuditService audit) {
+        this.audit = audit;
         this.mfa = mfa;
         this.login = login;
         this.sessions = sessions;
@@ -54,15 +57,17 @@ class AdminAccountController {
     Map<String, List<String>> confirm(@Valid @RequestBody Code input, Authentication auth,
                                       HttpServletRequest request, HttpServletResponse response) {
         List<String> codes = mfa.confirmSetup(MfaSubject.SUPERADMIN, login.email(), input.code());
+        audit.record(auth, AuditService.MFA_ENROLLED, null, "App autenticadora del superadmin");
         if (setupOnly(auth)) sessions.grant(auth, List.of(AdminLogin.FULL_ROLE), request, response);
         return Map.of("recoveryCodes", codes);
     }
 
     @PostMapping("/mfa/recovery-codes")
-    Map<String, List<String>> recoveryCodes(@Valid @RequestBody Code input) {
+    Map<String, List<String>> recoveryCodes(@Valid @RequestBody Code input, Authentication auth) {
         if (!mfa.verify(MfaSubject.SUPERADMIN, login.email(), input.code())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El código no es válido.");
         }
+        audit.record(auth, AuditService.RECOVERY_CODES_REGENERATED, null, null);
         return Map.of("recoveryCodes", mfa.regenerateRecoveryCodes(MfaSubject.SUPERADMIN, login.email()));
     }
 

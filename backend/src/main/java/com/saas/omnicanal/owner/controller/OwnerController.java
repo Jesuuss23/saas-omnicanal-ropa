@@ -2,6 +2,7 @@ package com.saas.omnicanal.owner.controller;
 
 import com.saas.omnicanal.notifications.service.EmailService;
 import com.saas.omnicanal.notifications.service.EmailTemplates;
+import com.saas.omnicanal.platformadmin.service.AuditService;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -32,8 +33,10 @@ class OwnerController {
 
     private final EmailService email;
     private final EmailTemplates templates;
+    private final AuditService audit;
 
-    OwnerController(JdbcTemplate db, PasswordEncoder passwords, EmailService email, EmailTemplates templates) {
+    OwnerController(JdbcTemplate db, PasswordEncoder passwords, EmailService email, EmailTemplates templates, AuditService audit) {
+        this.audit = audit;
         this.db = db;
         this.passwords = passwords;
         this.email = email;
@@ -55,7 +58,7 @@ class OwnerController {
     }
 
     @PostMapping("/api/superadmin/owners/{id}/invitation")
-    Map<String, String> invite(@PathVariable UUID id) {
+    Map<String, String> invite(@PathVariable UUID id, Principal admin) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -67,6 +70,7 @@ class OwnerController {
         db.query("SELECT o.email, t.name FROM tenant_owner o JOIN tenant t ON t.id = o.tenant_id WHERE t.id = ?",
                 rs -> { email.send(templates.ownerInvitation(rs.getString(1), rs.getString(2),
                         templates.url("/propietario/" + id + "#" + token))); }, id);
+        audit.record(admin, AuditService.OWNER_INVITED, id, null);
         return Map.of("token", token, "emailed", email.configured() ? "true" : "false");
     }
 
@@ -91,12 +95,14 @@ class OwnerController {
         return Map.of("token", csrf.getToken());
     }
 
+    record Profile(UUID id, String name, String email, boolean active, String suspendedReason) {}
+
     @GetMapping("/api/owner/me")
-    Store profile(Principal principal) {
+    Profile profile(Principal principal) {
         return db.queryForObject("""
-                SELECT t.name, o.email FROM tenant t JOIN tenant_owner o ON o.tenant_id = t.id WHERE t.id = ?
-                """, (rs, row) -> new Store(UUID.fromString(principal.getName()), rs.getString("name"),
-                rs.getString("email"), true), UUID.fromString(principal.getName()));
+                SELECT t.name, o.email, t.suspended_reason FROM tenant t JOIN tenant_owner o ON o.tenant_id = t.id WHERE t.id = ?
+                """, (rs, row) -> new Profile(UUID.fromString(principal.getName()), rs.getString("name"),
+                rs.getString("email"), true, rs.getString("suspended_reason")), UUID.fromString(principal.getName()));
     }
 
     private static String digest(String token) {

@@ -11,7 +11,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 | # | Módulo | Estado | Incluye | Pendiente |
 |---|--------|--------|---------|-----------|
 | 0.1 | Estructura por módulos | ✅ | Paquetes `modulo/{model,repository,service,controller,config}`; `shared/` para seguridad, cifrado y clientes HTTP | Extraer SQL de los controladores que aún lo tienen (ver [arquitectura.md](arquitectura.md#deuda-conocida)) |
-| 0.2 | Migraciones Flyway | ✅ | V1–V34 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
+| 0.2 | Migraciones Flyway | ✅ | V1–V35 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
 | 0.3 | Cifrado de secretos | ✅ | `SecretCipher` AES-256-GCM con contexto por tienda (`SECRETS_ENCRYPTION_KEY`) | Rotación de clave maestra (re-cifrado por lotes) |
 | 0.4 | CI | ✅ | GitHub Actions: tests del backend con PostgreSQL, lint/tipos/build del frontend y pruebas de humo con Playwright | — |
 | 0.5 | Acceso y 2FA | ✅ | TOTP enrolable con QR para superadmin y propietarios, códigos de recuperación, ingreso de propietarios por correo ([seguridad.md](seguridad.md)) | — |
@@ -49,7 +49,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 | 3.5 | Pedidos y logística | Preparación, recojo con código, reparto con estados y línea de tiempo |
 | 3.6 | Marketing | Segmentos, carrito abandonado, colas de trabajo, campañas por email y plantillas de WhatsApp |
 | 3.7 | Dominios | Subdominio administrado y dominio propio con verificación DNS/SSL asíncrona |
-| 3.8 | Panel comercial del superadmin | Trials por vencer, conversión, tenants en gracia/suspendidos (base: `/api/superadmin/subscriptions/summary`) |
+| 3.8 | Panel comercial del superadmin | ✅ Consola con KPIs (MRR, pruebas por vencer, morosas), tiendas con búsqueda y ficha, suspensión con kill switch (423), ajustes manuales de suscripción, capacidades por tienda, pagos y auditoría (`platform_audit_log`). Pendiente: embudo de conversión y exportación CSV |
 
 ## Siguiente incremento sugerido
 
