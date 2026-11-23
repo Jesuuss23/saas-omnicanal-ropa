@@ -5,7 +5,7 @@ import Link from "next/link";
 import {useParams} from "next/navigation";
 import OrderSummary, {type Order} from "../../OrderSummary";
 
-const statuses={PENDING_PAYMENT:"Pendiente de pago",EXPIRED:"Vencido",CANCELLED:"Cancelado"};
+const statuses={PENDING_PAYMENT:"Pendiente de pago",PAID:"Pagado",EXPIRED:"Vencido",CANCELLED:"Cancelado"};
 const limaDate=new Intl.DateTimeFormat("es-PE",{
   timeZone:"America/Lima",dateStyle:"long",timeStyle:"medium"
 });
@@ -99,6 +99,8 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
           {limaDate.format(new Date(detail.reservationExpiresAt))}
         </time> (hora de Lima).
       </p>}
+      {detail.status==="PENDING_PAYMENT" && token && <PayWithMercadoPago store={store} order={order} token={token}/>}
+      {detail.status==="PAID" && <p>¡Gracias! Recibimos tu pago. La tienda te avisará cuando tu pedido esté listo.</p>}
       {detail.status==="EXPIRED" && <p>La reserva de estas prendas ha vencido.</p>}
       {detail.pickup && <section className="rounded border p-3">
         <h2 className="font-semibold">Punto de recojo del pedido</h2>
@@ -114,4 +116,27 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
     </> : !error && <p>Cargando pedido…</p>}
     <button type="button" className="text-teal-800 underline" onClick={()=>setVersion(v=>v+1)}>Actualizar</button>
   </main>;
+}
+
+function PayWithMercadoPago({store,order,token}:{store:string;order:string;token:string}) {
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  async function pay() {
+    setBusy(true);setError("");
+    try {
+      const res=await fetch("/api/public/stores/"+store+"/orders/"+order+"/mercadopago",{
+        method:"POST",headers:{"X-Order-Token":token},cache:"no-store"
+      });
+      if (res.status===409) throw new Error("Esta tienda aún no recibe pagos en línea o falta confirmar el costo de delivery.");
+      if (res.status===410) throw new Error("La reserva venció. Vuelve a armar tu carrito.");
+      if (!res.ok) throw new Error("No se pudo iniciar el pago. Intenta nuevamente.");
+      const {checkoutUrl}=await res.json();
+      window.location.assign(checkoutUrl);
+    } catch (err) {setError(err instanceof Error?err.message:"No se pudo iniciar el pago.");setBusy(false);}
+  }
+  return <div className="space-y-2">
+    <button type="button" disabled={busy} onClick={()=>void pay()} className="rounded bg-sky-600 px-4 py-2 text-white">
+      {busy?"Abriendo Mercado Pago…":"Pagar con Mercado Pago"}</button>
+    {error && <p role="alert">{error}</p>}
+  </div>;
 }
