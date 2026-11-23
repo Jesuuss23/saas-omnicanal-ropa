@@ -70,7 +70,7 @@ function HomeContent() {
 
     {welcome && <Alert variant="success" title="¡Tu tienda está lista!">Sigue los pasos de abajo para empezar a vender. Tienes 14 días de prueba con todo incluido.</Alert>}
 
-    {done < steps.length && <Card>
+    {profile.role === "OWNER" && done < steps.length && <Card>
       <CardHeader className="flex-row items-center justify-between gap-4">
         <div className="grid gap-1"><CardTitle>Configura tu tienda</CardTitle><CardDescription>{done} de {steps.length} pasos completos</CardDescription></div>
         <PartyPopper className="size-5 text-primary" aria-hidden/>

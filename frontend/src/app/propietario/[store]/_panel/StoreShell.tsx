@@ -2,16 +2,19 @@
 
 import Link from "next/link";
 import {useState} from "react";
+import {usePathname} from "next/navigation";
+import {EmptyState} from "@/components/ui/empty-state";
 import {Ban, CreditCard, ExternalLink, Home, Landmark, LogOut, MessageCircle, Package, Palette, Receipt, ShieldCheck,
-  ShoppingBag, Sparkles, Store as StoreIcon, Users} from "lucide-react";
+  ShoppingBag, Sparkles, Store as StoreIcon, UserCog, Users} from "lucide-react";
 import {ConsoleShell, type NavSection} from "@/components/console/ConsoleShell";
 import {Button} from "@/components/ui/button";
-import {useStore} from "./StoreContext";
+import {roleAccess, useStore} from "./StoreContext";
 
 export function StoreShell({onLogout, children}: {onLogout: () => Promise<void>; children: React.ReactNode}) {
   const {store, profile} = useStore();
   const [leaving, setLeaving] = useState(false);
   const base = "/propietario/" + store;
+  const access = roleAccess[profile.role] ?? roleAccess.SELLER;
   const sections: NavSection[] = [
     {items: [{href: base, label: "Inicio", icon: Home, exact: true}]},
     {title: "Vender", items: [
@@ -21,14 +24,22 @@ export function StoreShell({onLogout, children}: {onLogout: () => Promise<void>;
       {href: base + "/clientes", label: "Clientes", icon: Users},
       {href: base + "/whatsapp", label: "WhatsApp", icon: MessageCircle},
     ]},
-    {title: "Configurar", items: [
+    ...(access.configure ? [{title: "Configurar", items: [
       {href: base + "/apariencia", label: "Apariencia", icon: Palette},
-      {href: base + "/cobros", label: "Cobros", icon: CreditCard},
+      ...(access.ownerOnly ? [{href: base + "/cobros", label: "Cobros", icon: CreditCard}] : []),
       {href: base + "/facturacion", label: "Facturación", icon: Landmark},
-      {href: base + "/plan", label: "Plan", icon: Sparkles},
-      {href: base + "/cuenta", label: "Cuenta y seguridad", icon: ShieldCheck},
-    ]},
+      ...(access.ownerOnly ? [
+        {href: base + "/equipo", label: "Equipo", icon: UserCog},
+        {href: base + "/plan", label: "Plan", icon: Sparkles},
+        {href: base + "/cuenta", label: "Cuenta y seguridad", icon: ShieldCheck},
+      ] : []),
+    ]}] : []),
   ];
+  // Si un miembro abre por enlace una sección que su rol no tiene, se explica en vez de mostrar errores 403.
+  const pathname = usePathname();
+  const section = pathname.slice(base.length).split("/")[1];
+  const allowed = !section || ["comprobantes"].includes(section)
+    || sections.some(s => s.items.some(i => i.href === base + "/" + section));
   return <ConsoleShell sections={sections} homeHref={base}
     banner={profile.suspendedReason && <div role="alert" className="flex items-start gap-3 bg-destructive px-4 py-3 text-sm text-destructive-foreground sm:px-6 lg:px-8">
       <Ban className="mt-0.5 size-4 shrink-0"/><p><strong>Tu tienda está suspendida.</strong> {profile.suspendedReason} Escríbenos para reactivarla.</p></div>}
@@ -38,11 +49,13 @@ export function StoreShell({onLogout, children}: {onLogout: () => Promise<void>;
         Ver tienda pública<ExternalLink className="size-3"/></Link>
     </div>}
     footer={<div className="grid gap-3 border-t pt-4">
-      <p className="truncate px-2 text-sm text-muted-foreground" title={profile.email}>{profile.email}</p>
+      <div className="px-2"><p className="truncate text-sm text-muted-foreground" title={profile.email}>{profile.email}</p>
+        <p className="text-xs text-muted-foreground">{access.label}</p></div>
       <Button variant="outline" className="w-full justify-start" loading={leaving}
         onClick={async () => { setLeaving(true); await onLogout(); setLeaving(false); }}>
         {!leaving && <LogOut/>}Cerrar sesión</Button>
     </div>}>
-    {children}
+    {allowed ? children : <EmptyState icon={ShieldCheck} title="Esta sección es solo para el propietario"
+      description="Tu rol no incluye esta parte del panel. Pide al propietario de la tienda que haga el cambio."/>}
   </ConsoleShell>;
 }

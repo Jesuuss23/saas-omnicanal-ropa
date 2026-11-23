@@ -19,3 +19,11 @@ VALUES ('e2e00000-0000-4000-8000-0000000000b1', 'e2e00000-0000-4000-8000-0000000
 ON CONFLICT (id) DO NOTHING;
 DELETE FROM product_image WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
 DELETE FROM store_appearance WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+-- El equipo empieza vacío en cada corrida (el plan de prueba admite al propietario y un miembro).
+DELETE FROM store_member WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+DELETE FROM owner_login_attempt WHERE email = 'vendedora@e2e.test';
+-- La tienda sembrada está en prueba gratis, así tiene las capacidades del plan de prueba.
+INSERT INTO tenant_subscription (tenant_id, plan_code, status, trial_ends_at)
+VALUES ('e2e00000-0000-4000-8000-000000000001', 'TRIAL', 'TRIAL', now() + interval '14 days')
+ON CONFLICT (tenant_id) DO UPDATE SET plan_code = 'TRIAL', status = 'TRIAL', trial_ends_at = EXCLUDED.trial_ends_at,
+    pending_plan_code = NULL, revision = tenant_subscription.revision + 1, updated_at = now();

@@ -88,6 +88,11 @@ class StorePanelTests {
 
         var catalog = get(owner, "/api/owner/stores/" + store + "/catalog");
         assertTrue(catalog.body().contains("\"coverImage\":\"" + ids.get(1) + "\""), catalog.body());
+        var storefront = get(HttpClient.newHttpClient(), "/api/public/stores/" + store + "/catalog");
+        assertEquals(200, storefront.statusCode(), storefront.body());
+        assertTrue(storefront.body().contains("\"tagline\":\"Ropa urbana\"") && storefront.body().contains("\"logoVersion\":1")
+                && storefront.body().contains("\"productId\":\"" + product + "\""), storefront.body());
+        assertTrue(storefront.body().contains("\"coverImage\":\"" + ids.get(1) + "\""), "la tienda pública muestra la portada");
         var deleted = json(owner, "DELETE", images + "/" + ids.get(1), "");
         assertEquals(200, deleted.statusCode());
         assertTrue(deleted.body().contains("\"position\":0") && !deleted.body().contains(ids.get(1)));

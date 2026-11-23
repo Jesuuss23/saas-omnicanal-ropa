@@ -58,6 +58,13 @@ public class EmailTemplates {
                 "El enlace vence en 24 horas.", "Activa tu acceso a " + storeName + " (vence en 24 horas):\n" + link);
     }
 
+    public EmailMessage memberInvitation(String to, String name, String storeName, String role, String link) {
+        return message(to, "member_invitation", "Te sumaron al equipo de " + storeName, "Hola " + name,
+                "Te invitaron a <strong>" + esc(storeName) + "</strong> en " + BRAND + " como <strong>" + esc(role)
+                        + "</strong>. Crea tu contraseña para empezar.", "Crear mi acceso", link,
+                "El enlace vence en 72 horas.", "Te sumaron a " + storeName + " como " + role + ". Crea tu acceso (vence en 72 horas):\n" + link);
+    }
+
     public EmailMessage welcome(String to, String name, String storeName, String panelLink, String trialEnds) {
         return message(to, "welcome", "¡Bienvenido a " + BRAND + "!", "Tu tienda está lista",
                 "Hola " + esc(name) + ", <strong>" + esc(storeName) + "</strong> ya está creada. Tu prueba gratis dura hasta el "

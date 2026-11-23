@@ -14,13 +14,13 @@ export default function OrderSummary({order,catalogPath}:{catalogPath?:string;or
         <p>{item.quantity} × {money.format(item.unitPrice)} = {money.format(Math.round(item.unitPrice*100)*item.quantity/100)}</p>
         {catalogPath && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
           <Link prefetch={false} href={{pathname:catalogPath,query:{variant:item.variant}}}
-            className="text-teal-800 underline" aria-label={"Ver disponibilidad de "+item.name+", talla "+item.size+(item.color ? ", color "+item.color : "")}>
+            className="text-primary underline" aria-label={"Ver disponibilidad de "+item.name+", talla "+item.size+(item.color ? ", color "+item.color : "")}>
             Ver disponibilidad de esta variante
           </Link>
           <Link prefetch={false} href={{
             pathname:catalogPath,
             query:{q:item.name.slice(0,150),size:item.size,...(item.color ? {color:item.color} : {})}
-          }} className="text-teal-800 underline">
+          }} className="text-primary underline">
             Buscar prendas similares
           </Link>
         </div>}

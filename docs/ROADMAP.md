@@ -11,7 +11,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 | # | Módulo | Estado | Incluye | Pendiente |
 |---|--------|--------|---------|-----------|
 | 0.1 | Estructura por módulos | ✅ | Paquetes `modulo/{model,repository,service,controller,config}`; `shared/` para seguridad, cifrado y clientes HTTP | Extraer SQL de los controladores que aún lo tienen (ver [arquitectura.md](arquitectura.md#deuda-conocida)) |
-| 0.2 | Migraciones Flyway | ✅ | V1–V36 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
+| 0.2 | Migraciones Flyway | ✅ | V1–V37 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
 | 0.3 | Cifrado de secretos | ✅ | `SecretCipher` AES-256-GCM con contexto por tienda (`SECRETS_ENCRYPTION_KEY`) | Rotación de clave maestra (re-cifrado por lotes) |
 | 0.4 | CI | ✅ | GitHub Actions: tests del backend con PostgreSQL, lint/tipos/build del frontend y pruebas de humo con Playwright | — |
 | 0.5 | Acceso y 2FA | ✅ | TOTP enrolable con QR para superadmin y propietarios, códigos de recuperación, ingreso de propietarios por correo ([seguridad.md](seguridad.md)) | — |
@@ -27,8 +27,9 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 | 1.4 | Catálogo, variantes, stock | ✅ | Productos/variantes por tienda, reservas atómicas, etiquetas QR, recursos por categoría, fotos de producto (hasta 8, en PostgreSQL para el piloto) | Inventario por local (hoy un stock por variante) e historial de movimientos |
 | 1.5 | Checkout web de invitado | ✅ | Reserva, contacto, recojo/delivery con tarifa por distancia, enlace de seguimiento | Login con Google y cuentas (ver 3.2) |
 | 1.6 | POS y facturación Beta | 🟡 | Venta POS, solicitud fiscal, emisión SUNAT Beta (APISPERU) | Turnos de caja, cierre/conciliación, recuperar carrito por código |
-
 | 1.7 | Panel de tienda | ✅ | Navegación lateral por secciones, inicio con métricas y pasos de configuración, apariencia de la tienda (logo, color, contacto) | Mover imágenes a R2/S3 cuando haya dominio y bucket |
+| 1.8 | Equipo y roles | ✅ | Miembros por tienda (`store_member`) con rol Encargado o Vendedor, invitación por correo con enlace de 72 h, cuota `team.users`, reglas por rol en `OwnerSecurity` y menú según rol | Registro de acciones por miembro, permisos finos por sección |
+| 1.9 | Tienda pública con marca | ✅ | Cabecera con logo, color, frase, WhatsApp e Instagram; prendas agrupadas por producto con selección de talla y color, portada con foto, carrito fijo | Página de detalle por prenda con galería |
 
 ## Prioridad 2 — Fase 1: cobrar
 

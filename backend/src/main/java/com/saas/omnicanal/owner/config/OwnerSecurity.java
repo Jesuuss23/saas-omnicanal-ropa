@@ -28,8 +28,15 @@ class OwnerSecurity {
     @Order(2)
     SecurityFilterChain ownerChain(HttpSecurity http, @Lazy OwnerLogin login, ObjectMapper json) throws Exception {
         return http.securityMatcher("/api/owner/**").authenticationManager(login::authenticate)
-                .authorizeHttpRequests(a -> a.requestMatchers("/api/owner/csrf", "/api/owner/activate", "/api/owner/login").permitAll()
-                        .anyRequest().hasRole("OWNER"))
+                .authorizeHttpRequests(a -> a
+                        .requestMatchers("/api/owner/csrf", "/api/owner/activate", "/api/owner/members/activate", "/api/owner/login").permitAll()
+                        // Solo el propietario: equipo, plan, cobros y su propia verificación en dos pasos.
+                        .requestMatchers("/api/owner/stores/*/team/**", "/api/owner/stores/*/subscription/**",
+                                "/api/owner/stores/*/payments/**", "/api/owner/payments/**", "/api/owner/security/**").hasRole("OWNER")
+                        // Propietario o encargado: configuración de la tienda.
+                        .requestMatchers("/api/owner/stores/*/appearance/**", "/api/owner/stores/*/billing/issuer/**",
+                                "/api/owner/stores/*/whatsapp/cloud/**", "/api/owner/stores/*/pickup/**").hasAnyRole("OWNER", "MANAGER")
+                        .anyRequest().hasAnyRole("OWNER", "MANAGER", "SELLER"))
                 .requestCache(cache -> cache.disable())
                 .exceptionHandling(e -> e.authenticationEntryPoint((q,r,x) -> reply(r,401))
                         .accessDeniedHandler((q,r,x) -> reply(r,403)))
