@@ -1,6 +1,7 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
-import {useCallback, useEffect, useReducer, useRef, useState, type FormEvent} from "react";
+import {useCallback, useReducer, useRef, useState, type FormEvent} from "react";
 import FiscalRequests from "./FiscalRequests";
 import QrCamera from "./QrCamera";
 
@@ -28,9 +29,14 @@ function reduce(cart:Cart, action:Action):Cart {
   })};
 }
 
-export default function PointOfSale({store,send}:{store:string;send:(path:string, body:string)=>Promise<Response>}) {
+function storageAvailable() {
+  try {sessionStorage.getItem("pos-probe"); return true;} catch {return false;}
+}
+
+export default function PointOfSale({store,send}:{store:string;send:Send}) {
   const [salesRevision,setSalesRevision] = useState(0);
-  const [cart,dispatch] = useReducer(reduce,{lines:[],notice:""});
+  // Se monta solo en el navegador (tras validar la sesión), así que puede leer sessionStorage al iniciar.
+  const [cart,dispatch] = useReducer(reduce,{lines:[],notice:storageAvailable() ? "" : "Habilita el almacenamiento de sesión para registrar cobros."});
   const [sku,setSku] = useState("");
   const [camera,setCamera] = useState(false);
   const [busy,setBusy] = useState(false);
@@ -41,12 +47,10 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
   const [method,setMethod] = useState("CASH");
   const [amount,setAmount] = useState("");
   const [reference,setReference] = useState("");
-  const [unconfirmed,setUnconfirmed] = useState(false);
   const storageKey = "pos-checkout:" + store;
-  useEffect(()=>{
-    try {setUnconfirmed(Boolean(sessionStorage.getItem(storageKey)));}
-    catch {dispatch({type:"notice",message:"Habilita el almacenamiento de sesión para registrar cobros."});}
-  },[storageKey]);
+  const [unconfirmed,setUnconfirmed] = useState(()=>{
+    try {return Boolean(sessionStorage.getItem(storageKey));} catch {return false;}
+  });
   const pending = useRef(false);
   const add = useCallback(async (key:"id"|"sku",value:string)=>{
     if (pending.current) return;
@@ -54,7 +58,7 @@ export default function PointOfSale({store,send}:{store:string;send:(path:string
     setBusy(true);
     try {
       const query = new URLSearchParams({[key]:value});
-      const res = await fetch("/api/owner/stores/"+store+"/pos/variant?"+query,{cache:"no-store"});
+      const res = await apiFetch(ownerApi.url("stores/"+store+"/pos/variant?"+query));
       if (!res.ok) {
         dispatch({type:"notice",message:res.status===404 ? "La variante no figura en esta tienda." :
           res.status===401 || res.status===403 ? "Vuelve a iniciar sesión en la tienda." : "No se pudo consultar la variante."});

@@ -1,4 +1,5 @@
 "use client";
+import {apiFetch,ownerApi} from "@/lib/api";
 
 import {useEffect, useState} from "react";
 import {useParams} from "next/navigation";
@@ -51,11 +52,10 @@ export default function PrintableDocument() {
   const [attempt,setAttempt] = useState(0);
   useEffect(()=>{
     const controller = new AbortController();
-    setInvoice(null); setError("");
     async function load() {
       try {
-        const res = await fetch("/api/owner/stores/"+encodeURIComponent(store)+"/billing/pos-documents/"+
-          encodeURIComponent(sale)+"/files/xml",{cache:"no-store",signal:controller.signal});
+        const res = await apiFetch(ownerApi.url("stores/"+encodeURIComponent(store)+"/billing/pos-documents/"+
+          encodeURIComponent(sale)+"/files/xml"),{signal:controller.signal});
         if (res.status===401 || res.status===403) throw new Error("Inicia sesión como propietario de la tienda para ver el comprobante.");
         if (res.status===404) throw new Error("Esta venta aún no tiene un XML disponible.");
         if (!res.ok) throw new Error("No se pudo descargar el comprobante.");
@@ -77,7 +77,7 @@ export default function PrintableDocument() {
       <a className="text-teal-800 underline" href={"/propietario/"+store}>Volver al panel</a>
       {invoice && <button className="rounded-lg bg-teal-800 px-4 py-2 text-white" onClick={()=>window.print()}>Imprimir o guardar PDF</button>}
     </nav>
-    {error ? <div role="alert">{error} <button className="underline print:hidden" onClick={()=>setAttempt(v=>v+1)}>Reintentar</button></div> :
+    {error ? <div role="alert">{error} <button className="underline print:hidden" onClick={()=>{setInvoice(null); setError(""); setAttempt(v=>v+1);}}>Reintentar</button></div> :
       !invoice ? <p role="status">Cargando comprobante…</p> : <article>
         <header className="border-b pb-4">
           <p className="text-sm font-semibold">Entorno de pruebas · Beta</p>

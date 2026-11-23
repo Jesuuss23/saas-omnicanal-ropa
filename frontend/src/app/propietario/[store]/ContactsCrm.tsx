@@ -1,37 +1,25 @@
 "use client";
+import {ownerApi,type Send} from "@/lib/api";
 
 import ChatHistory from "./ChatHistory";
 import ManualReply from "./ManualReply";
 import FollowUpLog from "./FollowUpLog";
 import {reviewMessages} from "./reviewMessages";
-import {useEffect,useState} from "react";
+import {useState} from "react";
+import {useApiData} from "@/lib/useApiData";
 
 const stages = {NEW:"Nuevo", IN_PROGRESS:"En proceso", WON:"Venta ganada", LOST:"Venta perdida"};
 type Stage = keyof typeof stages;
 type Contact = {chat:string; stage:Stage; revision:number; lastReceived:string; followUpDate:string|null; messages:number};
 type Message = {id:string; text:string; receivedAt:string};
 type Page = {contacts:Contact[]; more:boolean};
-type Props = {store:string; send:(path:string,body:string,method:"PUT")=>Promise<Response>};
+type Props = {store:string; send:Send};
 const date = new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
 
 function RecentMessages({path,chat,stage,apply,disabled}:{path:string;chat:string;stage:Stage;apply:(stage:Stage)=>void;disabled:boolean}) {
-  const [messages,setMessages] = useState<Message[]|null>(null);
-  const [failed,setFailed] = useState(false);
   const [retry,setRetry] = useState(0);
-  useEffect(()=>{
-    const controller=new AbortController();
-    setFailed(false);
-    async function load() {
-      try {
-        const res=await fetch("/api/owner/"+path+"/messages?"+new URLSearchParams({chat}),{cache:"no-store",signal:controller.signal});
-        if (!res.ok) throw new Error();
-        const rows:Message[]=await res.json();
-        if (!controller.signal.aborted) setMessages(rows);
-      } catch {if (!controller.signal.aborted) setFailed(true);}
-    }
-    void load();
-    return ()=>controller.abort();
-  },[path,chat,retry]);
+  const {data:messages,error} = useApiData<Message[]>(ownerApi.url(path+"/messages?"+new URLSearchParams({chat})),retry);
+  const failed = error!==null;
   if (failed) return <p role="alert">No se pudieron cargar los mensajes. <button type="button" className="underline" onClick={()=>setRetry(n=>n+1)}>Reintentar</button></p>;
   if (!messages) return <p>Cargando mensajes…</p>;
   const review = reviewMessages(messages);
@@ -55,26 +43,12 @@ export default function ContactsCrm({store,send}:Props) {
   const [followUps,setFollowUps]=useState(false);
   const [page,setPage]=useState(0);
   const [refresh,setRefresh]=useState(0);
-  const [data,setData]=useState<Page|null>(null);
-  const [failed,setFailed]=useState(false);
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState("");
   const [expanded,setExpanded]=useState("");
-  useEffect(()=>{
-    if (!open) return;
-    const controller=new AbortController();
-    setData(null); setFailed(false);
-    async function load() {
-      try {
-        const res=await fetch("/api/owner/"+path+"/contacts?page="+page+"&followUps="+followUps,{cache:"no-store",signal:controller.signal});
-        if (!res.ok) throw new Error();
-        const result:Page=await res.json();
-        if (!controller.signal.aborted) setData(result);
-      } catch {if (!controller.signal.aborted) setFailed(true);}
-    }
-    void load();
-    return ()=>controller.abort();
-  },[path,open,page,refresh,followUps]);
+  const contacts=useApiData<Page>(open?ownerApi.url(path+"/contacts?page="+page+"&followUps="+followUps):null,refresh);
+  const data=contacts.data;
+  const failed=contacts.error!==null;
 
   async function change(contact:Contact,stage:Stage) {
     setBusy(true);setNotice("");

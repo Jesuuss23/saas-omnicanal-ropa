@@ -1,4 +1,5 @@
 "use client";
+import {apiFetch} from "@/lib/api";
 
 import {useEffect,useState} from "react";
 import Link from "next/link";
@@ -33,15 +34,14 @@ function TrackingView({store,order}:{store:string;order:string}) {
 
 function OrderDetails({store,order,token}:{store:string;order:string;token:string|null}) {
   const [detail,setDetail]=useState<Detail|null>(null);
-  const [error,setError]=useState("");
+  const [loadError,setError]=useState("");
   const [version,setVersion]=useState(0);
+  const invalidToken=token!==null && !/^[a-f0-9]{64}$/.test(token);
+  const error=invalidToken ? "Abre el enlace privado completo de tu pedido." : loadError;
 
   useEffect(()=>{
     if (token===null) return;
-    if (!/^[a-f0-9]{64}$/.test(token)) {
-      setError("Abre el enlace privado completo de tu pedido.");
-      return;
-    }
+    if (invalidToken) return;
     const headers={"X-Order-Token":token};
     const controller=new AbortController();
     let timer:number|undefined;
@@ -53,7 +53,7 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
       if (busy || finished || document.hidden || controller.signal.aborted) return;
       busy=true;
       try {
-        const res=await fetch("/api/public/stores/"+store+"/orders/"+order,{
+        const res=await apiFetch("/api/public/stores/"+store+"/orders/"+order,{
           headers,cache:"no-store",signal:controller.signal
         });
         if (controller.signal.aborted) return;
@@ -83,7 +83,7 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange",load);
     };
-  },[store,order,token,version]);
+  },[store,order,token,invalidToken,version]);
 
   const catalogPath=detail && (detail.status==="EXPIRED" || detail.status==="CANCELLED")
     ? "/tienda/"+encodeURIComponent(store) : undefined;
@@ -124,7 +124,7 @@ function PayWithMercadoPago({store,order,token}:{store:string;order:string;token
   async function pay() {
     setBusy(true);setError("");
     try {
-      const res=await fetch("/api/public/stores/"+store+"/orders/"+order+"/mercadopago",{
+      const res=await apiFetch("/api/public/stores/"+store+"/orders/"+order+"/mercadopago",{
         method:"POST",headers:{"X-Order-Token":token},cache:"no-store"
       });
       if (res.status===409) throw new Error("Esta tienda aún no recibe pagos en línea o falta confirmar el costo de delivery.");

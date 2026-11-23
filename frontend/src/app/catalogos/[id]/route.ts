@@ -1,9 +1,10 @@
+import {backendBase} from "@/lib/api";
 const extensions:Record<string,string>={"application/pdf":"pdf","image/png":"png","image/jpeg":"jpg"};
 
 export async function GET(request:Request,context:{params:Promise<{id:string}>}) {
   const {id}=await context.params;
   if (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)) return new Response(null,{status:404});
-  const base=(process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/,"");
+  const base=backendBase();
   try {
     const result=await fetch(base+"/public/catalog-files/"+id,{cache:"no-store"});
     if (!result.ok) return new Response(null,{status:result.status===404?404:502});

@@ -1,8 +1,10 @@
 "use client";
+import {ownerApi,type Send} from "@/lib/api";
 
-import {useEffect, useState, useRef, type FormEvent} from "react";
+import {useState, useRef, type FormEvent} from "react";
+import {useApiData} from "@/lib/useApiData";
 
-import EditVariant, {type InventoryRow as Row, type Send} from "./EditVariant";
+import EditVariant, {type InventoryRow as Row} from "./EditVariant";
 
 type Props = {store:string; send:Send};
 type Page = {rows:Row[]; hasNext:boolean};
@@ -17,27 +19,12 @@ export default function Catalog({store, send}:Props) {
   const [editing,setEditing] = useState<Row|null>(null);
   const [page,setPage] = useState(0);
   const [refresh,setRefresh] = useState(0);
-  const [data,setData] = useState<Page|null>(null);
-  const [listError,setListError] = useState(false);
   const [keys,setKeys] = useState([0]);
   const nextKey = useRef(1);
   const [message,setMessage] = useState("");
   const [busy,setBusy] = useState(false);
   const path = "stores/" + store + "/catalog";
-  useEffect(()=>{
-    const controller = new AbortController();
-    setData(null); setListError(false);
-    async function load() {
-      try {
-        const res = await fetch("/api/owner/" + path + "?page=" + page, {cache:"no-store", signal:controller.signal});
-        if (!res.ok) throw new Error();
-        const result:Page = await res.json();
-        if (!controller.signal.aborted) setData(result);
-      } catch {if (!controller.signal.aborted) setListError(true);}
-    }
-    void load();
-    return ()=>controller.abort();
-  },[page,path,refresh]);
+  const {data,error:listError} = useApiData<Page>(ownerApi.url(path+"?page="+page),refresh);
 
   async function downloadLabels() {
     setLabelBusy(true);

@@ -1,13 +1,7 @@
-export async function csrfToken(): Promise<string> {
-  const csrf = await fetch("/api/superadmin/csrf", {cache: "no-store"});
-  if (!csrf.ok) throw new Error("No se pudo iniciar la conexión.");
-  const {token} = await csrf.json();
-  return token;
-}
+import {superadminApi} from "@/lib/api";
 
-export async function submitAuth(action: "login" | "logout", fields = new URLSearchParams()) {
-  const token = await csrfToken();
-  return fetch("/api/superadmin/" + action, {
-    method: "POST", headers: {"X-CSRF-TOKEN": token}, body: fields, cache: "no-store",
-  });
+export const csrfToken = superadminApi.csrf;
+
+export function submitAuth(action: "login" | "logout", fields = new URLSearchParams()) {
+  return superadminApi.send(action, fields);
 }

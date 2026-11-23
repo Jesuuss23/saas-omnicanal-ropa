@@ -1,6 +1,6 @@
 "use client";
 import {useState, type FormEvent} from "react";
-import {csrfToken} from "./auth";
+import {apiFetch,superadminApi} from "@/lib/api";
 
 type Store = {id: string; name: string; email: string; active: boolean};
 
@@ -15,7 +15,7 @@ export default function OwnerInvitations() {
     const email = String(new FormData(event.currentTarget).get("email"));
     setBusy(true); setLink(""); setMessage(""); setStores([]);
     try {
-      const res = await fetch("/api/superadmin/owners?email=" + encodeURIComponent(email), {cache:"no-store"});
+      const res = await apiFetch(superadminApi.url("owners?email=" + encodeURIComponent(email)));
       if (!res.ok) throw new Error();
       const data: Store[] = await res.json();
       setStores(data);
@@ -27,9 +27,7 @@ export default function OwnerInvitations() {
   async function invite(store: Store) {
     setBusy(true); setLink(""); setMessage("");
     try {
-      const res = await fetch("/api/superadmin/owners/" + store.id + "/invitation", {
-        method:"POST", headers:{"X-CSRF-TOKEN":await csrfToken()}
-      });
+      const res = await superadminApi.send("owners/" + store.id + "/invitation");
       if (!res.ok) throw new Error();
       const data = await res.json();
       setLink(location.origin + "/propietario/" + store.id + "#" + data.token);

@@ -1,9 +1,10 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import {useEffect,useState,type FormEvent} from "react";
 
 type Settings={enabled:boolean;address:string;hours:string;revision:number;freeDeliveryMinimum:number|null;latitude:number|null;longitude:number|null;perKm:number|null};
-type Props={store:string;send:(path:string,body:string,method:"PUT")=>Promise<Response>};
+type Props={store:string;send:Send};
 
 export default function PickupSettings({store,send}:Props) {
   const path="stores/"+store+"/pickup";
@@ -15,8 +16,7 @@ export default function PickupSettings({store,send}:Props) {
   useEffect(()=>{
     if (!open) return;
     const controller=new AbortController();
-    setSettings(null);setNotice("");
-    fetch("/api/owner/"+path,{signal:controller.signal,cache:"no-store"}).then(async res=>{
+    apiFetch(ownerApi.url(path),{signal:controller.signal}).then(async res=>{
       if (!res.ok) throw new Error();
       const data:Settings=await res.json();
       if (!controller.signal.aborted) setSettings(data);
@@ -38,7 +38,7 @@ export default function PickupSettings({store,send}:Props) {
     finally {setBusy(false);}
   }
 
-  return <details className="my-4 rounded-xl border p-4" onToggle={e=>setOpen(e.currentTarget.open)}>
+  return <details className="my-4 rounded-xl border p-4" onToggle={e=>{const next=e.currentTarget.open; if (next) {setSettings(null);setNotice("");} setOpen(next);}}>
     <summary className="cursor-pointer font-semibold">Recojo y delivery</summary>
     {open && <>
       {settings && <form onSubmit={save} className="my-3 grid max-w-lg gap-2">
@@ -63,7 +63,7 @@ export default function PickupSettings({store,send}:Props) {
           <button className="w-fit rounded bg-teal-800 px-3 py-2 text-white">Guardar</button>
         </fieldset>
       </form>}
-      <button type="button" disabled={busy} onClick={()=>setVersion(v=>v+1)} className="underline">Recargar datos guardados</button>
+      <button type="button" disabled={busy} onClick={()=>{setSettings(null);setNotice("");setVersion(v=>v+1);}} className="underline">Recargar datos guardados</button>
       <p role="status">{notice}</p>
     </>}
   </details>;

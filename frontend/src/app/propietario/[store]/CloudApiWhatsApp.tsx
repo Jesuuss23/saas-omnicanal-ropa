@@ -1,8 +1,8 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import {useEffect,useState,type FormEvent} from "react";
 
-type Send = (path:string,body:string,method?:"POST"|"PUT")=>Promise<Response>;
 type Channel = {
   configured:boolean; phoneNumberId:string|null; wabaId:string|null; accessTokenConfigured:boolean;
   appSecretConfigured:boolean; displayPhoneNumber:string|null; verifiedName:string|null; qualityRating:string|null;
@@ -41,7 +41,7 @@ export default function CloudApiWhatsApp({store,send}:{store:string;send:Send}) 
   useEffect(()=>{
     if (!open) return;
     const controller = new AbortController();
-    const get = (p:string)=>fetch("/api/owner/"+base+p,{cache:"no-store",signal:controller.signal}).then(r=>{if(!r.ok) throw new Error(); return r.json();});
+    const get = (p:string)=>apiFetch(ownerApi.url(base+p),{signal:controller.signal}).then(r=>{if(!r.ok) throw new Error(); return r.json();});
     Promise.all([get(""),get("/templates"),get("/test-messages")]).then(([c,t,m])=>{
       if (controller.signal.aborted) return;
       setChannel(c); setTemplates(t); setTests(m);
@@ -173,7 +173,7 @@ export default function CloudApiWhatsApp({store,send}:{store:string;send:Send}) 
       </section>}
 
       {channel.configured && <button type="button" disabled={busy} className="mt-5 text-sm text-red-700 underline"
-        onClick={()=>{ if (confirm("¿Desconectar Cloud API? Se borrarán las credenciales guardadas.")) void run(()=>fetch("/api/owner/csrf",{cache:"no-store"}).then(r=>r.json()).then(c=>fetch("/api/owner/"+base,{method:"DELETE",headers:{"X-CSRF-TOKEN":c.token}})),"No se pudo desconectar."); }}>
+        onClick={()=>{ if (confirm("¿Desconectar Cloud API? Se borrarán las credenciales guardadas.")) void run(()=>send(base,undefined,"DELETE"),"No se pudo desconectar."); }}>
         Desconectar Cloud API</button>}
     </>}
   </details>;

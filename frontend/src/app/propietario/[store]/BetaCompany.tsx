@@ -1,10 +1,11 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import {useEffect, useState, type FormEvent} from "react";
 
 type Props = {
   path:string; ruc:string; revision:number;
-  send:(path:string, body:string, method:"POST"|"PUT")=>Promise<Response>;
+  send:Send;
 };
 
 const descriptions:Record<string,string> = {
@@ -30,7 +31,7 @@ export default function BetaCompany({path,ruc,revision,send}:Props) {
     const controller = new AbortController();
     async function load() {
       try {
-        const res = await fetch("/api/owner/"+endpoint,{cache:"no-store",signal:controller.signal});
+        const res = await apiFetch(ownerApi.url(endpoint),{signal:controller.signal});
         if (!res.ok) throw new Error();
         const data = await res.json();
         if (!controller.signal.aborted) {setStatus(data.status);setMessage("");}
@@ -49,7 +50,7 @@ export default function BetaCompany({path,ruc,revision,send}:Props) {
     const controller = new AbortController();
     async function loadTokenStatus() {
       try {
-        const res = await fetch("/api/owner/"+endpoint+"/token",{cache:"no-store",signal:controller.signal});
+        const res = await apiFetch(ownerApi.url(endpoint+"/token"),{signal:controller.signal});
         if (!res.ok) throw new Error();
         const result = await res.json();
         if (!controller.signal.aborted) setStored(result.stored);

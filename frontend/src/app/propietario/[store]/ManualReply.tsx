@@ -1,11 +1,12 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import CategoryResources from "./CategoryResources";
 import CatalogReplyPicker from "./CatalogReplyPicker";
 import {deliveryLabels as labels} from "./deliveryLabels";
 import {useEffect,useRef,useState,type FormEvent} from "react";
 
-type Props={store:string; chat:string; send:(path:string,body:string,method:"PUT")=>Promise<Response>};
+type Props={store:string; chat:string; send:Send};
 type Row={text:string;status:string;createdAt:string};
 const date=new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
 
@@ -25,7 +26,7 @@ export default function ManualReply({store,chat,send}:Props) {
     const controller=new AbortController();
     async function load() {
       try {
-        const res=await fetch("/api/owner/"+path+"?"+new URLSearchParams({chat}),{cache:"no-store",signal:controller.signal});
+        const res=await apiFetch(ownerApi.url(path+"?"+new URLSearchParams({chat})),{signal:controller.signal});
         if (!res.ok) throw new Error();
         const data:Row[]=await res.json();
         if (!controller.signal.aborted) {setRows(data);setError(false);}

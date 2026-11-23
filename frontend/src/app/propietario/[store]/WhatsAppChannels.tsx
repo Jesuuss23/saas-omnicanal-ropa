@@ -1,10 +1,10 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import {useEffect,useState} from "react";
 import StoreWhatsApp from "./StoreWhatsApp";
 import CloudApiWhatsApp from "./CloudApiWhatsApp";
 
-type Send = (path:string,body:string,method?:"POST"|"PUT")=>Promise<Response>;
 type Provider = "EVOLUTION"|"CLOUD_API";
 const names:Record<Provider,string> = {EVOLUTION:"Evolution API (QR)",CLOUD_API:"WhatsApp Cloud API (oficial)"};
 
@@ -16,7 +16,7 @@ export default function WhatsAppChannels({store,send}:{store:string;send:Send}) 
   const [busy,setBusy] = useState(false);
   useEffect(()=>{
     const controller = new AbortController();
-    fetch("/api/owner/"+path,{cache:"no-store",signal:controller.signal}).then(async res=>{
+    apiFetch(ownerApi.url(path),{signal:controller.signal}).then(async res=>{
       if (!res.ok) throw new Error();
       const data:{activeProvider:Provider} = await res.json();
       if (!controller.signal.aborted) setActive(data.activeProvider);

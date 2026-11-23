@@ -1,6 +1,8 @@
 "use client";
+import {ownerApi} from "@/lib/api";
 
-import {useEffect,useState} from "react";
+import {useState} from "react";
+import {useApiData} from "@/lib/useApiData";
 
 type Item={id:string;name:string;sku:string;size:string;color:string|null;price:number;available:number};
 type Page={rows:Item[];hasNext:boolean};
@@ -14,24 +16,9 @@ export default function CatalogReplyPicker({store,disabled,insert}:{
   const [query,setQuery]=useState("");
   const [page,setPage]=useState(0);
   const [refresh,setRefresh]=useState(0);
-  const [data,setData]=useState<Page|null>(null);
-  const [failed,setFailed]=useState(false);
-  useEffect(()=>{
-    if (!open) return;
-    const controller=new AbortController();
-    setData(null);setFailed(false);
-    async function load() {
-      try {
-        const params=new URLSearchParams({availableOnly:"true",query,page:String(page)});
-        const res=await fetch("/api/owner/stores/"+store+"/catalog?"+params,{cache:"no-store",signal:controller.signal});
-        if (!res.ok) throw new Error();
-        const result:Page=await res.json();
-        if (!controller.signal.aborted) setData(result);
-      } catch {if (!controller.signal.aborted) setFailed(true);}
-    }
-    void load();
-    return ()=>controller.abort();
-  },[store,query,page,refresh,open]);
+  const params=new URLSearchParams({availableOnly:"true",query,page:String(page)});
+  const {data,error}=useApiData<Page>(open?ownerApi.url("stores/"+store+"/catalog?"+params):null,refresh);
+  const failed=error!==null;
 
   return <details className="my-2 rounded border p-3" onToggle={e=>{e.stopPropagation();setOpen(e.currentTarget.open);}}>
     <summary className="cursor-pointer">Consultar prendas con stock</summary>

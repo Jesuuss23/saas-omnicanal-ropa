@@ -1,3 +1,4 @@
+import {backendBase} from "@/lib/api";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import NewStore from "./NewStore";
@@ -8,7 +9,7 @@ type Dashboard = {email: string; stores: number; products: number; variants: num
 export default async function Panel() {
   const session = (await cookies()).get("JSESSIONID");
   if (!session) redirect("/superadmin/login");
-  const base = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/, "");
+  const base = backendBase();
   const res = await fetch(base + "/superadmin/dashboard", {
     headers: {Cookie: "JSESSIONID=" + encodeURIComponent(session.value)}, cache: "no-store"
   });

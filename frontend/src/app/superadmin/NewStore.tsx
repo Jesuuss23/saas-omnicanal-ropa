@@ -3,7 +3,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import OwnerInvitations from "./OwnerInvitations";
-import { csrfToken } from "./auth";
+import {superadminApi} from "@/lib/api";
 
 export default function NewStore() {
   const router = useRouter();
@@ -20,12 +20,8 @@ export default function NewStore() {
     setMessage("");
     try {
       registration.current ||= crypto.randomUUID();
-      const response = await fetch("/api/superadmin/tenants", {
-        method: "POST",
-        headers: {"Content-Type": "application/json", "X-CSRF-TOKEN": await csrfToken()},
-        body: JSON.stringify({id: registration.current, name: String(data.get("name")).trim(),
-          ownerEmail: String(data.get("ownerEmail")).trim()}),
-      });
+      const response = await superadminApi.send("tenants", JSON.stringify({id: registration.current,
+        name: String(data.get("name")).trim(), ownerEmail: String(data.get("ownerEmail")).trim()}));
       if (response.status === 401) {
         router.replace("/superadmin/login");
         return;

@@ -46,10 +46,12 @@ class MercadoPagoFlowTests {
                 {"id":123,"status":"approved","status_detail":"accredited","transaction_amount":160.00,
                  "currency_id":"PEN","external_reference":"%s"}""".formatted(order)));
 
-        var result = webhooks.receive(store, "payment", "123", null, "req-1", "{\"type\":\"payment\"}");
+        // Ids de notificación únicos por corrida: la deduplicación es global y la base puede traer corridas previas.
+        String req1 = "req-" + UUID.randomUUID(), req2 = "req-" + UUID.randomUUID();
+        var result = webhooks.receive(store, "payment", "123", null, req1, "{\"type\":\"payment\"}");
         assertEquals(OrderPaymentStatus.APPROVED.name(), result.get("result"));
-        assertEquals("duplicate", webhooks.receive(store, "payment", "123", null, "req-1", "{}").get("result"));
-        webhooks.receive(store, "payment", "123", null, "req-2", "{}"); // nueva notificación del mismo pago
+        assertEquals("duplicate", webhooks.receive(store, "payment", "123", null, req1, "{}").get("result"));
+        webhooks.receive(store, "payment", "123", null, req2, "{}"); // nueva notificación del mismo pago
 
         assertEquals("PAID", db.queryForObject("SELECT status FROM web_checkout_order WHERE tenant_id=? AND id=?",
                 String.class, store, order));
@@ -79,7 +81,7 @@ class MercadoPagoFlowTests {
                 {"id":456,"status":"approved","transaction_amount":1.00,"currency_id":"PEN","external_reference":"%s"}
                 """.formatted(order)));
 
-        webhooks.receive(store, "payment", "456", null, "req-x", "{}");
+        webhooks.receive(store, "payment", "456", null, "req-" + UUID.randomUUID(), "{}");
         assertEquals("PENDING_PAYMENT", db.queryForObject("SELECT status FROM web_checkout_order WHERE tenant_id=? AND id=?",
                 String.class, store, order));
         assertEquals(Boolean.TRUE, db.queryForObject("""

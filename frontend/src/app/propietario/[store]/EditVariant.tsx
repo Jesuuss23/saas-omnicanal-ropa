@@ -1,4 +1,5 @@
 "use client";
+import type {Send} from "@/lib/api";
 
 import {useState, type FormEvent} from "react";
 
@@ -6,7 +7,6 @@ export type InventoryRow = {
   id:string; name:string; category:string|null; sku:string; size:string; color:string|null;
   price:number; available:number; physical:number; reserved:number; productVersion:string; variantVersion:string;
 };
-export type Send = (path:string, body:string, method?:"POST"|"PUT")=>Promise<Response>;
 type Props = {row:InventoryRow; path:string; send:Send; close:()=>void; reload:()=>void};
 const input = "mt-1 block w-full rounded-lg border border-stone-300 bg-white px-3 py-2";
 
