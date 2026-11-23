@@ -93,7 +93,7 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
     finally {setBusy(false);}
   }
 
-  return <details className="mt-6 rounded-xl border border-stone-200 p-5" onToggle={e=>setOpen(e.currentTarget.open)}>
+  return <details className="rounded-xl border bg-card p-5 shadow-card" onToggle={e=>setOpen(e.currentTarget.open)}>
     <summary className="cursor-pointer font-semibold">Plan y suscripción</summary>
     {notice && <p role="status" className="my-3">{notice}</p>}
     {!data ? <p className="my-3">Cargando…</p> : <>
@@ -110,17 +110,17 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
         <p className="text-xl">{soles.format(p.monthlyPriceCents/100)} <span className="text-sm">/ mes</span></p>
         <ul className="my-2 text-sm">{p.entitlements.filter(e=>e.enabled).map(e=><li key={e.key}>{keyLabels[e.key] ?? e.key}{e.limit!==null && `: ${e.limit}`}</li>)}</ul>
         <button type="button" disabled={busy || !data.checkoutAvailable || !p.purchasable || data.planCode===p.code && data.status==="ACTIVE"}
-          className="rounded-lg bg-teal-800 px-3 py-2 text-white disabled:opacity-50" onClick={()=>setPlan(p)}>
+          className="rounded-lg bg-primary px-3 py-2 text-white disabled:opacity-50" onClick={()=>setPlan(p)}>
           {data.planCode===p.code && data.status==="ACTIVE" ? "Plan actual" : "Elegir plan"}</button>
       </article>)}</div>
-      {!data.checkoutAvailable && <p className="mt-2 text-sm text-stone-600">El pago en línea aún no está habilitado. Escríbenos para activar tu plan.</p>}
+      {!data.checkoutAvailable && <p className="mt-2 text-sm text-muted-foreground">El pago en línea aún no está habilitado. Escríbenos para activar tu plan.</p>}
 
       {plan && <form onSubmit={pay} className="mt-5 grid gap-3 md:grid-cols-2">
         <p className="md:col-span-2 font-medium">Datos de facturación para el plan {plan.name}</p>
         {[["firstName","Nombres"],["lastName","Apellidos"],["email","Correo"],["phone","Celular"],["address","Dirección"],["city","Ciudad"]].map(([n,l])=>
           <label key={n} className="grid gap-1 text-sm">{l}<input name={n} required type={n==="email"?"email":"text"} className="rounded border px-3 py-2"/></label>)}
         <div className="flex gap-3 md:col-span-2">
-          <button disabled={busy} className="rounded-lg bg-teal-800 px-4 py-2 text-white">{busy?"Procesando…":"Pagar con tarjeta (Culqi)"}</button>
+          <button disabled={busy} className="rounded-lg bg-primary px-4 py-2 text-white">{busy?"Procesando…":"Pagar con tarjeta (Culqi)"}</button>
           <button type="button" className="underline" onClick={()=>setPlan(null)}>Cancelar</button>
         </div>
       </form>}

@@ -6,6 +6,11 @@ server:
 spring:
   autoconfigure:
     exclude: org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+  servlet:
+    multipart:
+      # Fotos de producto (2 MB) y logos (512 KB); el servicio valida tamaño y formato real.
+      max-file-size: 3MB
+      max-request-size: 4MB
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}

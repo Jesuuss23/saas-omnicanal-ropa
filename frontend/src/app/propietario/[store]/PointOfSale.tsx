@@ -117,20 +117,20 @@ export default function PointOfSale({store,send}:{store:string;send:Send}) {
     } finally {pending.current=false; setBusy(false);}
   }
 
-  return <section className="mt-8 border-t border-stone-200 pt-6">
-    <h2 className="text-2xl font-semibold">Punto de venta</h2>
+  return <section className="rounded-xl border bg-card p-5 shadow-card">
+    <h2 className="text-lg font-semibold">Nueva venta</h2>
     <form onSubmit={search} className="my-4 flex flex-wrap items-end gap-3">
       <label>SKU de la etiqueta<input className="mt-1 block rounded-lg border px-3 py-2" maxLength={50}
         value={sku} onChange={e=>setSku(e.target.value)} required/></label>
-      <button disabled={busy || camera || unconfirmed} className="rounded-lg bg-teal-800 px-4 py-2 text-white">Agregar al carrito</button>
-      <button type="button" disabled={busy || unconfirmed} className="text-teal-800 underline" onClick={()=>setCamera(!camera)}>
+      <button disabled={busy || camera || unconfirmed} className="rounded-lg bg-primary px-4 py-2 text-white">Agregar al carrito</button>
+      <button type="button" disabled={busy || unconfirmed} className="text-primary underline" onClick={()=>setCamera(!camera)}>
         {camera ? "Cerrar cámara" : "Escanear etiqueta QR"}</button>
     </form>
     {camera && <QrCamera onScan={scan} onError={cameraError}/>}
     <p role="status" className="text-sm">{busy?"Consultando inventario…":cart.notice}</p>
     <h3 className="my-3 font-semibold">Carrito de mostrador</h3>
-    {!cart.lines.length ? <p className="text-stone-600">El carrito está vacío.</p> :
-    <><ul className="divide-y divide-stone-200">{cart.lines.map(line=><li key={line.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+    {!cart.lines.length ? <p className="text-muted-foreground">El carrito está vacío.</p> :
+    <><ul className="divide-y divide-border">{cart.lines.map(line=><li key={line.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
       <div><strong>{line.name}</strong><p className="text-sm">{line.sku} · {line.size} · {line.color || "Sin color"} · {money.format(line.price)}</p></div>
       <div className="flex items-center gap-3"><button disabled={busy || camera || unconfirmed} aria-label={"Restar "+line.sku} onClick={()=>dispatch({type:"minus",id:line.id})}>−</button>
       <span>{line.quantity}</span><button disabled={busy || camera || unconfirmed} aria-label={"Sumar "+line.sku} onClick={()=>void add("id",line.id)}>+</button>
@@ -154,7 +154,7 @@ export default function PointOfSale({store,send}:{store:string;send:Send}) {
           </select></label>
           {method==="CASH" ? <label>Efectivo recibido (S/)<input required type="number" min={(cents/100).toFixed(2)} step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} className="block rounded border p-2"/></label> :
           <label>Referencia de la operación confirmada<input required maxLength={100} value={reference} onChange={e=>setReference(e.target.value)} className="block rounded border p-2"/></label>}
-          <button className="rounded-lg bg-teal-800 px-4 py-2 text-white">Confirmar venta</button>
+          <button className="rounded-lg bg-primary px-4 py-2 text-white">Confirmar venta</button>
         </fieldset>
         {method==="CASH" && Number(amount)*100>=cents && <p>Vuelto: {money.format((Math.round(Number(amount)*100)-cents)/100)}</p>}
       </form>}

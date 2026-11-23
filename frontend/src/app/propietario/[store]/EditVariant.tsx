@@ -6,9 +6,10 @@ import {useState, type FormEvent} from "react";
 export type InventoryRow = {
   id:string; name:string; category:string|null; sku:string; size:string; color:string|null;
   price:number; available:number; physical:number; reserved:number; productVersion:string; variantVersion:string;
+  productId:string; coverImage:string|null;
 };
 type Props = {row:InventoryRow; path:string; send:Send; close:()=>void; reload:()=>void};
-const input = "mt-1 block w-full rounded-lg border border-stone-300 bg-white px-3 py-2";
+const input = "mt-1 block w-full rounded-lg border border-border bg-card px-3 py-2";
 
 export default function EditVariant({row,path,send,close,reload}:Props) {
   const [busy,setBusy] = useState(false);
@@ -36,7 +37,7 @@ export default function EditVariant({row,path,send,close,reload}:Props) {
     finally {setBusy(false);}
   }
 
-  return <form onSubmit={save} className="my-4 rounded-xl border border-teal-200 bg-teal-50 p-5">
+  return <form onSubmit={save} className="my-4 rounded-xl border border-brand-100 bg-accent p-5">
     <fieldset disabled={busy || stale} className="grid gap-3 sm:grid-cols-2">
       <legend className="mb-3 text-lg font-semibold">Editar {row.sku}</legend>
       <p className="sm:col-span-2 text-sm">El nombre y la categoría se aplican a todas las variantes de esta prenda.</p>
@@ -48,9 +49,9 @@ export default function EditVariant({row,path,send,close,reload}:Props) {
       <label>Precio (S/)<input name="price" type="number" defaultValue={row.price} min="0.01" max="99999999.99" step="0.01" required className={input}/></label>
       <label>Stock físico<input name="stock" type="number" defaultValue={row.physical} min={Math.max(0,row.reserved)} max="2147483647" required className={input}/></label>
       <p className="self-end py-2 text-sm">Unidades reservadas: {row.reserved}</p>
-      <button className="rounded-lg bg-teal-800 px-4 py-2 text-white">{busy ? "Guardando…" : "Guardar cambios"}</button>
+      <button className="rounded-lg bg-primary px-4 py-2 text-white">{busy ? "Guardando…" : "Guardar cambios"}</button>
     </fieldset>
-    <button type="button" disabled={busy} onClick={stale ? reload : close} className="mt-3 text-teal-800 underline">{stale ? "Recargar inventario" : "Cancelar"}</button>
+    <button type="button" disabled={busy} onClick={stale ? reload : close} className="mt-3 text-primary underline">{stale ? "Recargar inventario" : "Cancelar"}</button>
     <p role="status" className="mt-2 text-sm">{error}</p>
   </form>;
 }

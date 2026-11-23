@@ -36,9 +36,9 @@ export default function CatalogReplyPicker({store,disabled,insert}:{
         return <li key={item.id} className="py-2"><p>{line}</p>
           <p className="text-sm">{item.sku} · Disponibles: {item.available}</p>
           <div className="flex flex-wrap gap-3">
-            <button type="button" disabled={disabled} className="text-teal-800 underline"
+            <button type="button" disabled={disabled} className="text-primary underline"
               onClick={()=>insert(line)}>Agregar al mensaje</button>
-            <button type="button" disabled={disabled} className="text-teal-800 underline"
+            <button type="button" disabled={disabled} className="text-primary underline"
               onClick={()=>{
                 const url=new URL("/tienda/"+encodeURIComponent(store),window.location.origin);
                 url.searchParams.set("variant",item.id);

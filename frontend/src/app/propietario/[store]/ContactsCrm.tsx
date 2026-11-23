@@ -24,14 +24,14 @@ function RecentMessages({path,chat,stage,apply,disabled}:{path:string;chat:strin
   if (!messages) return <p>Cargando mensajes…</p>;
   const review = reviewMessages(messages);
   return <><ol className="mt-2 space-y-2 border-l pl-3">{messages.map(m=><li key={m.id}>
-    <time className="text-xs text-stone-600" dateTime={m.receivedAt}>{date.format(new Date(m.receivedAt))}</time>
+    <time className="text-xs text-muted-foreground" dateTime={m.receivedAt}>{date.format(new Date(m.receivedAt))}</time>
     <p className="whitespace-pre-wrap break-words">{m.text}</p>
   </li>)}</ol>
-    <div className="mt-3 rounded-lg bg-stone-50 p-3">
+    <div className="mt-3 rounded-lg bg-muted p-3">
       <h4 className="font-semibold">Señales comerciales</h4>
       {review ? <><p>{review.label}</p><blockquote className="my-2 border-l pl-2">{review.quote}</blockquote>
         <p>Etapa sugerida: {stages[review.stage]}.</p>
-        {stage!==review.stage && <button type="button" disabled={disabled} className="mt-2 text-teal-800 underline"
+        {stage!==review.stage && <button type="button" disabled={disabled} className="mt-2 text-primary underline"
           onClick={()=>apply(review.stage)}>Aplicar etapa sugerida</button>}
       </> : <p>Los mensajes recientes no contienen una señal clara para sugerir una etapa.</p>}
     </div></>;
@@ -72,18 +72,18 @@ export default function ContactsCrm({store,send}:Props) {
     finally {setBusy(false);setRefresh(n=>n+1);}
   }
 
-  return <details className="mt-6 rounded-xl border border-stone-200 p-5" onToggle={e=>setOpen(e.currentTarget.open)}>
+  return <details className="rounded-xl border bg-card p-5 shadow-card" onToggle={e=>setOpen(e.currentTarget.open)}>
     <summary className="cursor-pointer font-semibold">CRM · Contactos de WhatsApp</summary>
     <label className="mt-3 block">Mostrar <select className="rounded border p-1" disabled={busy} value={followUps?"scheduled":"all"}
       onChange={e=>{setPage(0);setExpanded("");setFollowUps(e.target.value==="scheduled");}}>
       <option value="all">Todos los contactos</option><option value="scheduled">Agenda de seguimiento</option>
     </select></label>
-    <button type="button" disabled={busy} onClick={()=>setRefresh(n=>n+1)} className="my-3 text-teal-800 underline">Actualizar contactos</button>
+    <button type="button" disabled={busy} onClick={()=>setRefresh(n=>n+1)} className="my-3 text-primary underline">Actualizar contactos</button>
     {failed ? <p role="alert">No se pudo cargar el CRM. Vuelve a actualizar los contactos.</p> : !data ? <p>Cargando contactos…</p> :
       data.contacts.length===0 ? <p>{followUps?"No hay seguimientos en esta página.":"Aún no hay contactos en esta página."}</p> :
       <ul className="divide-y">{data.contacts.map(contact=><li key={contact.chat} className="space-y-2 py-3">
         <strong>{contact.chat.split("@")[0]}</strong>
-        <p className="text-sm text-stone-600">{contact.messages} mensajes · Último contacto {date.format(new Date(contact.lastReceived))}</p>
+        <p className="text-sm text-muted-foreground">{contact.messages} mensajes · Último contacto {date.format(new Date(contact.lastReceived))}</p>
         <label className="block">Etapa comercial <select disabled={busy} className="rounded border p-1"
             value={contact.stage} onChange={e=>change(contact,e.target.value as Stage)}>
           {Object.entries(stages).map(([key,label])=><option key={key} value={key}>{label}</option>)}
@@ -95,7 +95,7 @@ export default function ContactsCrm({store,send}:Props) {
         }}>
           <label>Fecha de seguimiento<input className="block rounded border p-1" type="date" name="due"
             defaultValue={contact.followUpDate || ""} required disabled={busy}/></label>
-          <button type="submit" disabled={busy} className="text-teal-800 underline">Guardar fecha</button>
+          <button type="submit" disabled={busy} className="text-primary underline">Guardar fecha</button>
           {contact.followUpDate && <button type="button" disabled={busy} className="underline"
             onClick={()=>schedule(contact,null)}>Retirar de la agenda</button>}
         </form>
@@ -105,7 +105,7 @@ export default function ContactsCrm({store,send}:Props) {
           setNotice("Resultado registrado. El seguimiento salió de la agenda.");
           setRefresh(n=>n+1);
         }}/>
-        <button type="button" aria-expanded={expanded===contact.chat} className="text-teal-800 underline"
+        <button type="button" aria-expanded={expanded===contact.chat} className="text-primary underline"
           onClick={()=>setExpanded(expanded===contact.chat?"":contact.chat)}>
           {expanded===contact.chat?"Ocultar mensajes":"Ver los últimos 5 mensajes"}</button>
         {expanded===contact.chat && <RecentMessages path={path} chat={contact.chat} stage={contact.stage} disabled={busy} apply={stage=>void change(contact,stage)}/>}

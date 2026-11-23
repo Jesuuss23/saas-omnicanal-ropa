@@ -21,7 +21,9 @@ public class ProductRepository {
                 SELECT v.id, p.name, v.sku, v.size, v.color, v.price,
                        coalesce(v.stock_physical, 0) - coalesce(v.stock_reserved, 0) AS available,
                        p.category, coalesce(v.stock_physical, 0) AS physical, coalesce(v.stock_reserved, 0) AS reserved,
-                       p.xmin::text AS product_version, v.xmin::text AS variant_version
+                       p.xmin::text AS product_version, v.xmin::text AS variant_version, p.id AS product_id,
+                       (SELECT i.id FROM product_image i WHERE i.tenant_id = p.tenant_id AND i.product_id = p.id
+                         ORDER BY i.position LIMIT 1) AS cover_image
                 FROM product_variant v JOIN product p ON (p.tenant_id, p.id) = (v.tenant_id, v.product_id)
                 WHERE v.tenant_id = ?
                   AND (NOT ? OR coalesce(v.stock_physical,0) > coalesce(v.stock_reserved,0))
@@ -30,7 +32,8 @@ public class ProductRepository {
                 """, (rs, n) -> new CatalogRow(rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("sku"),
                 rs.getString("size"), rs.getString("color"), rs.getBigDecimal("price"), rs.getInt("available"),
                 rs.getString("category"), rs.getInt("physical"), rs.getInt("reserved"),
-                rs.getString("product_version"), rs.getString("variant_version")),
+                rs.getString("product_version"), rs.getString("variant_version"),
+                rs.getObject("product_id", UUID.class), rs.getObject("cover_image", UUID.class)),
                 tenant, availableOnly, query, limit, offset);
     }
 

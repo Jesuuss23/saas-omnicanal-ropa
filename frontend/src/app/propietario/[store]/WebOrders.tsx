@@ -37,7 +37,7 @@ function DeliveryDirections({order}:{order:Order}) {
   return <p>
     {hasPoint && <span>Destino {destination} · </span>}
     <a href={"https://www.google.com/maps/dir/?"+params} target="_blank" rel="noopener noreferrer"
-      className="text-teal-800 underline">{hasPoint?"Ver ruta al destino":"Buscar ruta por dirección"} en Google Maps</a>
+      className="text-primary underline">{hasPoint?"Ver ruta al destino":"Buscar ruta por dirección"} en Google Maps</a>
   </p>;
 }
 
@@ -66,7 +66,7 @@ function ShareTracking({store,order,path}:{store:string;order:Order;path:string}
     } catch {setNotice("Selecciona y copia el enlace del campo.");}
   }
   return <div>
-    <button type="button" className="text-teal-800 underline" aria-expanded={open}
+    <button type="button" className="text-primary underline" aria-expanded={open}
       onClick={()=>{setOpen(!open);setNotice("");}}> {open?"Ocultar enlace":"Compartir seguimiento"} </button>
     {open && (failed ? <p>No se pudo obtener el enlace. <button className="underline" onClick={refresh}>Reintentar</button></p> :
       !link ? <p>Cargando enlace…</p> : <div className="my-2 grid max-w-xl gap-2">
@@ -84,7 +84,7 @@ function ShareTracking({store,order,path}:{store:string;order:Order;path:string}
             } catch {setNotice("Copia el texto del mensaje y el enlace desde sus campos.");}
           }}>Copiar mensaje</button>
           <button type="button" onClick={copy} className="underline">Copiar enlace</button>
-          {destination && <a target="_blank" rel="noopener noreferrer" className="text-teal-800 underline"
+          {destination && <a target="_blank" rel="noopener noreferrer" className="text-primary underline"
             href={"https://wa.me/"+destination+"?"+new URLSearchParams({text:withTracking})}>
             Preparar WhatsApp para +{destination}</a>}
         </div>
@@ -111,7 +111,7 @@ function DeliveryQuote({store,order,send,refresh}:{store:string;order:Order;send
   }}>
     <label>Tarifa de envío (S/)<input type="number" min="0" max="999999999999.99" step="0.01" required value={amount}
       disabled={busy} onChange={e=>setAmount(e.target.value)} className="block rounded border p-2"/></label>
-    <button disabled={busy} className="rounded bg-teal-800 px-3 py-2 text-white">{busy?"Guardando…":"Confirmar tarifa"}</button>
+    <button disabled={busy} className="rounded bg-primary px-3 py-2 text-white">{busy?"Guardando…":"Confirmar tarifa"}</button>
     <p role="status">{message}</p>
   </form>;
 }
@@ -145,7 +145,7 @@ export default function WebOrders({store,send}:{store:string;send:Send}) {
             <DeliveryQuote store={store} order={o} send={send} refresh={refresh}/>}
           <DeliveryDirections order={o}/>
           <p className="break-all text-sm">Pedido {o.id}</p>
-          <button className="text-teal-800 underline" aria-expanded={expanded===o.id}
+          <button className="text-primary underline" aria-expanded={expanded===o.id}
             onClick={()=>setExpanded(expanded===o.id?"":o.id)}>{expanded===o.id?"Ocultar prendas":"Ver prendas"}</button>
           <ShareTracking store={store} order={o} path={path}/>
           {expanded===o.id && <Items url={path+"/"+o.id+"/items"}/>}

@@ -36,10 +36,10 @@ export default function WhatsAppChannels({store,send}:{store:string;send:Send}) 
     finally {setBusy(false);}
   }
 
-  return <section className="mt-6 rounded-xl border border-stone-200 p-5">
+  return <section className="rounded-xl border bg-card p-5 shadow-card">
     <h2 className="font-semibold">WhatsApp de la tienda</h2>
     <fieldset className="mt-3" disabled={busy || !active}>
-      <legend className="text-sm text-stone-600">Canal para responder a tus clientes</legend>
+      <legend className="text-sm text-muted-foreground">Canal para responder a tus clientes</legend>
       <div className="mt-2 flex flex-wrap gap-4">
         {(Object.keys(names) as Provider[]).map(p=><label key={p} className="flex items-center gap-2">
           <input type="radio" name={"wa-provider-"+store} checked={active===p} onChange={()=>void choose(p)}/>

@@ -47,7 +47,7 @@ class OwnerMercadoPagoController {
     ResponseEntity<Void> callback(@RequestParam(required = false) String code, @RequestParam(required = false) String state,
                                   @RequestParam(required = false) String error, Principal owner) {
         if (owner == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-        String target = "/propietario/" + owner.getName() + "?mercadopago=";
+        String target = "/propietario/" + owner.getName() + "/cobros?mercadopago=";
         if (error != null) return redirect(target + "cancelled");
         try {
             accounts.completeAuthorization(state, code, owner.getName());

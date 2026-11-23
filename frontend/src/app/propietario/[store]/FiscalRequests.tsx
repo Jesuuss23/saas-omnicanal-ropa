@@ -117,11 +117,11 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
         <p className="break-all text-xs">Venta {row.sale}</p>
         <p>{statusLabels[row.status] || row.status}</p>
         {row.number!==null ? <p>Serie beta {row.series}-{String(row.number).padStart(8,"0")}</p> :
-          row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>assign(row.sale)}>Asignar número de pruebas</button>}
-        {row.number!==null && row.status==="PENDING" && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>emit(row.sale)}>Enviar a APIsPERU en beta</button>}
-        {row.status==="BETA_REVIEW" && row.submission && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>reconcile(row.sale)}>Consultar CDR en APIsPERU</button>}
+          row.status==="PENDING" && <button type="button" disabled={busy} className="text-primary underline" onClick={()=>assign(row.sale)}>Asignar número de pruebas</button>}
+        {row.number!==null && row.status==="PENDING" && <button type="button" disabled={busy} className="text-primary underline" onClick={()=>emit(row.sale)}>Enviar a APIsPERU en beta</button>}
+        {row.status==="BETA_REVIEW" && row.submission && <button type="button" disabled={busy} className="text-primary underline" onClick={()=>reconcile(row.sale)}>Consultar CDR en APIsPERU</button>}
         {row.submission && <details className="my-2">
-          <summary className="cursor-pointer text-teal-800">Detalle del envío</summary>
+          <summary className="cursor-pointer text-primary">Detalle del envío</summary>
           <p>Intento registrado el {date.format(new Date(row.submission.attemptedAt))} (Lima).</p>
           {row.submission.cdrCode && <p>Código CDR: {row.submission.cdrCode}</p>}
           {row.submission.description && <p>{row.submission.description}</p>}
@@ -134,10 +134,10 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
           {row.status==="BETA_REVIEW" && <p>El resultado sigue pendiente. Usa «Consultar CDR en APIsPERU» para actualizar el resultado.</p>}
         </details>}
         {(row.hasXml || row.hasCdr) && <div className="mt-2 flex flex-wrap gap-4">
-          {row.hasXml && <a className="text-teal-800 underline" target="_blank" rel="noopener noreferrer"
+          {row.hasXml && <a className="text-primary underline" target="_blank" rel="noopener noreferrer"
             href={"/propietario/"+store+"/comprobantes/"+row.sale}>Ver para imprimir</a>}
-          {row.hasXml && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"xml")}>Descargar XML</button>}
-          {row.hasCdr && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>download(row.sale,"cdr")}>Descargar CDR (.zip)</button>}
+          {row.hasXml && <button type="button" disabled={busy} className="text-primary underline" onClick={()=>download(row.sale,"xml")}>Descargar XML</button>}
+          {row.hasCdr && <button type="button" disabled={busy} className="text-primary underline" onClick={()=>download(row.sale,"cdr")}>Descargar CDR (.zip)</button>}
         </div>}
       </li>)}</ul>}
     <p role="status">{message}</p>

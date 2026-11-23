@@ -60,12 +60,12 @@ export default function ManualReply({store,chat,send}:Props) {
   }
 
   return <details onToggle={e=>{e.stopPropagation();setOpen(e.currentTarget.open);}}>
-    <summary className="cursor-pointer text-teal-800">Mensaje de seguimiento por WhatsApp</summary>
+    <summary className="cursor-pointer text-primary">Mensaje de seguimiento por WhatsApp</summary>
     {open && <>
       {/^[0-9]{5,15}@s\.whatsapp\.net$/.test(chat) ? <><CatalogReplyPicker store={store} disabled={busy} insert={append}/><CategoryResources store={store} chat={chat} insert={append} disabled={busy}/><form onSubmit={submit} className="my-2 grid max-w-md gap-2">
         <label>Mensaje para {chat.split("@")[0]}<textarea value={text} onChange={e=>setText(e.target.value)}
           disabled={busy} maxLength={4000} required className="block w-full rounded border p-2"/></label>
-        <button type="submit" disabled={busy || !text.trim()} className="rounded bg-teal-800 px-3 py-2 text-white">
+        <button type="submit" disabled={busy || !text.trim()} className="rounded bg-primary px-3 py-2 text-white">
           {busy?"Enviando…":"Enviar por WhatsApp"}</button>
       </form></> : <p>Este contacto aún no tiene un número de teléfono identificable para el envío.</p>}
       <p role="status">{notice}</p>

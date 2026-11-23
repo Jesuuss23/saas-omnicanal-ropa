@@ -6,7 +6,7 @@ import {useEffect, useState, type FormEvent} from "react";
 
 type Issuer = {ruc:string; legalName:string; address:string; ubigeo:string; revision:number};
 type Props = {store:string; send:Send};
-const input = "mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2";
+const input = "mt-1 block w-full rounded-lg border border-border px-3 py-2";
 
 export default function FiscalIssuer({store,send}:Props) {
   const [issuer,setIssuer] = useState<Issuer|null>(null);
@@ -112,7 +112,7 @@ export default function FiscalIssuer({store,send}:Props) {
     setIssuer(current=>current && {...current,[key]:value});
   }
 
-  return <details className="mt-6 rounded-xl border border-stone-200 p-5">
+  return <details className="rounded-xl border bg-card p-5 shadow-card">
     <summary className="cursor-pointer font-semibold">Facturación electrónica · Datos del emisor</summary>
     {issuer && <form onSubmit={save}>
       <fieldset disabled={busy || retry} className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -120,8 +120,8 @@ export default function FiscalIssuer({store,send}:Props) {
         <label>Razón social<input className={input} value={issuer.legalName} onChange={e=>change("legalName",e.target.value)} maxLength={200} required/></label>
         <label>Domicilio fiscal<input className={input} value={issuer.address} onChange={e=>change("address",e.target.value)} maxLength={250} required/></label>
         <label>Ubigeo<input className={input} value={issuer.ubigeo} onChange={e=>change("ubigeo",e.target.value)} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required/></label>
-        <button className="rounded-lg bg-teal-800 px-4 py-2 text-white">Guardar datos del emisor</button>
-        {issuer.revision > 0 && <button type="button" className="rounded-lg border border-teal-800 px-4 py-2 text-teal-800" onClick={verify}>Verificar RUC guardado en APIsPERU</button>}
+        <button className="rounded-lg bg-primary px-4 py-2 text-white">Guardar datos del emisor</button>
+        {issuer.revision > 0 && <button type="button" className="rounded-lg border border-primary px-4 py-2 text-primary" onClick={verify}>Verificar RUC guardado en APIsPERU</button>}
       </fieldset>
     </form>}
     {issuer && issuer.revision > 0 && <form onSubmit={downloadCertificate} className="mt-5 border-t pt-4">
@@ -131,11 +131,11 @@ export default function FiscalIssuer({store,send}:Props) {
           <input className={input} type="password" autoComplete="new-password" minLength={8} maxLength={128}
             required value={password} onChange={e=>setPassword(e.target.value)} />
         </label>
-        <button className="rounded-lg border border-teal-800 px-4 py-2 text-teal-800">Descargar certificado de pruebas</button>
+        <button className="rounded-lg border border-primary px-4 py-2 text-primary">Descargar certificado de pruebas</button>
       </fieldset>
     </form>}
     {issuer && issuer.revision > 0 && <BetaCompany key={issuer.revision} path={path} ruc={savedRuc} revision={issuer.revision} send={send}/>}
     <p role="status" className="mt-2 text-sm">{message}</p>
-    {retry && <button className="text-teal-800 underline" onClick={()=>{setIssuer(null); setRetry(false); setMessage("Cargando datos fiscales…"); setReload(v=>v+1);}}>Recargar ficha</button>}
+    {retry && <button className="text-primary underline" onClick={()=>{setIssuer(null); setRetry(false); setMessage("Cargando datos fiscales…"); setReload(v=>v+1);}}>Recargar ficha</button>}
   </details>;
 }

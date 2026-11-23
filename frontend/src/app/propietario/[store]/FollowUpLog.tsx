@@ -48,17 +48,17 @@ export default function FollowUpLog({path,contact,send,disabled,onSaved}:Props) 
 
   return <div className="space-y-2">
     {contact.followUpDate && <details onToggle={e=>e.stopPropagation()}>
-      <summary className="cursor-pointer text-teal-800">Registrar resultado del seguimiento</summary>
+      <summary className="cursor-pointer text-primary">Registrar resultado del seguimiento</summary>
       <form onSubmit={complete} className="mt-2 grid max-w-md gap-2">
         <label>Resultado <select name="outcome" required defaultValue="" className="rounded border p-1">
           <option value="" disabled>Seleccionar</option>
           {Object.entries(outcomes).map(([key,label])=><option key={key} value={key}>{label}</option>)}
         </select></label>
         <label>Nota interna (opcional)<textarea name="note" maxLength={500} className="block w-full rounded border p-2"/></label>
-        <button disabled={disabled || busy} className="rounded bg-teal-800 px-3 py-2 text-white">Completar seguimiento</button>
+        <button disabled={disabled || busy} className="rounded bg-primary px-3 py-2 text-white">Completar seguimiento</button>
       </form>
     </details>}
-    <button type="button" disabled={busy} aria-expanded={entries!==null} className="text-teal-800 underline"
+    <button type="button" disabled={busy} aria-expanded={entries!==null} className="text-primary underline"
       onClick={()=>entries===null ? void load(false) : setEntries(null)}>
       {entries===null?"Ver historial de seguimientos":"Ocultar historial"}</button>
     {entries && <div>
