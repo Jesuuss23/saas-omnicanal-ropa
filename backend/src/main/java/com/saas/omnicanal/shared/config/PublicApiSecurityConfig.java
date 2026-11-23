@@ -38,6 +38,25 @@ public class PublicApiSecurityConfig {
                 .build();
     }
 
+    /** Sitio de venta: planes, prueba gratis y recuperación de acceso. Sin sesión, así CSRF no aplica. */
+    @Bean
+    @Order(-2)
+    SecurityFilterChain publicOnboarding(HttpSecurity http) throws Exception {
+        String[] posts = {"/api/public/signup", "/api/public/signup/preview", "/api/public/signup/confirm",
+                "/api/public/password-reset", "/api/public/password-reset/confirm"};
+        return http.securityMatcher("/api/public/plans", "/api/public/signup/**", "/api/public/signup",
+                        "/api/public/password-reset", "/api/public/password-reset/**")
+                .csrf(c -> c.disable())
+                .requestCache(c -> c.disable())
+                .sessionManagement(s -> s.sessionCreationPolicy(
+                        org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(a -> a
+                        .requestMatchers(HttpMethod.GET, "/api/public/plans").permitAll()
+                        .requestMatchers(HttpMethod.POST, posts).permitAll()
+                        .anyRequest().denyAll())
+                .build();
+    }
+
     @Bean
     @Order(0)
     SecurityFilterChain webhooks(HttpSecurity http) throws Exception {

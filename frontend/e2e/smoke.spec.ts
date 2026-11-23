@@ -18,7 +18,30 @@ test("portada", async ({page}) => {
   const errors = watchErrors(page);
   await page.goto("/");
   await expect(page.getByRole("heading", {level: 1})).toBeVisible();
-  await expect(page.getByRole("link", {name: /Ingresar/})).toBeVisible();
+  await expect(page.getByRole("link", {name: /Prueba gratis/}).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("precios muestra los planes públicos", async ({page}) => {
+  const errors = watchErrors(page);
+  await page.goto("/precios");
+  for (const plan of ["Básico", "Pro", "Premium"]) await expect(page.getByRole("heading", {name: plan, exact: true})).toBeVisible();
+  await expect(page.getByRole("table")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("prueba gratis envía el enlace de confirmación", async ({page}) => {
+  const errors = watchErrors(page);
+  await page.goto("/prueba-gratis?plan=PRO");
+  await page.getByLabel("Nombre de tu tienda").fill("Tienda Playwright");
+  await page.getByLabel("Tu nombre").fill("Prueba Automática");
+  const email = "e2e-" + Date.now() + "-" + Math.random().toString(36).slice(2) + "@prueba.test";
+  await page.getByLabel("Correo electrónico").fill(email);
+  await expect(page.getByLabel("Plan que te interesa")).toHaveValue("PRO");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", {name: "Crear mi tienda gratis"}).click();
+  await expect(page.getByRole("heading", {name: "Revisa tu correo"})).toBeVisible();
+  await expect(page.getByText(email)).toBeVisible();
   expect(errors).toEqual([]);
 });
 
