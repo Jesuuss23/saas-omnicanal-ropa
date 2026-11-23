@@ -16,6 +16,12 @@ const proxied = [
   "/public/stores/:store/reservation/guest/quote",
   "/public/stores/:store/orders/:order",
   "/public/stores/:store/orders/:order/mercadopago",
+  "/public/plans",
+  "/public/signup",
+  "/public/signup/preview",
+  "/public/signup/confirm",
+  "/public/password-reset",
+  "/public/password-reset/confirm",
 ];
 
 const nextConfig: NextConfig = {

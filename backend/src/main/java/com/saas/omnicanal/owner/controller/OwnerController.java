@@ -1,5 +1,8 @@
 package com.saas.omnicanal.owner.controller;
 
+import com.saas.omnicanal.notifications.service.EmailService;
+import com.saas.omnicanal.notifications.service.EmailTemplates;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -27,9 +30,14 @@ class OwnerController {
     private final PasswordEncoder passwords;
     private final SecureRandom random = new SecureRandom();
 
-    OwnerController(JdbcTemplate db, PasswordEncoder passwords) {
+    private final EmailService email;
+    private final EmailTemplates templates;
+
+    OwnerController(JdbcTemplate db, PasswordEncoder passwords, EmailService email, EmailTemplates templates) {
         this.db = db;
         this.passwords = passwords;
+        this.email = email;
+        this.templates = templates;
     }
 
     record Store(UUID id, String name, String email, boolean active) {}
@@ -56,7 +64,10 @@ class OwnerController {
                 WHERE tenant_id = ? AND password_hash IS NULL
                 """, digest(token), id);
         if (count != 1) throw new ResponseStatusException(HttpStatus.CONFLICT);
-        return Map.of("token", token);
+        db.query("SELECT o.email, t.name FROM tenant_owner o JOIN tenant t ON t.id = o.tenant_id WHERE t.id = ?",
+                rs -> { email.send(templates.ownerInvitation(rs.getString(1), rs.getString(2),
+                        templates.url("/propietario/" + id + "#" + token))); }, id);
+        return Map.of("token", token, "emailed", email.configured() ? "true" : "false");
     }
 
     @PostMapping("/api/owner/activate")

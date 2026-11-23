@@ -1,6 +1,7 @@
 "use client";
 
 import {useState, type FormEvent} from "react";
+import Link from "next/link";
 import {ArrowLeft, ChevronRight, LogIn, Store} from "lucide-react";
 import {CodeInput} from "./CodeInput";
 import {Alert} from "@/components/ui/alert";
@@ -79,6 +80,7 @@ export function OwnerLoginForm({store, onSuccess}: {store?: string; onSuccess: (
     <Field label="Contraseña" htmlFor="owner-password">
       <Input id="owner-password" name="password" type="password" autoComplete="current-password" required disabled={busy}/>
     </Field>
+    <Link href="/recuperar-acceso" className="-mt-2 justify-self-end text-sm font-medium text-primary hover:underline">¿Olvidaste tu contraseña?</Link>
     {error && <Alert variant="destructive">{error}</Alert>}
     <Button size="lg" type="submit" loading={busy}><LogIn/>Ingresar</Button>
   </form>;

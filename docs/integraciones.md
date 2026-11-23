@@ -69,3 +69,24 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`).
 4. En la página del pedido, el comprador pulsa *Pagar con Mercado Pago* (Checkout Pro). El webhook
    `/api/webhooks/mercadopago/{tenantId}` re-consulta el pago y, si el monto coincide, marca el pedido `PAID` y
    descuenta el stock una sola vez. Montos distintos o pagos tardíos quedan con `requires_review`.
+
+## Correos transaccionales (Resend)
+
+- **Configuración:** `RESEND_API_KEY`, `EMAIL_FROM` (dominio verificado en Resend), `EMAIL_REPLY_TO` opcional y `APP_BASE_URL` (frontend, para armar los enlaces).
+- **Sin clave (desarrollo y pruebas):** los correos no salen. Se registran en `email_log` con su cuerpo y en el log de la aplicación, así se pueden abrir los enlaces a mano.
+- **Plantillas** (`notifications/service/EmailTemplates`):
+  - confirmación de prueba gratis (vence en 48 h);
+  - bienvenida;
+  - recuperación de contraseña (vence en 1 h, un enlace por tienda);
+  - invitación de propietario (vence en 24 h).
+- **Seguridad de los enlaces:** los tokens viajan en el fragmento de la URL (`#token`), que no llega al servidor ni a los logs. En la base se guarda solo su SHA-256.
+
+## Sitio de venta y prueba gratis
+
+| Endpoint | Uso |
+|---|---|
+| `GET /api/public/plans` | Planes públicos con sus capacidades (página de precios). |
+| `POST /api/public/signup` | Solicitud de prueba gratis. Siempre responde 202, tiene un campo trampa para bots y admite máximo 3 solicitudes por hora por correo. |
+| `POST /api/public/signup/preview` | Datos de la solicitud a partir del token. |
+| `POST /api/public/signup/confirm` | Crea la tienda, el propietario con contraseña y la suscripción TRIAL. |
+| `POST /api/public/password-reset` y `/confirm` | Recuperación de contraseña del propietario. |
