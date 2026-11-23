@@ -7,7 +7,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.Locale;
 import java.util.UUID;
+import com.saas.omnicanal.platformadmin.service.AuditService;
 import com.saas.omnicanal.subscription.service.SubscriptionService;
+import java.security.Principal;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,8 +25,10 @@ import org.springframework.web.server.ResponseStatusException;
 public class TenantRegistrationController {
     private final JdbcTemplate db;
     private final SubscriptionService subscriptions;
+    private final AuditService audit;
 
-    TenantRegistrationController(JdbcTemplate db, SubscriptionService subscriptions) {
+    TenantRegistrationController(JdbcTemplate db, SubscriptionService subscriptions, AuditService audit) {
+        this.audit = audit;
         this.db = db;
         this.subscriptions = subscriptions;
     }
@@ -35,13 +39,14 @@ public class TenantRegistrationController {
 
     @PostMapping
     @Transactional
-    public ResponseEntity<Store> register(@Valid @RequestBody Registration request) {
+    public ResponseEntity<Store> register(@Valid @RequestBody Registration request, Principal admin) {
         var store = new Store(request.id(), request.name().strip(), request.ownerEmail().strip().toLowerCase(Locale.ROOT));
         int inserted = db.update("INSERT INTO tenant(id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
                 store.id(), store.name());
         if (inserted == 1) {
             db.update("INSERT INTO tenant_owner(tenant_id, email) VALUES (?, ?)", store.id(), store.ownerEmail());
             subscriptions.startTrial(store.id());
+            audit.record(admin, AuditService.TENANT_CREATED, store.id(), store.name() + " · " + store.ownerEmail());
             return ResponseEntity.status(HttpStatus.CREATED).body(store);
         }
         boolean sameRegistration = Boolean.TRUE.equals(db.queryForObject("""

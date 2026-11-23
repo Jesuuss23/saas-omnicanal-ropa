@@ -1,17 +1,23 @@
 "use client";
 import {useState} from "react";
+import {LogOut} from "lucide-react";
+import {Button} from "@/components/ui/button";
+import {toast} from "@/components/ui/toaster";
 import {submitAuth} from "./auth";
 
 export default function Logout() {
   const [busy,setBusy] = useState(false);
-  const [error,setError] = useState(false);
   async function leave() {
-    setBusy(true); setError(false);
+    setBusy(true);
     try {
       if (!(await submitAuth("logout")).ok) throw new Error();
       window.location.replace("/superadmin/login");
-    } catch { setBusy(false); setError(true); }
+    } catch {
+      setBusy(false);
+      toast.error("No se pudo cerrar la sesión. Inténtalo otra vez.");
+    }
   }
-  return <div><button className="rounded-lg border border-teal-600 px-4 py-2 text-sm disabled:opacity-60" disabled={busy} onClick={leave}>{busy ? "Cerrando…" : "Cerrar sesión"}</button>
-  {error && <p role="alert">No se pudo cerrar la sesión. Inténtalo otra vez.</p>}</div>;
+  return <Button variant="outline" className="w-full justify-start" loading={busy} onClick={leave}>
+    {!busy && <LogOut aria-hidden/>}{busy ? "Cerrando…" : "Cerrar sesión"}
+  </Button>;
 }

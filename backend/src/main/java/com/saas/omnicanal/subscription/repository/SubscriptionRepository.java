@@ -69,6 +69,15 @@ public class SubscriptionRepository {
                 """, planCode, periodEnd, tenant);
     }
 
+    /** Extiende la prueba desde su fin actual (o desde hoy si ya venció) y la deja en TRIAL. */
+    public void extendTrial(UUID tenant, int days) {
+        db.update("""
+                UPDATE tenant_subscription SET status='TRIAL',
+                       trial_ends_at=greatest(coalesce(trial_ends_at, now()), now()) + make_interval(days => ?),
+                       revision=revision+1, updated_at=now() WHERE tenant_id=?
+                """, days, tenant);
+    }
+
     public void setStatus(UUID tenant, SubscriptionStatus status, OffsetDateTime graceEndsAt) {
         db.update("""
                 UPDATE tenant_subscription SET status=?, grace_ends_at=?, revision=revision+1, updated_at=now()
