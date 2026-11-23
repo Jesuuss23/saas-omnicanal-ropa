@@ -29,6 +29,14 @@ Tiendas (búsqueda, filtro y ficha con suspensión, ajustes de suscripción y ca
 Culqi), Pagos (webhooks de Culqi y Mercado Pago), Auditoría y Seguridad. Los tipos de las respuestas están en
 `src/lib/superadmin.ts`. En CI el backend arranca con un superadmin de prueba (`admin@e2e.test`).
 
+## Panel de la tienda
+
+`src/app/propietario/[store]/layout.tsx` monta `OwnerGate`: muestra ingreso o activación por invitación hasta que hay
+sesión, y luego `StoreShell` (barra lateral) con `useStore()` disponible para cada página. Secciones: Inicio (métricas,
+ventas por día y pasos de configuración), Pedidos web, Punto de venta, Catálogo (con fotos y etiquetas QR), Clientes,
+WhatsApp, Apariencia (nombre, logo, color, contacto), Cobros, Facturación, Plan y Cuenta. Los componentes de cada
+módulo (`Catalog`, `WebOrders`, `PointOfSale`…) siguen en la carpeta de la ruta.
+
 ## Diseño
 
 Los colores, radios y sombras son tokens en `src/app/globals.css` (marca teal, modo oscuro con la clase `.dark`).

@@ -62,12 +62,12 @@ export default function StoreWhatsApp({store,send}:Props) {
     } finally {setBusy(false);}
   }
 
-  return <details className="mt-4 rounded-xl border border-stone-200 p-5" onToggle={e=>{
+  return <details className="mt-4 rounded-xl border border-border p-5" onToggle={e=>{
     setOpen(e.currentTarget.open);
     if (!e.currentTarget.open) {generation.current++;setChannel(null);setError("");}
   }}>
     <summary className="cursor-pointer font-semibold">Conexión rápida por QR (Evolution API)</summary>
-    <p className="mt-2 text-sm text-stone-600">Ideal para empezar o para bajo volumen. Al ser una conexión no oficial, WhatsApp puede bloquear el número si se usa para envíos masivos.</p>
+    <p className="mt-2 text-sm text-muted-foreground">Ideal para empezar o para bajo volumen. Al ser una conexión no oficial, WhatsApp puede bloquear el número si se usa para envíos masivos.</p>
     <p role="status" className="my-3">{error || (channel ? labels[channel.state] : "Consultando conexión…")}</p>
     {channel?.qr && <div className="mb-4">
       <p>En el WhatsApp de la tienda, abre Dispositivos vinculados y escanea el código.</p>
@@ -77,9 +77,9 @@ export default function StoreWhatsApp({store,send}:Props) {
     </div>}
     <div className="flex flex-wrap gap-4">
       {channel && channel.state!=="CONNECTED" && <button type="button" disabled={busy}
-        className="rounded-lg bg-teal-800 px-4 py-2 text-white" onClick={connect}>
+        className="rounded-lg bg-primary px-4 py-2 text-white" onClick={connect}>
         {busy?"Conectando…":channel.qr?"Renovar QR":"Conectar WhatsApp"}</button>}
-      <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>{setError("");setRefresh(v=>v+1);}}>Actualizar estado</button>
+      <button type="button" disabled={busy} className="text-primary underline" onClick={()=>{setError("");setRefresh(v=>v+1);}}>Actualizar estado</button>
     </div>
     {open && <WhatsAppInbox path={path} send={send} connected={channel?.state==="CONNECTED"}/>}
   </details>;

@@ -112,7 +112,7 @@ export default function BetaCompany({path,ruc,revision,send}:Props) {
         <label>Certificado de pruebas (.pfx o .p12)<input className="block" name="pfx" type="file" accept=".pfx,.p12" required/></label>
         <label>Contraseña del certificado<input className="block w-full rounded-lg border p-2" name="password" type="password" autoComplete="off" maxLength={128} required/></label>
         <label>Logo PNG (máximo 200 KiB)<input className="block" name="logo" type="file" accept="image/png" required/></label>
-        <button className="rounded-lg bg-teal-800 px-4 py-2 text-white">{busy?"Registrando…":"Registrar empresa en beta"}</button>
+        <button className="rounded-lg bg-primary px-4 py-2 text-white">{busy?"Registrando…":"Registrar empresa en beta"}</button>
       </fieldset>
     </form>}
     <p role="status" className="mt-2 text-sm">{message || descriptions[status] || (!status && "Consultando estado…")}</p>
@@ -122,9 +122,9 @@ export default function BetaCompany({path,ruc,revision,send}:Props) {
           autoComplete="off" maxLength={16384} required />
       </label>
       <p className="text-sm">Usa el token de empresa del RUC {ruc} que figura en APIsPERU.</p>
-      <button disabled={busy} className="rounded-lg border border-teal-800 p-2">{stored ? "Reemplazar token" : "Guardar token"}</button>
+      <button disabled={busy} className="rounded-lg border border-primary p-2">{stored ? "Reemplazar token" : "Guardar token"}</button>
       <p role="status" className="text-sm">{tokenMessage || (stored === true ? "Token almacenado." : stored === false ? "Pendiente de configurar." : "")}</p>
     </form>}
-    {(message || status === "REVIEW") && <button type="button" disabled={busy} className="text-teal-800 underline" onClick={()=>setReload(value=>value+1)}>Consultar estado</button>}
+    {(message || status === "REVIEW") && <button type="button" disabled={busy} className="text-primary underline" onClick={()=>setReload(value=>value+1)}>Consultar estado</button>}
   </section>;
 }

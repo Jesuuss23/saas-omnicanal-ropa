@@ -44,14 +44,14 @@ export function ConsoleShell({sections, context, footer, banner, children, homeH
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const brandLink = <Link href={homeHref} className="flex items-center gap-2 font-semibold tracking-tight"><Logo className="size-7"/>{brand.name}</Link>;
-  return <div className="min-h-dvh bg-background lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
-    <div className="hidden border-r bg-card lg:block"><aside className="sticky top-0 flex h-dvh flex-col gap-6 overflow-y-auto px-4 py-5">
+  return <div className="min-h-dvh bg-background lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] print:block">
+    <div className="hidden border-r bg-card lg:block print:hidden"><aside className="sticky top-0 flex h-dvh flex-col gap-6 overflow-y-auto px-4 py-5">
       <div className="px-2">{brandLink}</div>
       {context}
       <div className="flex-1"><Nav sections={sections} pathname={pathname}/></div>
       {footer}
     </aside></div>
-    <header className="sticky top-0 z-40 flex items-center justify-between border-b bg-card/95 px-4 py-3 backdrop-blur lg:hidden">
+    <header className="sticky top-0 z-40 flex items-center print:hidden justify-between border-b bg-card/95 px-4 py-3 backdrop-blur lg:hidden">
       {brandLink}
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-controls="mobile-nav"
         className="rounded-lg p-2 hover:bg-muted" aria-label={open ? "Cerrar menú" : "Abrir menú"}>

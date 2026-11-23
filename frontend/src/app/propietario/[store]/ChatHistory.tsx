@@ -11,7 +11,7 @@ const date = new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:
 export default function ChatHistory({path,chat}:{path:string;chat:string}) {
   const [open,setOpen]=useState(false);
   return <details onToggle={event=>{event.stopPropagation();setOpen(event.currentTarget.open);}}>
-    <summary className="cursor-pointer text-teal-800">Conversación completa</summary>
+    <summary className="cursor-pointer text-primary">Conversación completa</summary>
     {open && <Timeline path={path} chat={chat}/>}
   </details>;
 }
@@ -57,10 +57,10 @@ function Timeline({path,chat}:{path:string;chat:string}) {
     {busy && <p role="status">Cargando conversación…</p>}
     {!busy && !error && !page.lines.length && <p>Aún no hay mensajes registrados.</p>}
     <ol className="mt-3 space-y-2">{page.lines.map(line=><li key={line.key}
-      className={line.status ? "ml-auto max-w-[85%] rounded-lg bg-teal-50 p-3" : "max-w-[85%] rounded-lg bg-stone-100 p-3"}>
+      className={line.status ? "ml-auto max-w-[85%] rounded-lg bg-accent p-3" : "max-w-[85%] rounded-lg bg-muted p-3"}>
       <strong>{line.status ? "Tienda" : "Cliente"}</strong>
       <p className="whitespace-pre-wrap break-words">{line.text}</p>
-      <p className="text-xs text-stone-600"><time dateTime={line.at}>{date.format(new Date(line.at))}</time>
+      <p className="text-xs text-muted-foreground"><time dateTime={line.at}>{date.format(new Date(line.at))}</time>
         {line.status && " · "+(deliveryLabels[line.status] || line.status)}</p>
     </li>)}</ol>
   </div>;

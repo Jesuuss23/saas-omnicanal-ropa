@@ -46,10 +46,10 @@ export default function WhatsAppInbox({path,connected,send}:Props) {
     {connected && <details className="my-2" onToggle={event=>event.stopPropagation()}>
       <summary className="cursor-pointer">Configurar recepción</summary>
       <p className="my-2 text-sm">Esta acción configura el webhook de esta instancia para recibir mensajes y reemplaza su configuración anterior.</p>
-      <button type="button" disabled={busy} onClick={enable} className="rounded bg-teal-800 px-3 py-2 text-white">Activar recepción</button>
+      <button type="button" disabled={busy} onClick={enable} className="rounded bg-primary px-3 py-2 text-white">Activar recepción</button>
     </details>}
     <p role="status">{notice}</p>
-    <button type="button" onClick={()=>setRefresh(v=>v+1)} className="my-2 text-teal-800 underline">Actualizar mensajes</button>
+    <button type="button" onClick={()=>setRefresh(v=>v+1)} className="my-2 text-primary underline">Actualizar mensajes</button>
     {failed ? <p role="alert">No se pudo consultar la bandeja.</p> : rows===null ? <p>Cargando mensajes…</p> :
       rows.length===0 ? <p>Aún no hay mensajes de texto recibidos.</p> :
       <ul className="divide-y">{rows.map(row=><li key={row.chat+":"+row.id} className="py-2">

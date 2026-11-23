@@ -64,15 +64,49 @@ test("panel del propietario carga todas sus secciones", async ({page}, info) => 
   await page.getByLabel("Correo electrónico").fill("propietario@e2e.test");
   await page.getByLabel("Contraseña").fill("e2e-propietario-2026");
   await page.getByRole("button", {name: "Ingresar"}).click();
-  await expect(page.getByRole("heading", {name: "Tienda E2E"})).toBeVisible();
-  for (const section of ["WhatsApp de la tienda", "Cobros en línea con Mercado Pago"]) {
-    await expect(page.getByRole("heading", {name: section})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Hola, Tienda E2E"})).toBeVisible();
+  await expect(page.getByText("Configura tu tienda")).toBeVisible();
+  const nav = page.getByRole("navigation");
+  for (const link of ["Pedidos web", "Punto de venta", "Catálogo", "Clientes", "WhatsApp", "Apariencia", "Cobros", "Facturación", "Plan", "Cuenta y seguridad"]) {
+    await nav.getByRole("link", {name: link, exact: true}).click();
+    await expect(page.getByRole("heading", {name: link, exact: true, level: 1})).toBeVisible();
+    if (link === "WhatsApp") await expect(page.getByRole("heading", {name: "WhatsApp de la tienda"})).toBeVisible();
+    if (link === "Cobros") await expect(page.getByRole("heading", {name: "Cobros en línea con Mercado Pago"})).toBeVisible();
+    if (link === "Catálogo") await expect(page.getByRole("cell", {name: /Polo E2E/})).toBeVisible();
   }
-  await expect(page.getByText("Cargando inventario…")).toHaveCount(0, {timeout: 10_000});
   await page.getByRole("button", {name: "Cerrar sesión"}).click();
   await expect(page.getByLabel(/contraseña/i)).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("apariencia y fotos de producto", async ({page}, info) => {
+  test.skip(!process.env.E2E_SEEDED || info.project.name !== "desktop", "Requiere e2e/seed.sql; usa la cuenta sembrada antes de activar 2FA");
+  const errors = watchErrors(page);
+  await page.goto("/propietario/" + seededStore + "/apariencia");
+  await page.getByLabel("Correo electrónico").fill("propietario@e2e.test");
+  await page.getByLabel("Contraseña").fill("e2e-propietario-2026");
+  await page.getByRole("button", {name: "Ingresar"}).click();
+  await page.getByLabel("Frase corta").fill("Moda de prueba");
+  await page.getByLabel("WhatsApp").fill("51987654321");
+  await page.getByRole("button", {name: "Guardar cambios"}).click();
+  await expect(page.getByText("Apariencia guardada")).toBeVisible();
+  await page.getByLabel("Elegir logo").setInputFiles({name: "logo.png", mimeType: "image/png", buffer: PNG});
+  await expect(page.getByAltText("Logo actual")).toBeVisible();
+
+  await page.getByRole("navigation").getByRole("link", {name: "Catálogo"}).click();
+  await page.getByRole("button", {name: "Fotos de Polo E2E"}).click();
+  await page.getByLabel("Elegir fotos").setInputFiles([{name: "a.png", mimeType: "image/png", buffer: PNG}, {name: "b.png", mimeType: "image/png", buffer: PNG}]);
+  await expect(page.getByAltText("Foto 2 de Polo E2E")).toBeVisible();
+  await expect(page.getByText("Portada", {exact: true})).toBeVisible();
+  await page.getByRole("button", {name: "Quitar foto 2"}).click();
+  await expect(page.getByAltText("Foto 2 de Polo E2E")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("navigation").getByRole("link", {name: "Inicio"}).click();
+  await expect(page.getByRole("heading", {name: "Hola, Tienda E2E"})).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
 test.describe.serial("verificación en dos pasos del propietario", () => {
   test("activa con QR y luego pide el código al ingresar", async ({page}, info) => {
@@ -83,6 +117,7 @@ test.describe.serial("verificación en dos pasos del propietario", () => {
     await page.getByLabel("Contraseña").fill("e2e-propietario-2026");
     await page.getByRole("button", {name: "Ingresar"}).click();
     await expect(page).toHaveURL(new RegExp("/propietario/" + seededStore));
+    await page.getByRole("navigation").getByRole("link", {name: "Cuenta y seguridad"}).click();
 
     await page.getByRole("button", {name: "Activar con código QR"}).click();
     await page.getByRole("button", {name: "Empezar configuración"}).click();
@@ -102,7 +137,7 @@ test.describe.serial("verificación en dos pasos del propietario", () => {
     await page.getByRole("button", {name: "Ingresar"}).click();
     await page.getByLabel("Código de verificación").fill(totp(secret, 1));
     await page.getByRole("button", {name: "Verificar e ingresar"}).click();
-    await expect(page.getByRole("heading", {name: "Tienda E2E"})).toBeVisible();
+    await expect(page.getByRole("heading", {name: "Cuenta y seguridad"})).toBeVisible();
     expect(errors).toEqual([]);
   });
 });

@@ -49,9 +49,4 @@ export const auditLabels: Record<string, string> = {
   RECOVERY_CODES_REGENERATED: "Códigos de recuperación nuevos",
 };
 
-export const limaDate = new Intl.DateTimeFormat("es-PE", {timeZone: "America/Lima", dateStyle: "medium"});
-export const shortDay = new Intl.DateTimeFormat("es-PE", {timeZone: "UTC", day: "numeric", month: "short"});
-
-export function formatDate(value: string | null | undefined, format: Intl.DateTimeFormat = limaDate) {
-  return value ? format.format(new Date(value)) : "—";
-}
+export {formatDate, limaDate, shortDay} from "./utils";

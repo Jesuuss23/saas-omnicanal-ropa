@@ -60,7 +60,7 @@ export default function PickupSettings({store,send}:Props) {
               max={field==="perKm"?999999.99:field==="latitude"?90:180} defaultValue={settings[field] ?? ""} key={settings.revision}
               onChange={e=>setSettings({...settings,[field]:e.target.value===""?null:e.target.valueAsNumber})} className="block w-full rounded border p-2"/>
           </label>)}
-          <button className="w-fit rounded bg-teal-800 px-3 py-2 text-white">Guardar</button>
+          <button className="w-fit rounded bg-primary px-3 py-2 text-white">Guardar</button>
         </fieldset>
       </form>}
       <button type="button" disabled={busy} onClick={()=>{setSettings(null);setNotice("");setVersion(v=>v+1);}} className="underline">Recargar datos guardados</button>

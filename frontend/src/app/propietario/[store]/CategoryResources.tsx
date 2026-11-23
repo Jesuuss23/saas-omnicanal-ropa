@@ -96,7 +96,7 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
           <legend className="text-sm font-medium">Categorías mencionadas por el cliente</legend>
           {suggested.map(row=><button key={row.category} type="button" disabled={disabled}
             aria-pressed={selected.category===row.category} onClick={()=>setCategory(row.category)}
-            className="rounded border px-2 py-1 aria-pressed:border-teal-800">{row.category}</button>)}
+            className="rounded border px-2 py-1 aria-pressed:border-primary">{row.category}</button>)}
         </fieldset>}
         {historyFailed && <p role="status">No se pudieron leer los mensajes recientes. Puedes elegir la categoría manualmente.</p>}
         <label>Categoría <select disabled={busy} value={selected.category} onChange={e=>{setCategory(e.target.value);setMessage("");}} className="rounded border p-1">
@@ -104,15 +104,15 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
         </select></label>
         {insert ? <div className="flex flex-wrap gap-3">
           {shareUrl && <>
-            <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">
+            <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">
               Revisar {labels[selected.active].toLowerCase()} de {selected.category}
             </a>
-            <button type="button" disabled={disabled} className="text-teal-800 underline"
+            <button type="button" disabled={disabled} className="text-primary underline"
               onClick={()=>insert("Catálogo de "+selected.category+": "+new URL(shareUrl,window.location.origin).href)}>
               Agregar {labels[selected.active].toLowerCase()} al borrador
             </button>
           </>}
-          <button type="button" disabled={disabled} className="text-teal-800 underline" onClick={()=>{
+          <button type="button" disabled={disabled} className="text-primary underline" onClick={()=>{
             const url=new URL(categoryPath,window.location.origin);
             insert("Ver "+selected.category+" en la tienda: "+url.href);
           }}>Agregar enlace a la categoría en la tienda</button>
@@ -120,7 +120,7 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
           <form key={selected.category+":"+selected.revision} onSubmit={save} className="grid gap-2">
             <div className="rounded border p-3">
               <p>Recurso publicado: {labels[selected.active]}</p>
-              <a href={categoryPath} target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">
+              <a href={categoryPath} target="_blank" rel="noopener noreferrer" className="text-primary underline">
                 Ver categoría en la tienda pública
               </a>
             </div>
@@ -133,7 +133,7 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
             <label>Recurso para compartir <select name="active" defaultValue={selected.active} disabled={busy} className="rounded border p-1">
               {Object.entries(labels).map(([key,label])=><option key={key} value={key}>{label}</option>)}
             </select></label>
-            <button disabled={busy} className="rounded bg-teal-800 px-3 py-2 text-white">Guardar recursos</button>
+            <button disabled={busy} className="rounded bg-primary px-3 py-2 text-white">Guardar recursos</button>
           </form>}
       </> : rows ? <p>{insert?"Aún no hay categorías para compartir.":"Asigna una categoría a un producto para configurar sus recursos."}</p> :
         !status && <p>Cargando categorías…</p>}
