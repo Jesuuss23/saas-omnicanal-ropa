@@ -1,7 +1,9 @@
 "use client";
+import type {Send} from "@/lib/api";
 
-import OrderAmounts, {getOrderAmounts} from "../../components/OrderAmounts";
-import {useEffect,useState} from "react";
+import OrderAmounts, {getOrderAmounts} from "@/components/OrderAmounts";
+import {useState} from "react";
+import {useApiData} from "@/lib/useApiData";
 
 const labels={PENDING_PAYMENT:"Pendiente de pago",CANCELLED:"Cancelado",EXPIRED:"Vencido"};
 type Order={id:string;name:string;phone:string;total:number;status:keyof typeof labels;createdAt:string;method?:string;address?:string;pickupHours?:string;freeDelivery?:boolean;fee?:number|null;latitude?:number|null;longitude?:number|null};
@@ -11,22 +13,8 @@ const money=new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 const date=new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
 
 function useOrderData<T>(url:string|null) {
-  const [data,setData]=useState<T|null>(null);
-  const [failed,setFailed]=useState(false);
-  const [version,setVersion]=useState(0);
-  useEffect(()=>{
-    setData(null);
-    setFailed(false);
-    if (!url) return;
-    const controller=new AbortController();
-    fetch(url,{signal:controller.signal,cache:"no-store"}).then(async response=>{
-      if (!response.ok) throw new Error();
-      const result:T=await response.json();
-      if (!controller.signal.aborted) setData(result);
-    }).catch(()=>{if (!controller.signal.aborted) setFailed(true);});
-    return ()=>controller.abort();
-  },[url,version]);
-  return {data,failed,refresh:()=>setVersion(v=>v+1)};
+  const {data,error,reload}=useApiData<T>(url);
+  return {data,failed:error!==null,refresh:reload};
 }
 
 function Items({url}:{url:string}) {
@@ -105,7 +93,6 @@ function ShareTracking({store,order,path}:{store:string;order:Order;path:string}
   </div>;
 }
 
-type Send=(path:string,body:string,method:"PUT")=>Promise<Response>;
 
 function DeliveryQuote({store,order,send,refresh}:{store:string;order:Order;send:Send;refresh:()=>void}) {
   const [amount,setAmount]=useState("");

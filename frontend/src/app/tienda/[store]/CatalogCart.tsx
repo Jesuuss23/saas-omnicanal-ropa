@@ -1,4 +1,5 @@
 "use client";
+import {apiFetch} from "@/lib/api";
 
 import ShareCatalog from "./ShareCatalog";
 import GuestContact from "./GuestContact";
@@ -69,7 +70,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
       const pending=hold ?? {key:crypto.randomUUID(),expiresAt:null};
       sessionStorage.setItem(reservationKey,JSON.stringify(pending));
       setHold(pending);
-      const response=await fetch("/api/public/stores/"+store+"/reservation",{
+      const response=await apiFetch("/api/public/stores/"+store+"/reservation",{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({key:pending.key,items:lines.map(({id,quantity,price})=>({id,quantity,price}))})
       });
@@ -97,7 +98,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
     if (!hold?.expiresAt || reserving) return;
     setReserving(true);
     try {
-      const response=await fetch("/api/public/stores/"+store+"/reservation",{
+      const response=await apiFetch("/api/public/stores/"+store+"/reservation",{
         method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:hold.key})
       });
       if (!response.ok) throw new Error();
@@ -156,7 +157,7 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
       for (let i=0;i<snapshot.length;i+=24) {
         const query=new URLSearchParams();
         for (const line of snapshot.slice(i,i+24)) query.append("ids",line.id);
-        const response=await fetch("/api/public/stores/"+store+"/availability?"+query,{cache:"no-store"});
+        const response=await apiFetch("/api/public/stores/"+store+"/availability?"+query,{cache:"no-store"});
         if (!response.ok) throw new Error();
         const rows:Availability[]=await response.json();
         for (const row of rows) available.set(row.id,row);

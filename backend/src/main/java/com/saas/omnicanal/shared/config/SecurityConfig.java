@@ -14,12 +14,11 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .cors(Customizer.withDefaults()) // Aplica las reglas de CorsConfig.java
-            .csrf(AbstractHttpConfigurer::disable) // Desactiva CSRF porque usarán JWT en el futuro
+            .csrf(AbstractHttpConfigurer::disable) // Cadena por defecto: las APIs reales tienen sus propias cadenas con CSRF
             .authorizeHttpRequests(auth -> auth
                 // Sin esto, un 401/404 de un endpoint público se convertía en 403 al despachar /error.
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/api/test").permitAll() // Hace pública la ruta de prueba
                 .anyRequest().authenticated() // Protege el resto del sistema
             );
         return http.build();

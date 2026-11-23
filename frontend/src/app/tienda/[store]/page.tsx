@@ -1,3 +1,4 @@
+import {backendBase} from "@/lib/api";
 import type {Metadata} from "next";
 import {cache} from "react";
 import Link from "next/link";
@@ -13,7 +14,7 @@ type Props = {
 };
 
 const loadCatalog = cache(async (store:string,query:string,size:string,color:string,category:string,page:number,variant:string) => {
-  const base = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/,"");
+  const base = backendBase();
   const response = await fetch(base+"/public/stores/"+store+"/catalog?"+new URLSearchParams({query,size,color,category,page:String(page),...(variant ? {variant} : {})}),{cache:"no-store"});
   if (response.status===404) notFound();
   if (!response.ok) throw new Error("No se pudo cargar el catálogo.");

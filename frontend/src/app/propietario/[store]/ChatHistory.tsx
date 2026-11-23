@@ -1,4 +1,5 @@
 "use client";
+import {apiFetch,ownerApi} from "@/lib/api";
 
 import {useEffect,useState} from "react";
 import {deliveryLabels} from "./deliveryLabels";
@@ -31,7 +32,7 @@ function Timeline({path,chat}:{path:string;chat:string}) {
           query.set("before",cursor.at);
           query.set("beforeKey",cursor.key);
         }
-        const res=await fetch("/api/owner/"+path+"/conversation?"+query,{cache:"no-store",signal:controller.signal});
+        const res=await apiFetch(ownerApi.url(path+"/conversation?"+query),{signal:controller.signal});
         if (!res.ok) throw new Error();
         const data:Page=await res.json();
         if (!controller.signal.aborted) setPage(current=>({

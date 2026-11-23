@@ -1,16 +1,30 @@
-import type { NextConfig } from "next";
+import type {NextConfig} from "next";
+
+const backend = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/, "");
+
+/**
+ * Rutas que el navegador llama en /api/... y Next reenvía al backend Spring.
+ * Las sesiones de propietario y superadmin viajan como cookie del mismo origen.
+ * Las rutas públicas se listan una por una para no exponer nada más del backend.
+ */
+const proxied = [
+  "/owner/:path*",
+  "/superadmin/:path*",
+  "/public/stores/:store/availability",
+  "/public/stores/:store/reservation",
+  "/public/stores/:store/reservation/guest",
+  "/public/stores/:store/reservation/guest/quote",
+  "/public/stores/:store/orders/:order",
+  "/public/stores/:store/orders/:order/mercadopago",
+];
 
 const nextConfig: NextConfig = {
   async rewrites() {
-    const base = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/$/, "");
-    return [{source: "/api/public/stores/:store/orders/:order/mercadopago", destination: base + "/public/stores/:store/orders/:order/mercadopago"}, {source: "/api/public/stores/:store/reservation/guest/quote", destination: base + "/public/stores/:store/reservation/guest/quote"}, {source: "/api/public/stores/:store/orders/:order", destination: base + "/public/stores/:store/orders/:order"}, {source: "/api/public/stores/:store/reservation/guest", destination: base + "/public/stores/:store/reservation/guest"}, {source: "/api/public/stores/:store/reservation", destination: base + "/public/stores/:store/reservation"}, {source: "/api/public/stores/:store/availability", destination: base + "/public/stores/:store/availability"}, {source: "/api/owner/:path*", destination: base + "/owner/:path*"}, { source: "/api/superadmin/:path*", destination: base + "/superadmin/:path*" }];
+    return proxied.map(path => ({source: "/api" + path, destination: backend + path}));
   },
   turbopack: {
     rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
+      "*.css": {loaders: ["@tailwindcss/turbopack"], as: "*.css"},
     },
   },
 };

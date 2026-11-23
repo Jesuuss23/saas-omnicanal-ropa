@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend · Omnicanal
 
-## Getting Started
+Sitio de venta, superadmin, panel de cada tienda y catálogo público. Next.js 16, React 19 y Tailwind 4.
 
-First, run the development server:
+## Levantar en local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+BACKEND_API_URL=http://localhost:8080/api npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`BACKEND_API_URL` es la URL del backend Spring (por defecto `http://localhost:8080/api`). El navegador
+solo habla con Next, que reenvía las rutas `/api/...` al backend.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | Qué hace |
+|---|---|
+| `npm run dev` | Servidor de desarrollo en http://localhost:3000 |
+| `npm run build` / `npm start` | Build y servidor de producción |
+| `npm run lint` | ESLint (debe quedar en 0 errores) |
+| `npm run typecheck` | Revisión de tipos de TypeScript |
+| `npm run e2e` | Pruebas de humo con Playwright (necesita frontend y backend levantados) |
 
-## Learn More
+Para probar también el panel del propietario: carga `e2e/seed.sql` en la base y corre `E2E_SEEDED=1 npm run e2e`.
 
-To learn more about Next.js, take a look at the following resources:
+## Rutas
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Ruta | Para quién |
+|---|---|
+| `/` | Portada |
+| `/superadmin` | Administración de la plataforma |
+| `/propietario/[tienda]` | Panel del dueño de la tienda |
+| `/tienda/[tienda]` | Catálogo público y carrito del comprador |
+| `/tienda/[tienda]/pedido/[pedido]` | Seguimiento privado del pedido |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+La estructura y las convenciones están en [`docs/frontend.md`](../docs/frontend.md).

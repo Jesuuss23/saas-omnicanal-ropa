@@ -1,5 +1,5 @@
 import Link from "next/link";
-import OrderAmounts from "../../components/OrderAmounts";
+import OrderAmounts from "@/components/OrderAmounts";
 
 type OrderItem={variant:string;name:string;size:string;color:string|null;quantity:number;unitPrice:number};
 export type Order={id:string;total:number;items?:OrderItem[];trackingToken?:string;freeDelivery?:boolean;deliveryFee?:number|null;method?:string|null};

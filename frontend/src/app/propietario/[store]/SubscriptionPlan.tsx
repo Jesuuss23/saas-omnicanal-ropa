@@ -1,8 +1,8 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import {useEffect,useState,type FormEvent} from "react";
 
-type Send = (path:string,body:string,method?:"POST"|"PUT")=>Promise<Response>;
 type Entitlement = {key:string;enabled:boolean;limit:number|null};
 type Plan = {code:string;name:string;monthlyPriceCents:number;currency:string;purchasable:boolean;entitlements:Entitlement[]};
 type Overview = {status:string;planCode:string|null;pendingPlanCode:string|null;trialEndsAt:string|null;
@@ -50,7 +50,7 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
   useEffect(()=>{
     if (!open) return;
     const controller = new AbortController();
-    fetch("/api/owner/"+path,{cache:"no-store",signal:controller.signal}).then(async r=>{
+    apiFetch(ownerApi.url(path),{signal:controller.signal}).then(async r=>{
       if (!r.ok) throw new Error();
       const body:Overview = await r.json();
       if (!controller.signal.aborted) setData(body);

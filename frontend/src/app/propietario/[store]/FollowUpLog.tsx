@@ -1,4 +1,5 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import {useState,type FormEvent} from "react";
 
@@ -6,7 +7,7 @@ const outcomes = {CONTACTED:"Cliente contactado", NO_RESPONSE:"Sin respuesta", D
 type Entry = {revision:number; scheduledDate:string; completedAt:string; outcome:keyof typeof outcomes; note:string};
 type Props = {
   path:string; contact:{chat:string;revision:number;followUpDate:string|null};
-  send:(path:string,body:string,method:"PUT")=>Promise<Response>;
+  send:Send;
   disabled:boolean; onSaved:()=>void;
 };
 const time = new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
@@ -21,7 +22,7 @@ export default function FollowUpLog({path,contact,send,disabled,onSaved}:Props) 
     try {
       const query=new URLSearchParams({chat:contact.chat});
       if (older && entries?.length) query.set("before",String(entries[entries.length-1].revision));
-      const res=await fetch("/api/owner/"+path+"/follow-up/history?"+query,{cache:"no-store"});
+      const res=await apiFetch(ownerApi.url(path+"/follow-up/history?"+query));
       if (!res.ok) throw new Error();
       const rows:Entry[]=await res.json();
       setEntries(previous=>older ? [...(previous || []),...rows] : rows);

@@ -1,5 +1,6 @@
 "use client";
-import {useEffect,useState,type FormEvent} from "react";
+import {API_EVENTS,apiFetch,ownerApi} from "@/lib/api";
+import {useEffect,useState,useSyncExternalStore,type FormEvent} from "react";
 import Link from "next/link";
 import ContactsCrm from "./ContactsCrm";
 import WhatsAppChannels from "./WhatsAppChannels";
@@ -15,17 +16,21 @@ import {useParams} from "next/navigation";
 
 type Profile = {id:string; name:string; email:string};
 
-async function send(path:string, body?:URLSearchParams|string, method: "POST" | "PUT" = "POST") {
-  const csrf = await fetch("/api/owner/csrf",{cache:"no-store"});
-  if (!csrf.ok) throw new Error();
-  const headers = new Headers({"X-CSRF-TOKEN":(await csrf.json()).token});
-  if (typeof body === "string") headers.set("Content-Type","application/json");
-  return fetch("/api/owner/"+path,{method,headers,body});
+const send = ownerApi.send;
+
+function subscribeHash(onChange:()=>void) {
+  window.addEventListener("hashchange",onChange);
+  return ()=>window.removeEventListener("hashchange",onChange);
 }
 
 export default function Owner() {
   const {store} = useParams<{store:string}>();
-  const [token,setToken] = useState("");
+  return <OwnerPanel key={store} store={store}/>;
+}
+
+function OwnerPanel({store}:{store:string}) {
+  // El enlace de invitación trae el token en el fragmento (#token), que nunca viaja al servidor.
+  const token = useSyncExternalStore(subscribeHash,()=>location.hash.slice(1),()=>"");
   const [profile,setProfile] = useState<Profile|null>(null);
   const [message,setMessage] = useState("");
   const [loading,setLoading] = useState(true);
@@ -33,9 +38,7 @@ export default function Owner() {
   useEffect(()=>{
     let current = true;
     const invitation = location.hash.slice(1);
-    setToken(invitation);
-    setLoading(true); setProfile(null);
-    fetch("/api/owner/me",{cache:"no-store"}).then(async res=>{
+    apiFetch(ownerApi.url("me")).then(async res=>{
       if (res.ok) {
         const data:Profile = await res.json();
         if (current && data.id === store && !invitation) setProfile(data);
@@ -44,6 +47,11 @@ export default function Owner() {
       .finally(()=>{if(current) setLoading(false);});
     return ()=>{current=false;};
   },[store]);
+  useEffect(()=>{
+    const expired = ()=>{setProfile(null); setMessage("Tu sesión terminó. Vuelve a ingresar.");};
+    window.addEventListener(API_EVENTS.unauthorized,expired);
+    return ()=>window.removeEventListener(API_EVENTS.unauthorized,expired);
+  },[]);
 
   async function submit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,11 +63,12 @@ export default function Owner() {
         const res = await send("activate",JSON.stringify({store,token,password}));
         if (!res.ok) {setMessage("Verifica la contraseña y la vigencia de la invitación."); return;}
         history.replaceState(null,"",location.pathname);
-        setToken(""); form.reset(); setMessage("Cuenta activada. Ingresa con tu contraseña.");
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+        form.reset(); setMessage("Cuenta activada. Ingresa con tu contraseña.");
       } else {
         const res = await send("login",new URLSearchParams({username:store,password}));
         if (!res.ok) {setMessage("Acceso denegado."); return;}
-        const session = await fetch("/api/owner/me",{cache:"no-store"});
+        const session = await apiFetch(ownerApi.url("me"));
         if (!session.ok) throw new Error();
         setProfile(await session.json());
       }

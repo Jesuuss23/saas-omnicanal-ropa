@@ -1,11 +1,16 @@
-import type { Metadata } from "next";
+import type {Metadata, Viewport} from "next";
+import {Toaster} from "@/components/ui/toaster";
+import {brand} from "@/lib/brand";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Omnicanal · Administración",
-  description: "Administración de la plataforma de comercio omnicanal",
+  title: {default: brand.name + " · " + brand.tagline, template: "%s · " + brand.name},
+  description: brand.description,
+  applicationName: brand.name,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="es"><body>{children}</body></html>;
+export const viewport: Viewport = {themeColor: "#115e59"};
+
+export default function RootLayout({children}: {children: React.ReactNode}) {
+  return <html lang="es-PE"><body className="min-h-dvh">{children}<Toaster/></body></html>;
 }

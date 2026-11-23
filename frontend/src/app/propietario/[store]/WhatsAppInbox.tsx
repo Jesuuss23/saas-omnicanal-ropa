@@ -1,9 +1,10 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import {useEffect,useState} from "react";
 
 type Message = {chat:string; id:string; text:string; receivedAt:string};
-type Props = {path:string; connected:boolean; send:(path:string,body:string)=>Promise<Response>};
+type Props = {path:string; connected:boolean; send:Send};
 const date = new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
 
 export default function WhatsAppInbox({path,connected,send}:Props) {
@@ -18,7 +19,7 @@ export default function WhatsAppInbox({path,connected,send}:Props) {
     async function load() {
       setFailed(false);
       try {
-        const res = await fetch("/api/owner/"+path+"/inbox",{cache:"no-store",signal:controller.signal});
+        const res = await apiFetch(ownerApi.url(path+"/inbox"),{signal:controller.signal});
         if (!res.ok) throw new Error();
         const messages:Message[] = await res.json();
         if (!controller.signal.aborted) setRows(messages);

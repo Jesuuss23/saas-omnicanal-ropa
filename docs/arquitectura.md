@@ -46,6 +46,10 @@ Tokens de Meta, Mercado Pago y similares se guardan con `SecretCipher` (AES-256-
 incluye propósito y tenant (`whatsapp-cloud/access-token/{tenant}`), así un ciphertext copiado a otra fila
 no descifra. Las APIs nunca devuelven secretos: solo `accessTokenConfigured: true`.
 
+## Frontend
+
+Ver `docs/frontend.md`.
+
 ## Deuda conocida
 
 Se movieron todas las clases a su capa, pero estos controladores todavía contienen SQL y deben pasar a

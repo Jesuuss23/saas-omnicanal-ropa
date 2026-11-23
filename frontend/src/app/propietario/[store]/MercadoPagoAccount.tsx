@@ -1,8 +1,8 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import {useEffect,useState} from "react";
 
-type Send = (path:string,body:string,method?:"POST"|"PUT")=>Promise<Response>;
 type Account = {available:boolean;linked:boolean;providerUserId:number|null;liveMode:boolean;status:string;
   lastError:string|null;linkedAt:string|null;tokenExpiresAt:string|null};
 
@@ -21,7 +21,7 @@ export default function MercadoPagoAccount({store,send}:{store:string;send:Send}
 
   useEffect(()=>{
     const controller = new AbortController();
-    fetch("/api/owner/"+path,{cache:"no-store",signal:controller.signal}).then(async r=>{
+    apiFetch(ownerApi.url(path),{signal:controller.signal}).then(async r=>{
       if (!r.ok) throw new Error();
       const body:Account = await r.json();
       if (controller.signal.aborted) return;
@@ -53,8 +53,7 @@ export default function MercadoPagoAccount({store,send}:{store:string;send:Send}
     if (!confirm("¿Desvincular Mercado Pago? Tu tienda dejará de aceptar pagos en línea.")) return;
     setBusy(true);setNotice("");
     try {
-      const csrf = await (await fetch("/api/owner/csrf",{cache:"no-store"})).json();
-      const res = await fetch("/api/owner/"+path,{method:"DELETE",headers:{"X-CSRF-TOKEN":csrf.token}});
+      const res = await send(path,undefined,"DELETE");
       if (!res.ok) throw new Error();
       setVersion(v=>v+1);
     } catch {setNotice("No se pudo desvincular.");}

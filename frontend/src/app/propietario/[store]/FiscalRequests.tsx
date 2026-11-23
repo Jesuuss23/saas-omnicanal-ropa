@@ -1,6 +1,8 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
-import {useEffect, useState} from "react";
+import {useState} from "react";
+import {useApiData} from "@/lib/useApiData";
 
 type Submission = {
   attemptedAt:string; cdrCode:string|null; description:string|null; notes:string[];
@@ -12,7 +14,7 @@ type DocumentRow = {
   status:string; series:string|null; number:number|null; hasXml:boolean; hasCdr:boolean;
 };
 type Page = {documents:DocumentRow[]; more:boolean};
-type Props = {store:string; salesRevision:number; send:(path:string,body:string)=>Promise<Response>};
+type Props = {store:string; salesRevision:number; send:Send};
 const statusLabels:Record<string,string> = {PENDING:"Pendiente de emisión", BETA_REVIEW:"Pendiente de confirmar con el proveedor", BETA_ACCEPTED:"Aceptado en beta", BETA_REJECTED:"Rechazado en beta"};
 const money = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 const date = new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",dateStyle:"short",timeStyle:"short"});
@@ -22,34 +24,17 @@ export default function FiscalRequests({store,salesRevision,send}:Props) {
   const [open,setOpen] = useState(false);
   const [page,setPage] = useState(0);
   const [refresh,setRefresh] = useState(0);
-  const [data,setData] = useState<Page|null>(null);
-  const [loadError,setLoadError] = useState(false);
   const [message,setMessage] = useState("");
   const [busy,setBusy] = useState(false);
 
-  useEffect(()=>{
-    if (!open) return;
-    const controller = new AbortController();
-    setData(null);
-    setLoadError(false);
-    async function load() {
-      try {
-        const res = await fetch("/api/owner/"+path+"?page="+page,{cache:"no-store",signal:controller.signal});
-        if (!res.ok) throw new Error();
-        const result:Page = await res.json();
-        if (!controller.signal.aborted) setData(result);
-      } catch {
-        if (!controller.signal.aborted) setLoadError(true);
-      }
-    }
-    void load();
-    return ()=>controller.abort();
-  },[open,path,page,refresh,salesRevision]);
+  const list = useApiData<Page>(open?ownerApi.url(path+"?page="+page):null, refresh+":"+salesRevision);
+  const data = list.data;
+  const loadError = list.error!==null;
 
   async function download(sale:string, kind:"xml"|"cdr") {
     setBusy(true); setMessage("");
     try {
-      const res = await fetch("/api/owner/"+path+"/"+sale+"/files/"+kind,{cache:"no-store"});
+      const res = await apiFetch(ownerApi.url(path+"/"+sale+"/files/"+kind));
       if (res.status===404) throw new Error("El archivo ya no está disponible. Actualiza la lista.");
       if (res.status===422) throw new Error("El archivo guardado tiene un formato inválido.");
       if (!res.ok) throw new Error("No se pudo descargar el archivo.");

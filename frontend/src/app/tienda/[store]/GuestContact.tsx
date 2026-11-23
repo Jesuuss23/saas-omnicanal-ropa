@@ -1,4 +1,5 @@
 "use client";
+import {apiFetch} from "@/lib/api";
 
 import {useEffect,useState,type FormEvent} from "react";
 
@@ -24,14 +25,13 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
   const [address,setAddress]=useState("");
   const needsQuote=method==="DELIVERY" && distancePricing && (minimum===null || subtotal<minimum);
   const [retry,setRetry]=useState(0);
+  function reload() {setReady(false);setMessage("");setRetry(n=>n+1);}
 
   useEffect(()=>{
     const controller=new AbortController();
-    setReady(false);
-    setMessage("");
     async function load() {
       try {
-        const response=await fetch(url,{headers:{"X-Reservation-Key":reservation},cache:"no-store",signal:controller.signal});
+        const response=await apiFetch(url,{headers:{"X-Reservation-Key":reservation},cache:"no-store",signal:controller.signal});
         if (!response.ok) throw new Error();
         const contact=await response.json();
         if (!controller.signal.aborted) {
@@ -60,7 +60,7 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
     setBusy(true);
     setMessage("");
     try {
-      const response=await fetch(url,{method:"PUT",headers:{"Content-Type":"application/json","X-Reservation-Key":reservation},
+      const response=await apiFetch(url,{method:"PUT",headers:{"Content-Type":"application/json","X-Reservation-Key":reservation},
         body:JSON.stringify({name:name.trim(),phone:phone.replace(/[\s()-]/g,"")})});
       if (!response.ok) {
         setMessage(response.status===410?"La reserva ya no está activa.":response.status===400?"Revisa el nombre y el teléfono.":"No se pudo guardar el contacto.");
@@ -89,11 +89,11 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
   async function quote() {
     setBusy(true);setMessage("");setFee(null);
     try {
-      const response=await fetch(url+"/quote",{method:"POST",headers:{"X-Reservation-Key":reservation,"Content-Type":"application/json"},
+      const response=await apiFetch(url+"/quote",{method:"POST",headers:{"X-Reservation-Key":reservation,"Content-Type":"application/json"},
         body:JSON.stringify({latitude:Number(lat),longitude:Number(lon)})});
       if (!response.ok) throw new Error();
       const result=await response.json();
-      if (result.fee==null) {setRetry(n=>n+1);return;}
+      if (result.fee==null) {reload();return;}
       setFee(result.fee);
     } catch {setMessage("No se pudo cotizar. Revisa las coordenadas y la reserva.");}
     finally {setBusy(false);}
@@ -103,10 +103,10 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
     setBusy(true);
     setMessage("");
     try {
-      const response=await fetch(url,{method:"POST",headers:{"X-Reservation-Key":reservation,"Content-Type":"application/json"},
+      const response=await apiFetch(url,{method:"POST",headers:{"X-Reservation-Key":reservation,"Content-Type":"application/json"},
         body:JSON.stringify({method,address:method==="DELIVERY"?address.trim():null,pickupRevision:pickup?.revision,freeDeliveryMinimum:minimum,point:needsQuote?{latitude:Number(lat),longitude:Number(lon)}:null,expectedFee:needsQuote?fee:null})});
       if (response.status===409) {
-        setRetry(n=>n+1);
+        reload();
         return;
       }
       if (!response.ok) {
@@ -156,6 +156,6 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
         <button type="button" disabled={(needsQuote && fee===null) || !method || (method==="DELIVERY" && !address.trim())} onClick={confirm} className="w-fit rounded border px-3 py-2">Confirmar pedido pendiente de pago</button></>}
     </fieldset>
     <p role="status">{message}</p>
-    {!ready && message && <button type="button" onClick={()=>setRetry(n=>n+1)} className="w-fit underline">Reintentar consulta</button>}
+    {!ready && message && <button type="button" onClick={reload} className="w-fit underline">Reintentar consulta</button>}
   </form>;
 }

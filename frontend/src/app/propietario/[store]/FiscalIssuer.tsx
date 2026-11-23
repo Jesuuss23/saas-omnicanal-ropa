@@ -1,10 +1,11 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import BetaCompany from "./BetaCompany";
 import {useEffect, useState, type FormEvent} from "react";
 
 type Issuer = {ruc:string; legalName:string; address:string; ubigeo:string; revision:number};
-type Props = {store:string; send:(path:string, body:string, method:"PUT"|"POST")=>Promise<Response>};
+type Props = {store:string; send:Send};
 const input = "mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2";
 
 export default function FiscalIssuer({store,send}:Props) {
@@ -14,15 +15,14 @@ export default function FiscalIssuer({store,send}:Props) {
   const [reload,setReload] = useState(0);
   const [busy,setBusy] = useState(false);
   const [retry,setRetry] = useState(false);
-  const [message,setMessage] = useState("");
+  const [message,setMessage] = useState("Cargando datos fiscales…");
   const path = "stores/"+store+"/billing/issuer";
 
   useEffect(()=>{
     const controller = new AbortController();
-    setIssuer(null); setRetry(false); setMessage("Cargando datos fiscales…");
     async function load() {
       try {
-        const res = await fetch("/api/owner/"+path,{cache:"no-store",signal:controller.signal});
+        const res = await apiFetch(ownerApi.url(path),{signal:controller.signal});
         if (!res.ok) throw new Error();
         const profile:Issuer = await res.json();
         if (!controller.signal.aborted) {setIssuer(profile); setSavedRuc(profile.ruc); setMessage("");}
@@ -39,7 +39,7 @@ export default function FiscalIssuer({store,send}:Props) {
     setBusy(true);
     setMessage("Consultando el RUC guardado en APIsPERU…");
     try {
-      const res = await fetch("/api/owner/"+path+"/verification", {cache:"no-store"});
+      const res = await apiFetch(ownerApi.url(path+"/verification"));
       if (res.ok) {
         const result:{ruc:string} = await res.json();
         setMessage("APIsPERU confirmó la empresa asignada para el RUC " + result.ruc + ".");
@@ -136,6 +136,6 @@ export default function FiscalIssuer({store,send}:Props) {
     </form>}
     {issuer && issuer.revision > 0 && <BetaCompany key={issuer.revision} path={path} ruc={savedRuc} revision={issuer.revision} send={send}/>}
     <p role="status" className="mt-2 text-sm">{message}</p>
-    {retry && <button className="text-teal-800 underline" onClick={()=>setReload(v=>v+1)}>Recargar ficha</button>}
+    {retry && <button className="text-teal-800 underline" onClick={()=>{setIssuer(null); setRetry(false); setMessage("Cargando datos fiscales…"); setReload(v=>v+1);}}>Recargar ficha</button>}
   </details>;
 }

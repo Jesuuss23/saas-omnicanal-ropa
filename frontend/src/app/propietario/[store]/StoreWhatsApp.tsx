@@ -1,9 +1,10 @@
 "use client";
+import {apiFetch,ownerApi,type Send} from "@/lib/api";
 
 import WhatsAppInbox from "./WhatsAppInbox";
 import {useEffect,useRef,useState} from "react";
 
-type Props = {store:string; send:(path:string,body:string)=>Promise<Response>};
+type Props = {store:string; send:Send};
 type Connection = {state:string; qr:string|null};
 
 const labels:Record<string,string> = {
@@ -34,7 +35,7 @@ export default function StoreWhatsApp({store,send}:Props) {
     let timer:ReturnType<typeof setTimeout>;
     async function check() {
       try {
-        const res = await fetch("/api/owner/"+path,{cache:"no-store",signal:controller.signal});
+        const res = await apiFetch(ownerApi.url(path),{signal:controller.signal});
         if (!res.ok) throw new Error(problem(res.status));
         const result:Connection = await res.json();
         if (controller.signal.aborted || id!==generation.current) return;
