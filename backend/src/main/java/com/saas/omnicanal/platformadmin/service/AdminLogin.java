@@ -1,12 +1,10 @@
 package com.saas.omnicanal.platformadmin.service;
 
-import java.nio.ByteBuffer;
-import java.security.GeneralSecurityException;
-import java.time.Instant;
+import com.saas.omnicanal.auth.model.MfaRequiredException;
+import com.saas.omnicanal.auth.model.MfaSubject;
+import com.saas.omnicanal.auth.service.MfaService;
+import com.saas.omnicanal.auth.service.Totp;
 import java.util.Locale;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import org.apache.commons.codec.binary.Base32;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -24,20 +22,25 @@ public class AdminLogin {
     private final String passwordHash;
     private final String secret;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final MfaService mfa;
 
-    AdminLogin(JdbcTemplate db, @Value("${SUPERADMIN_EMAIL:}") String email,
+    public static final String FULL_ROLE = "ROLE_PLATFORM_ADMIN";
+    /** Sesión a medias: contraseña correcta pero todavía sin app autenticadora enrolada. */
+    public static final String SETUP_ROLE = "ROLE_PLATFORM_ADMIN_SETUP";
+
+    AdminLogin(JdbcTemplate db, MfaService mfa, @Value("${SUPERADMIN_EMAIL:}") String email,
                @Value("${SUPERADMIN_PASSWORD_HASH:}") String passwordHash,
                @Value("${SUPERADMIN_TOTP_SECRET:}") String secret) {
         this.db = db;
+        this.mfa = mfa;
         this.email = email.strip().toLowerCase(Locale.ROOT);
         this.passwordHash = passwordHash;
         this.secret = secret;
     }
 
-    @Transactional(noRollbackFor = BadCredentialsException.class)
+    @Transactional(noRollbackFor = {BadCredentialsException.class, MfaRequiredException.class})
     public Authentication authenticate(Authentication request) {
-        if (email.isEmpty() || passwordHash.isEmpty() || !secret.matches("[A-Z2-7]{32}")
-                || !email.equalsIgnoreCase(request.getName())) {
+        if (email.isEmpty() || passwordHash.isEmpty() || !email.equalsIgnoreCase(request.getName())) {
             throw denied();
         }
         db.update("INSERT INTO platform_admin_login(email) VALUES (?) ON CONFLICT DO NOTHING", email);
@@ -51,33 +54,50 @@ public class AdminLogin {
             throw denied();
         }
         String code = (String) request.getDetails();
-        if (code == null || !code.matches("[0-9]{6}")) {
+        if (mfa.enabled(MfaSubject.SUPERADMIN, email)) {
+            // Segundo factor enrolado con QR: código de la app o código de recuperación.
+            if (code == null || code.isBlank()) throw new MfaRequiredException();
+            if (mfa.verify(MfaSubject.SUPERADMIN, email, code)) {
+                db.update("UPDATE platform_admin_login SET failures = 0 WHERE email = ?", email);
+                return admin(FULL_ROLE);
+            }
             throw denied();
         }
-        long now = Instant.now().getEpochSecond() / 30;
-        for (long step = now - 1; step <= now + 1; step++) {
-            if (code.equals(codeAt(secret, step)) && db.update("""
-                    UPDATE platform_admin_login SET last_step = ?, failures = 0
-                    WHERE email = ? AND last_step < ?
-                    """, step, email, step) == 1) {
-                return UsernamePasswordAuthenticationToken.authenticated(email, null,
-                        AuthorityUtils.createAuthorityList("ROLE_PLATFORM_ADMIN"));
+        if (secret.matches("[A-Z2-7]{32}")) {
+            // Secreto heredado de la variable SUPERADMIN_TOTP_SECRET.
+            if (code == null || code.isBlank()) throw new MfaRequiredException();
+            if (code == null || !code.matches("[0-9]{6}")) throw denied();
+            long now = Totp.currentStep();
+            for (long step = now - 1; step <= now + 1; step++) {
+                if (code.equals(codeAt(secret, step)) && db.update("""
+                        UPDATE platform_admin_login SET last_step = ?, failures = 0
+                        WHERE email = ? AND last_step < ?
+                        """, step, email, step) == 1) {
+                    return admin(FULL_ROLE);
+                }
             }
+            throw denied();
         }
-        throw denied();
+        // Sin segundo factor todavía: la sesión solo permite enrolar la app autenticadora.
+        db.update("UPDATE platform_admin_login SET failures = 0 WHERE email = ?", email);
+        return admin(SETUP_ROLE);
+    }
+
+    /** Hay un secreto heredado por variable de entorno (sin enrolamiento en base de datos). */
+    public boolean usesEnvironmentSecret() {
+        return secret.matches("[A-Z2-7]{32}");
+    }
+
+    public String email() {
+        return email;
+    }
+
+    private Authentication admin(String role) {
+        return UsernamePasswordAuthenticationToken.authenticated(email, null, AuthorityUtils.createAuthorityList(role));
     }
 
     public static String codeAt(String secret, long step) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA1");
-            mac.init(new SecretKeySpec(new Base32().decode(secret), "HmacSHA1"));
-            byte[] hash = mac.doFinal(ByteBuffer.allocate(8).putLong(step).array());
-            int offset = hash[hash.length - 1] & 15;
-            int value = ByteBuffer.wrap(hash, offset, 4).getInt() & Integer.MAX_VALUE;
-            return String.format(Locale.ROOT, "%06d", value % 1000000);
-        } catch (GeneralSecurityException ex) {
-            throw new IllegalStateException(ex);
-        }
+        return Totp.codeAt(secret, step);
     }
 
     private static BadCredentialsException denied() {

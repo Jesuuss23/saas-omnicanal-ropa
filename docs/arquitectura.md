@@ -48,7 +48,7 @@ no descifra. Las APIs nunca devuelven secretos: solo `accessTokenConfigured: tru
 
 ## Frontend
 
-Ver `docs/frontend.md`.
+Ver `docs/frontend.md`. Acceso y 2FA: `docs/seguridad.md`.
 
 ## Deuda conocida
 

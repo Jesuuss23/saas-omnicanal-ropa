@@ -1,5 +1,6 @@
 package com.saas.omnicanal.platformadmin.config;
 
+import com.saas.omnicanal.auth.model.MfaRequiredException;
 import com.saas.omnicanal.platformadmin.service.AdminLogin;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,6 +19,9 @@ class AdminSecurity {
         String root = "/api/superadmin";
         return http.securityMatcher(root + "/**")
                 .authorizeHttpRequests(auth -> auth.requestMatchers(root + "/csrf", root + "/login").permitAll()
+                        // Con sesión a medias (sin app autenticadora) solo se puede consultar el perfil y enrolar.
+                        .requestMatchers(root + "/me", root + "/mfa/setup", root + "/mfa/confirm")
+                        .hasAnyRole("PLATFORM_ADMIN", "PLATFORM_ADMIN_SETUP")
                         .anyRequest().hasRole("PLATFORM_ADMIN"))
                 .authenticationManager(login::authenticate)
                 .requestCache(cache -> cache.disable())
@@ -27,7 +31,8 @@ class AdminSecurity {
                 .formLogin(form -> form.loginPage(root + "/login").loginProcessingUrl(root + "/login")
                         .authenticationDetailsSource(req -> req.getParameter("code"))
                         .successHandler((req, res, auth) -> json(res, 200, "authenticated"))
-                        .failureHandler((req, res, ex) -> json(res, 401, "invalid_credentials")))
+                        .failureHandler((req, res, ex) -> json(res, 401,
+                                ex instanceof MfaRequiredException ? "mfa_required" : "invalid_credentials")))
                 .logout(logout -> logout.logoutUrl(root + "/logout")
                         .logoutSuccessHandler((req, res, auth) -> json(res, 200, "signed_out")))
                 .build();
