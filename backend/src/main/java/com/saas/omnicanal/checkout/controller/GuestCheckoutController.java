@@ -3,6 +3,9 @@ package com.saas.omnicanal.checkout.controller;
 import com.saas.omnicanal.checkout.service.OrderTrackingTokens;
 
 import com.saas.omnicanal.checkout.repository.WebOrderItemRepository;
+import com.saas.omnicanal.contact.controller.CustomerCookie;
+import com.saas.omnicanal.contact.service.ContactService;
+import com.saas.omnicanal.contact.service.CustomerAccountService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -26,10 +29,14 @@ class GuestCheckoutController {
     private final JdbcTemplate db;
 
     private final WebOrderItemRepository orderItems;
+    private final ContactService contacts;
+    private final CustomerAccountService customers;
 
-    GuestCheckoutController(JdbcTemplate db, WebOrderItemRepository orderItems) {
+    GuestCheckoutController(JdbcTemplate db, WebOrderItemRepository orderItems, ContactService contacts, CustomerAccountService customers) {
         this.db = db;
         this.orderItems = orderItems;
+        this.contacts = contacts;
+        this.customers = customers;
     }
 
     record Contact(@NotBlank @Size(max=150) String name,
@@ -77,7 +84,8 @@ class GuestCheckoutController {
     @PostMapping
     @Transactional
     ResponseEntity<Order> confirm(@PathVariable UUID store, @RequestHeader("X-Reservation-Key") UUID key,
-                                  @Valid @RequestBody(required=false) Choice choice) {
+                                  @Valid @RequestBody(required=false) Choice choice,
+                                  @CookieValue(name=CustomerCookie.NAME, required=false) String customer) {
         lockActive(store,key);
         var existing=db.query("SELECT id,merchandise_total,free_delivery,delivery_fee,delivery_method FROM web_checkout_order WHERE tenant_id=? AND reservation_id=?",
                 (rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2),rs.getBoolean(3),rs.getBigDecimal(4),rs.getString(5)),store,key);
@@ -124,6 +132,7 @@ class GuestCheckoutController {
                 GROUP BY r.tenant_id,r.id,t.free_delivery_minimum RETURNING id,merchandise_total,free_delivery,delivery_fee,delivery_method
                 """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2),rs.getBoolean(3),rs.getBigDecimal(4),rs.getString(5)),choice.method().name(),address,hours,charge,destination==null?null:destination.latitude(),destination==null?null:destination.longitude(),choice.method().name(),store,key,choice.method().name(),choice.freeDeliveryMinimum())
                 .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
+        contacts.attachOrder(store,header.id(),customers.contactFor(store,customer).orElse(null));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,header.id(),header.total(),header.freeDelivery(),header.deliveryFee(),header.method()));
     }
 

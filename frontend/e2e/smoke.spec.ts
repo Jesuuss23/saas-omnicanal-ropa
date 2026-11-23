@@ -187,5 +187,8 @@ test("catálogo público de la tienda", async ({page}) => {
   await page.getByRole("button", {name: "Agregar al carrito"}).first().click();
   await expect(page.getByRole("region", {name: "Carrito"}).getByText("Polo E2E", {exact: true})).toBeVisible();
   await expect(page.getByRole("button", {name: "Reservar por 15 minutos"})).toBeVisible();
+  await page.getByRole("link", {name: "Mi cuenta"}).click();
+  await expect(page.getByRole("heading", {name: "Mi cuenta"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Ingresa para ver tus pedidos"})).toBeVisible();
   expect(errors).toEqual([]);
 });

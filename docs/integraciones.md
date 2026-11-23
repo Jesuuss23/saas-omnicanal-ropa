@@ -17,6 +17,7 @@ Todas las credenciales globales llegan por variables de entorno. Las credenciale
 | `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, `MP_REDIRECT_URI`, `MP_WEBHOOK_SECRET` | Aplicación de Mercado Pago del SaaS (marketplace) |
 | `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD_HASH`, `SUPERADMIN_TOTP_SECRET` | Superadmin |
 | `APISPERU_*` | Facturación electrónica |
+| `GOOGLE_CLIENT_ID` | Client ID web de Google (OAuth) para "Continuar con Google" en la tienda pública. Sin él, el botón no aparece |
 
 ## WhatsApp: dos categorías
 
@@ -78,7 +79,8 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`).
   - confirmación de prueba gratis (vence en 48 h);
   - bienvenida;
   - recuperación de contraseña (vence en 1 h, un enlace por tienda);
-  - invitación de propietario (vence en 24 h).
+  - invitación de propietario (vence en 24 h);
+  - invitación de miembro del equipo (vence en 72 h).
 - **Seguridad de los enlaces:** los tokens viajan en el fragmento de la URL (`#token`), que no llega al servidor ni a los logs. En la base se guarda solo su SHA-256.
 
 ## Sitio de venta y prueba gratis
@@ -90,3 +92,16 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`).
 | `POST /api/public/signup/preview` | Datos de la solicitud a partir del token. |
 | `POST /api/public/signup/confirm` | Crea la tienda, el propietario con contraseña y la suscripción TRIAL. |
 | `POST /api/public/password-reset` y `/confirm` | Recuperación de contraseña del propietario. |
+
+## Cuentas de compradores con Google
+
+- **Alta en Google Cloud:** crear un *OAuth client ID* de tipo "Aplicación web" y agregar el dominio del frontend en
+  *Authorized JavaScript origins* (por ejemplo `https://tutienda.pe` y `http://localhost:3000` para desarrollo). No hace
+  falta *redirect URI*: el botón usa el modo popup de Google Identity Services.
+- **Verificación:** el backend valida el ID token con las llaves públicas de Google (firma RS256, emisor, audiencia igual
+  a `GOOGLE_CLIENT_ID`, vigencia y `email_verified`). Las llaves se guardan en memoria 6 horas.
+- **Sesión:** cookie `omni_customer` HttpOnly, SameSite=Lax, limitada a `/api/public/stores/{tienda}` y válida 30 días.
+  En la base solo va el SHA-256 del token (`customer_session`). Con `APP_BASE_URL` en https la cookie es `Secure`.
+- **Identidad:** la cuenta de Google o el correo verificado unen al comprador con su contacto. El teléfono escrito en el
+  checkout no prueba identidad: si ya es de otro contacto, aparece en "Posibles duplicados" del panel y el dueño decide
+  si los une. Cada fusión se puede deshacer (`contact_merge_log`).
