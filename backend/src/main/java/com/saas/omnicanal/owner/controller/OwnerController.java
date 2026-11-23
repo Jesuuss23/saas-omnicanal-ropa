@@ -3,6 +3,9 @@ package com.saas.omnicanal.owner.controller;
 import com.saas.omnicanal.notifications.service.EmailService;
 import com.saas.omnicanal.notifications.service.EmailTemplates;
 import com.saas.omnicanal.platformadmin.service.AuditService;
+import com.saas.omnicanal.team.model.StoreRole;
+import com.saas.omnicanal.team.model.StoreSession;
+import org.springframework.security.core.Authentication;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -95,14 +98,17 @@ class OwnerController {
         return Map.of("token", csrf.getToken());
     }
 
-    record Profile(UUID id, String name, String email, boolean active, String suspendedReason) {}
+    record Profile(UUID id, String name, String email, boolean active, String suspendedReason, StoreRole role) {}
 
     @GetMapping("/api/owner/me")
-    Profile profile(Principal principal) {
+    Profile profile(Authentication auth) {
+        // Sesiones previas a los roles no traen StoreSession: son del propietario.
+        StoreSession session = auth.getDetails() instanceof StoreSession s ? s : null;
         return db.queryForObject("""
                 SELECT t.name, o.email, t.suspended_reason FROM tenant t JOIN tenant_owner o ON o.tenant_id = t.id WHERE t.id = ?
-                """, (rs, row) -> new Profile(UUID.fromString(principal.getName()), rs.getString("name"),
-                rs.getString("email"), true, rs.getString("suspended_reason")), UUID.fromString(principal.getName()));
+                """, (rs, row) -> new Profile(UUID.fromString(auth.getName()), rs.getString("name"),
+                session == null || session.email() == null ? rs.getString("email") : session.email(), true,
+                rs.getString("suspended_reason"), session == null ? StoreRole.OWNER : session.role()), UUID.fromString(auth.getName()));
     }
 
     private static String digest(String token) {

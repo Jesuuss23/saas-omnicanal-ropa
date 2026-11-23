@@ -107,14 +107,14 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
         <p>{detail.pickup.address}</p>
         <p>Horario de recojo: {detail.pickup.hours}</p>
         <a href={"https://www.google.com/maps/dir/?"+new URLSearchParams({api:"1",destination:detail.pickup.address})}
-          target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">Ver ruta al local en Google Maps</a>
+          target="_blank" rel="noopener noreferrer" className="text-primary underline">Ver ruta al local en Google Maps</a>
       </section>}
       <OrderSummary order={detail} catalogPath={catalogPath}/>
-      {catalogPath && <Link href={catalogPath} className="inline-block rounded bg-teal-800 px-4 py-2 text-white">
+      {catalogPath && <Link href={catalogPath} className="inline-block rounded-full bg-primary px-4 py-2 text-primary-foreground">
         Volver al catálogo de la tienda
       </Link>}
     </> : !error && <p>Cargando pedido…</p>}
-    <button type="button" className="text-teal-800 underline" onClick={()=>setVersion(v=>v+1)}>Actualizar</button>
+    <button type="button" className="text-primary underline" onClick={()=>setVersion(v=>v+1)}>Actualizar</button>
   </main>;
 }
 

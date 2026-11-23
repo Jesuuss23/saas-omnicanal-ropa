@@ -3,9 +3,10 @@ import {apiFetch} from "@/lib/api";
 
 import ShareCatalog from "./ShareCatalog";
 import GuestContact from "./GuestContact";
-import {useEffect,useRef,useState} from "react";
+import {useEffect,useMemo,useRef,useState,type ReactNode} from "react";
+import {ImageOff, Minus, Plus, ShoppingBag, Trash2} from "lucide-react";
 
-export type Variant = {id:string; name:string; category:string|null; size:string; color:string|null; price:number; available:number};
+export type Variant = {id:string; productId:string; name:string; category:string|null; size:string; color:string|null; price:number; available:number; coverImage:string|null};
 type Availability = {id:string; price:number; available:number};
 type StockIssue = {message:string; available:number};
 type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number; available?:number};
@@ -20,7 +21,7 @@ function isLine(value:unknown):value is Line {
     Number.isSafeInteger(row.quantity) && row.quantity>0;
 }
 
-export default function CatalogCart({store,variants,query}:{store:string;variants:Variant[];query:string}) {
+export default function CatalogCart({store,variants,query,pager}:{store:string;variants:Variant[];query:string;pager?:ReactNode}) {
   const storageKey="store-cart:v1:"+store.toLowerCase();
   const [lines,setLines]=useState<Line[]>([]);
   const [ready,setReady]=useState(false);
@@ -34,6 +35,8 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
   const [reserving,setReserving]=useState(false);
   const locked=Boolean(hold) || reserving;
   const current=useRef<Line[]>([]);
+  const products=useMemo(()=>groupByProduct(variants),[variants]);
+  const [picked,setPicked]=useState<Record<string,string>>({});
 
   useEffect(()=>{
     try {
@@ -197,49 +200,118 @@ export default function CatalogCart({store,variants,query}:{store:string;variant
   }
 
   const subtotal=lines.reduce((sum,line)=>sum+Math.round(line.price*100)*line.quantity,0)/100;
-  return <>
-    {variants.length ? <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {variants.map(item=><li key={item.id} className="rounded-xl border border-stone-200 p-5">
-        {item.category && <p className="text-sm text-stone-600">{item.category}</p>}
-        <h2 className="text-xl font-semibold">{item.name}</h2>
-        <p className="my-2">Talla {item.size}{item.color && " · "+item.color}</p>
-        <p className="font-semibold">{currency.format(verified[item.id]?.price ?? item.price)}</p>
-        <p className="text-sm text-stone-600">
-          {(verified[item.id]?.available ?? item.available)===1 ? "1 unidad disponible" : (verified[item.id]?.available ?? item.available)+" unidades disponibles"}
-        </p>
-        <button type="button" disabled={!ready || locked} onClick={()=>add(item)} className="mt-3 rounded bg-teal-800 px-3 py-2 text-white">Agregar al carrito</button>
-        <ShareCatalog path={"/tienda/"+store+"?variant="+item.id} title={item.name+" · Talla "+item.size+(item.color?" · "+item.color:"")} label="Compartir prenda"/>
-      </li>)}
-    </ul> : <p>{query?"No hay prendas disponibles para esta búsqueda.":"No hay prendas disponibles en esta página."}</p>}
-    <p role="status" className="mt-2 text-sm">{notice}</p>
-    <section className="mt-8 rounded-xl border p-5" aria-label="Carrito">
-      <h2 className="text-xl font-semibold">Tu carrito</h2>
-      {storageError && <p role="alert">El navegador no pudo guardar o recuperar el carrito de esta pestaña.</p>}
-      {!ready ? <p>Cargando carrito…</p> : lines.length===0 ? <p>Tu carrito está vacío.</p> : <>
-        <ul className="divide-y">{lines.map(line=><li key={line.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-          <div><strong>{line.name}</strong><p>Talla {line.size}{line.color && " · "+line.color}</p>
-            <p>{currency.format(line.price)} por unidad</p>
-            {issues[line.id] && <p className="text-sm text-amber-800">{issues[line.id].message}</p>}</div>
-          <div className="flex items-center gap-3">
-            <button type="button" disabled={locked} aria-label={"Restar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,-1)} className="rounded border px-3 py-1">−</button>
-            <span>{line.quantity}</span>
-            <button type="button" disabled={locked} aria-label={"Sumar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,1)} className="rounded border px-3 py-1">+</button>
-            <button type="button" disabled={locked} className="underline" onClick={()=>save(current.current.filter(row=>row.id!==line.id),"Prenda retirada.")}>Retirar</button>
-          </div>
-        </li>)}</ul>
-        <p className="mt-3 font-semibold">Subtotal estimado {currency.format(subtotal)}</p>
-        <button type="button" disabled={checking || locked} onClick={()=>verify()} className="my-2 rounded border px-3 py-2">{checking?"Verificando…":"Verificar precios y stock"}</button>
-        {hasShortage && !locked && <button type="button" disabled={checking} onClick={applyAvailableQuantities}
-          className="my-2 rounded border px-3 py-2">Ajustar cantidades y retirar prendas agotadas</button>}
-        {hold?.expiresAt ? <><p role="status">Prendas reservadas hasta las {new Date(hold.expiresAt).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}.</p>
-          <GuestContact key={hold.key} store={store} reservation={hold.key} disabled={reserving}/>
-          <button type="button" disabled={reserving} onClick={releaseReservation} className="my-2 rounded border px-3 py-2">
-            {reserving?"Liberando…":"Liberar reserva y editar carrito"}
-          </button></> :
-          <button type="button" disabled={checking || reserving} onClick={reserve} className="ml-2 rounded bg-teal-800 px-3 py-2 text-white">
-            {reserving?"Confirmando…":hold?"Reintentar reserva":"Reservar por 15 minutos"}
-          </button>}
-      </>}
+  const units=lines.reduce((sum,line)=>sum+line.quantity,0);
+  const stockOf=(item:Variant)=>verified[item.id]?.available ?? item.available;
+  const priceOf=(item:Variant)=>verified[item.id]?.price ?? item.price;
+
+  function choose(product:Product,size:string,color:string|null) {
+    const match=product.variants.find(v=>v.size===size && v.color===color)
+      ?? product.variants.find(v=>v.size===size) ?? product.variants.find(v=>v.color===color);
+    if (match) setPicked(previous=>({...previous,[product.id]:match.id}));
+  }
+
+  return <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <section aria-label="Prendas">
+      {products.length ? <ul className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3">
+        {products.map(product=>{
+          const item=product.variants.find(v=>v.id===picked[product.id]) ?? product.variants[0];
+          const sizes=[...new Set(product.variants.map(v=>v.size))];
+          const colors=[...new Set(product.variants.filter(v=>v.size===item.size).map(v=>v.color).filter((c):c is string=>Boolean(c)))];
+          const stock=stockOf(item);
+          const prices=product.variants.map(priceOf);
+          const varies=Math.min(...prices)!==Math.max(...prices);
+          return <li key={product.id} className="group flex flex-col">
+            <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-muted">
+              {item.coverImage
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={"/api/public/stores/"+store+"/images/"+item.coverImage} alt={product.name} loading="lazy"
+                    className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/>
+                : <div className="grid size-full place-items-center text-muted-foreground"><ImageOff aria-hidden className="size-8"/></div>}
+              {stock<=3 && <span className="absolute top-2 left-2 rounded-full bg-card/90 px-2.5 py-1 text-xs font-medium shadow-sm">
+                {stock===1 ? "Última unidad" : "Quedan "+stock}</span>}
+            </div>
+            <div className="mt-3 flex flex-1 flex-col gap-2">
+              <div>
+                {product.category && <p className="text-xs tracking-wide text-muted-foreground uppercase">{product.category}</p>}
+                <h2 className="font-semibold leading-snug">{product.name}</h2>
+                <p className="font-semibold text-[var(--store)]">{currency.format(priceOf(item))}{varies && <span className="ml-1 text-xs font-normal text-muted-foreground">según talla</span>}</p>
+              </div>
+              <fieldset>
+                <legend className="sr-only">Talla de {product.name}</legend>
+                <div className="flex flex-wrap gap-1.5">{sizes.map(size=><button key={size} type="button" aria-pressed={size===item.size}
+                  onClick={()=>choose(product,size,item.color)}
+                  className={"h-8 min-w-8 rounded-lg border px-2 text-xs font-medium "+(size===item.size ? "border-[var(--store)] bg-[var(--store)] text-[var(--store-fg)]" : "border-border bg-card hover:border-foreground/40")}>{size}</button>)}</div>
+              </fieldset>
+              {colors.length>0 && <fieldset>
+                <legend className="sr-only">Color de {product.name}</legend>
+                <div className="flex flex-wrap gap-1.5">{colors.map(color=><button key={color} type="button" aria-pressed={color===item.color}
+                  onClick={()=>choose(product,item.size,color)}
+                  className={"h-7 rounded-full border px-2.5 text-xs "+(color===item.color ? "border-foreground font-medium" : "border-border text-muted-foreground hover:border-foreground/40")}>{color}</button>)}</div>
+              </fieldset>}
+              <p className="text-xs text-muted-foreground">Talla {item.size}{item.color && " · "+item.color} · {stock===1 ? "1 unidad disponible" : stock+" unidades disponibles"}</p>
+              <div className="mt-auto grid gap-1 pt-1">
+                <button type="button" disabled={!ready || locked} onClick={()=>add(item)}
+                  className="inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--store)] px-4 text-sm font-medium text-[var(--store-fg)] disabled:opacity-50">
+                  <Plus aria-hidden className="size-4"/>Agregar al carrito</button>
+                <ShareCatalog path={"/tienda/"+store+"?variant="+item.id} title={item.name+" · Talla "+item.size+(item.color?" · "+item.color:"")} label="Compartir prenda" tone="subtle"/>
+              </div>
+            </div>
+          </li>;
+        })}
+      </ul> : <div className="rounded-2xl border border-dashed border-border px-6 py-16 text-center text-muted-foreground">
+        {query?"No hay prendas disponibles para esta búsqueda.":"No hay prendas disponibles en esta página."}</div>}
+      {pager}
     </section>
-  </>;
+
+    <aside className="lg:sticky lg:top-20 lg:self-start">
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)]" aria-label="Carrito">
+        <h2 className="flex items-center gap-2 text-lg font-semibold"><ShoppingBag aria-hidden className="size-5 text-[var(--store)]"/>Tu carrito
+          {units>0 && <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{units} {units===1 ? "prenda" : "prendas"}</span>}</h2>
+        <p role="status" className="mt-2 text-sm text-muted-foreground empty:hidden">{notice}</p>
+        {storageError && <p role="alert" className="mt-2 text-sm text-destructive">El navegador no pudo guardar o recuperar el carrito de esta pestaña.</p>}
+        {!ready ? <p className="mt-3 text-sm">Cargando carrito…</p> : lines.length===0 ? <p className="mt-3 text-sm text-muted-foreground">Tu carrito está vacío. Elige una talla y agrega tus prendas.</p> : <>
+          <ul className="mt-3 divide-y divide-border">{lines.map(line=><li key={line.id} className="py-3">
+            <div className="flex justify-between gap-3">
+              <div className="min-w-0"><p className="truncate font-medium">{line.name}</p>
+                <p className="text-xs text-muted-foreground">Talla {line.size}{line.color && " · "+line.color} · {currency.format(line.price)} c/u</p></div>
+              <p className="shrink-0 text-sm font-medium">{currency.format(line.price*line.quantity)}</p>
+            </div>
+            {issues[line.id] && <p className="mt-1 text-xs text-warning-foreground"><span className="rounded bg-warning/30 px-1">{issues[line.id].message}</span></p>}
+            <div className="mt-2 flex items-center gap-2">
+              <button type="button" disabled={locked} aria-label={"Restar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,-1)} className="grid size-7 place-items-center rounded-full border border-border disabled:opacity-50"><Minus className="size-3.5"/></button>
+              <span className="w-6 text-center text-sm tabular-nums">{line.quantity}</span>
+              <button type="button" disabled={locked} aria-label={"Sumar una unidad de "+line.name} onClick={()=>changeQuantity(line.id,1)} className="grid size-7 place-items-center rounded-full border border-border disabled:opacity-50"><Plus className="size-3.5"/></button>
+              <button type="button" disabled={locked} className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50" onClick={()=>save(current.current.filter(row=>row.id!==line.id),"Prenda retirada.")}><Trash2 className="size-3.5"/>Retirar</button>
+            </div>
+          </li>)}</ul>
+          <p className="flex justify-between border-t border-border pt-3 font-semibold"><span>Subtotal estimado</span><span>{currency.format(subtotal)}</span></p>
+          <div className="mt-3 grid gap-2">
+            {hold?.expiresAt ? <><p role="status" className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">Prendas reservadas hasta las {new Date(hold.expiresAt).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}.</p>
+              <GuestContact key={hold.key} store={store} reservation={hold.key} disabled={reserving}/>
+              <button type="button" disabled={reserving} onClick={releaseReservation} className="h-10 rounded-full border border-border text-sm">
+                {reserving?"Liberando…":"Liberar reserva y editar carrito"}
+              </button></> :
+              <button type="button" disabled={checking || reserving} onClick={reserve} className="h-11 rounded-full bg-[var(--store)] text-sm font-semibold text-[var(--store-fg)] disabled:opacity-50">
+                {reserving?"Confirmando…":hold?"Reintentar reserva":"Reservar por 15 minutos"}
+              </button>}
+            {!locked && <button type="button" disabled={checking} onClick={()=>verify()} className="h-10 rounded-full border border-border text-sm">{checking?"Verificando…":"Verificar precios y stock"}</button>}
+            {hasShortage && !locked && <button type="button" disabled={checking} onClick={applyAvailableQuantities}
+              className="h-10 rounded-full border border-border text-sm">Ajustar cantidades y retirar prendas agotadas</button>}
+          </div>
+        </>}
+      </section>
+    </aside>
+  </div>;
+}
+
+type Product = {id:string; name:string; category:string|null; variants:Variant[]};
+
+function groupByProduct(variants:Variant[]):Product[] {
+  const byId=new Map<string,Product>();
+  for (const v of variants) {
+    const product=byId.get(v.productId) ?? {id:v.productId,name:v.name,category:v.category,variants:[]};
+    product.variants.push(v);
+    byId.set(v.productId,product);
+  }
+  return [...byId.values()];
 }

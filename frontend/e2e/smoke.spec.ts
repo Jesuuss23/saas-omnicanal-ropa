@@ -67,7 +67,7 @@ test("panel del propietario carga todas sus secciones", async ({page}, info) => 
   await expect(page.getByRole("heading", {name: "Hola, Tienda E2E"})).toBeVisible();
   await expect(page.getByText("Configura tu tienda")).toBeVisible();
   const nav = page.getByRole("navigation");
-  for (const link of ["Pedidos web", "Punto de venta", "Catálogo", "Clientes", "WhatsApp", "Apariencia", "Cobros", "Facturación", "Plan", "Cuenta y seguridad"]) {
+  for (const link of ["Pedidos web", "Punto de venta", "Catálogo", "Clientes", "WhatsApp", "Apariencia", "Cobros", "Facturación", "Equipo", "Plan", "Cuenta y seguridad"]) {
     await nav.getByRole("link", {name: link, exact: true}).click();
     await expect(page.getByRole("heading", {name: link, exact: true, level: 1})).toBeVisible();
     if (link === "WhatsApp") await expect(page.getByRole("heading", {name: "WhatsApp de la tienda"})).toBeVisible();
@@ -103,6 +103,42 @@ test("apariencia y fotos de producto", async ({page}, info) => {
   await page.keyboard.press("Escape");
   await page.getByRole("navigation").getByRole("link", {name: "Inicio"}).click();
   await expect(page.getByRole("heading", {name: "Hola, Tienda E2E"})).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("equipo: invitar a una vendedora y entrar con su rol", async ({page}, info) => {
+  test.skip(!process.env.E2E_SEEDED || info.project.name !== "desktop", "Requiere e2e/seed.sql; usa la cuenta sembrada antes de activar 2FA");
+  const errors = watchErrors(page);
+  await page.goto("/propietario/" + seededStore + "/equipo");
+  await page.getByLabel("Correo electrónico").fill("propietario@e2e.test");
+  await page.getByLabel("Contraseña").fill("e2e-propietario-2026");
+  await page.getByRole("button", {name: "Ingresar"}).click();
+  await expect(page.getByRole("heading", {name: "Equipo", level: 1})).toBeVisible();
+  await page.getByRole("button", {name: "Invitar persona"}).click();
+  await page.getByLabel("Nombre").fill("Vendedora E2E");
+  await page.getByLabel("Correo").fill("vendedora@e2e.test");
+  await page.getByRole("button", {name: "Enviar invitación"}).click();
+  const link = await page.getByLabel("Enlace de invitación").inputValue();
+  await expect(page.getByText("vendedora@e2e.test", {exact: true})).toBeVisible();
+  await expect(page.getByText("Invitación pendiente")).toBeVisible();
+  await page.getByRole("button", {name: "Cerrar sesión"}).click();
+  await expect(page.getByLabel(/contraseña/i)).toBeVisible();
+
+  await page.goto(link);
+  await expect(page.getByRole("heading", {name: "Únete al equipo"})).toBeVisible();
+  await page.getByLabel("Nueva contraseña").fill("vendedora-e2e-2026");
+  await page.getByRole("button", {name: "Activar cuenta"}).click();
+  await expect(page.getByText("Cuenta activada")).toBeVisible();
+  await page.getByLabel("Correo electrónico").fill("vendedora@e2e.test");
+  await page.getByLabel("Contraseña").fill("vendedora-e2e-2026");
+  await page.getByRole("button", {name: "Ingresar"}).click();
+  await expect(page.getByRole("heading", {name: "Hola, Tienda E2E"})).toBeVisible();
+  const nav = page.getByRole("navigation");
+  await expect(nav.getByRole("link", {name: "Punto de venta"})).toBeVisible();
+  await expect(nav.getByRole("link", {name: "Equipo"})).toHaveCount(0);
+  await expect(nav.getByRole("link", {name: "Cobros"})).toHaveCount(0);
+  await page.goto("/propietario/" + seededStore + "/plan");
+  await expect(page.getByText("Esta sección es solo para el propietario")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -147,5 +183,9 @@ test("catálogo público de la tienda", async ({page}) => {
   const errors = watchErrors(page);
   await page.goto("/tienda/" + seededStore);
   await expect(page.getByRole("heading", {name: /Tienda E2E/})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Polo E2E"})).toBeVisible();
+  await page.getByRole("button", {name: "Agregar al carrito"}).first().click();
+  await expect(page.getByRole("region", {name: "Carrito"}).getByText("Polo E2E", {exact: true})).toBeVisible();
+  await expect(page.getByRole("button", {name: "Reservar por 15 minutos"})).toBeVisible();
   expect(errors).toEqual([]);
 });

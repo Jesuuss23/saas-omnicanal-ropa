@@ -34,8 +34,19 @@ Culqi), Pagos (webhooks de Culqi y Mercado Pago), Auditoría y Seguridad. Los ti
 `src/app/propietario/[store]/layout.tsx` monta `OwnerGate`: muestra ingreso o activación por invitación hasta que hay
 sesión, y luego `StoreShell` (barra lateral) con `useStore()` disponible para cada página. Secciones: Inicio (métricas,
 ventas por día y pasos de configuración), Pedidos web, Punto de venta, Catálogo (con fotos y etiquetas QR), Clientes,
-WhatsApp, Apariencia (nombre, logo, color, contacto), Cobros, Facturación, Plan y Cuenta. Los componentes de cada
+WhatsApp, Apariencia (nombre, logo, color, contacto), Cobros, Facturación, Equipo, Plan y Cuenta. Los componentes de cada
 módulo (`Catalog`, `WebOrders`, `PointOfSale`…) siguen en la carpeta de la ruta.
+
+El menú depende de `profile.role` (`roleAccess` en `StoreContext`): el vendedor solo ve las secciones de venta y el
+encargado no ve Cobros, Equipo, Plan ni Cuenta. Si alguien abre por enlace una sección fuera de su rol, `StoreShell`
+muestra un aviso en vez de la página. La invitación de un miembro llega como `#m.<id>.<token>` y la del propietario como
+`#<token>`; ambas se activan en `OwnerGate`.
+
+## Tienda pública
+
+`src/app/tienda/[store]` se renderiza en el servidor. La cabecera usa la apariencia de la tienda: el color del dueño
+llega como `--store` y el texto encima (`--store-fg`) se calcula por luminancia en `brand.ts`. `CatalogCart` agrupa las
+variantes por producto, deja elegir talla y color, y mantiene la reserva de 15 minutos y el contacto del invitado.
 
 ## Diseño
 

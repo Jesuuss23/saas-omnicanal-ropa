@@ -118,42 +118,42 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
     finally {setBusy(false);}
   }
 
-  if (order) return <section className="my-4 rounded border p-3" role="status">
+  if (order) return <section className="my-2 rounded-xl border border-border p-3 text-sm" role="status">
     <h3 className="font-semibold">Pedido pendiente de pago</h3>
     <p>Código de pedido: {order.id}</p>
     <OrderSummary order={order}/>
     {order.trackingToken && <a href={"/tienda/"+store+"/pedido/"+order.id+"#"+order.trackingToken}
-      className="my-2 inline-block text-teal-800 underline">Abrir enlace privado del pedido</a>}
+      className="my-2 inline-block font-medium text-[var(--store)] underline">Abrir enlace privado del pedido</a>}
     <p>Al liberar la reserva o llegar a su vencimiento, este pedido se cierra.</p>
   </section>;
 
-  return <form onSubmit={save} className="my-4 grid max-w-md gap-3">
+  return <form onSubmit={save} className="my-2 grid gap-3 text-sm">
     <fieldset disabled={disabled || busy || !ready} className="grid gap-2">
       <legend className="font-semibold">Continuar como invitado</legend>
       <label>Nombre <input autoComplete="name" required maxLength={150} value={name}
-        onChange={e=>{setName(e.target.value);setMessage("");setSaved(false);}} className="block w-full rounded border p-2"/></label>
+        onChange={e=>{setName(e.target.value);setMessage("");setSaved(false);}} className="mt-1 block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"/></label>
       <label>Teléfono de contacto <input type="tel" autoComplete="tel" required maxLength={30} value={phone}
-        onChange={e=>{setPhone(e.target.value);setMessage("");setSaved(false);}} className="block w-full rounded border p-2"/></label>
-      <button className="w-fit rounded bg-teal-800 px-3 py-2 text-white">{busy?"Guardando…":"Guardar contacto"}</button>
+        onChange={e=>{setPhone(e.target.value);setMessage("");setSaved(false);}} className="mt-1 block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"/></label>
+      <button className="h-10 w-full rounded-full bg-[var(--store)] px-4 text-sm font-semibold text-[var(--store-fg)] disabled:opacity-50">{busy?"Guardando…":"Guardar contacto"}</button>
       {saved && <>
-        <label>Forma de entrega <select value={method} onChange={e=>setMethod(e.target.value)} className="rounded border p-2">
+        <label>Forma de entrega <select value={method} onChange={e=>setMethod(e.target.value)} className="h-10 rounded-lg border border-input bg-background px-3 text-sm">
           {pickup && <option value="">Elige una opción</option>}
           <option value="DELIVERY">Delivery</option>
           {pickup && <option value="PICKUP">Recojo en tienda</option>}
         </select></label>
         {method==="PICKUP" && pickup && <p>{pickup.address} · {pickup.hours}</p>}
         {method==="DELIVERY" && <label>Dirección de entrega<input value={address} maxLength={250} autoComplete="street-address"
-          onChange={e=>{setAddress(e.target.value);setFee(null);}} className="block w-full rounded border p-2"/>
+          onChange={e=>{setAddress(e.target.value);setFee(null);}} className="mt-1 block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"/>
           <span className="text-sm">{minimum!==null && subtotal>=minimum ? "Delivery gratis para este pedido." :
             needsQuote ? "La tarifa se calcula desde el punto de despacho hasta las coordenadas de entrega." : minimum!==null ? "Delivery gratis desde S/ "+minimum.toFixed(2)+". Tarifa de este pedido pendiente." : "Tarifa de envío pendiente."}</span></label>}
         {needsQuote && <>
           <button type="button" onClick={useLocation} className="w-fit underline">Usar mi ubicación como destino</button>
-          <label>Latitud de entrega<input type="number" min="-90" max="90" step="0.000001" value={lat} onChange={e=>{setLat(e.target.value);setFee(null);}} className="block w-full rounded border p-2"/></label>
-          <label>Longitud de entrega<input type="number" min="-180" max="180" step="0.000001" value={lon} onChange={e=>{setLon(e.target.value);setFee(null);}} className="block w-full rounded border p-2"/></label>
+          <label>Latitud de entrega<input type="number" min="-90" max="90" step="0.000001" value={lat} onChange={e=>{setLat(e.target.value);setFee(null);}} className="mt-1 block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"/></label>
+          <label>Longitud de entrega<input type="number" min="-180" max="180" step="0.000001" value={lon} onChange={e=>{setLon(e.target.value);setFee(null);}} className="mt-1 block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"/></label>
           <button type="button" className="w-fit underline" disabled={!lat || !lon} onClick={quote}>Cotizar por distancia en línea recta</button>
           {fee!==null && <p>Envío S/ {fee.toFixed(2)} · Total S/ {(subtotal+fee).toFixed(2)}</p>}
         </>}
-        <button type="button" disabled={(needsQuote && fee===null) || !method || (method==="DELIVERY" && !address.trim())} onClick={confirm} className="w-fit rounded border px-3 py-2">Confirmar pedido pendiente de pago</button></>}
+        <button type="button" disabled={(needsQuote && fee===null) || !method || (method==="DELIVERY" && !address.trim())} onClick={confirm} className="h-10 w-full rounded-full border border-border px-4 text-sm">Confirmar pedido pendiente de pago</button></>}
     </fieldset>
     <p role="status">{message}</p>
     {!ready && message && <button type="button" onClick={reload} className="w-fit underline">Reintentar consulta</button>}

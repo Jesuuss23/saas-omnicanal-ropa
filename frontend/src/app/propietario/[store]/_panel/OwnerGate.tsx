@@ -53,13 +53,18 @@ export function OwnerGate({store, children}: {store: string; children: React.Rea
   const refreshProfile = useCallback(() => { loadProfile().then(p => { if (p) setProfile(p); }).catch(() => {}); }, [loadProfile]);
   const context = useMemo(() => profile && {store, profile, send: ownerApi.send, refreshProfile}, [store, profile, refreshProfile]);
 
+  // Invitación de un miembro del equipo: #m.<id>.<token>. La del propietario es solo el token.
+  const memberInvite = /^m\.([0-9a-f-]{36})\.(.+)$/i.exec(token);
+
   async function activate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const password = String(new FormData(form).get("password"));
     setBusy(true); setMessage("");
     try {
-      const res = await ownerApi.send("activate", JSON.stringify({store, token, password}));
+      const res = memberInvite
+        ? await ownerApi.send("members/activate", JSON.stringify({store, member: memberInvite[1], token: memberInvite[2], password}))
+        : await ownerApi.send("activate", JSON.stringify({store, token, password}));
       if (!res.ok) { setMessage("Verifica la contraseña y la vigencia de la invitación."); return; }
       history.replaceState(null, "", location.pathname);
       window.dispatchEvent(new HashChangeEvent("hashchange"));
@@ -87,7 +92,8 @@ export function OwnerGate({store, children}: {store: string; children: React.Rea
   if (loading) return <main className="grid min-h-dvh place-items-center"><Spinner label="Cargando tu tienda…"/></main>;
 
   if (!context) return token
-    ? <AuthShell eyebrow="Invitación" title="Activa tu acceso" description="Crea la contraseña con la que administrarás tu tienda.">
+    ? <AuthShell eyebrow="Invitación" title={memberInvite ? "Únete al equipo" : "Activa tu acceso"}
+      description={memberInvite ? "Crea tu contraseña para ingresar al panel de la tienda con tu correo." : "Crea la contraseña con la que administrarás tu tienda."}>
       <form onSubmit={activate} className="grid gap-5">
         <Field label="Nueva contraseña" htmlFor="new-password" hint="Al menos 12 caracteres. Usa una frase que solo tú conozcas.">
           <Input id="new-password" type="password" name="password" required minLength={12} maxLength={72} autoComplete="new-password" disabled={busy}/>
