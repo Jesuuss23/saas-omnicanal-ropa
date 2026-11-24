@@ -4,6 +4,9 @@ server:
     include-message: always
 
 spring:
+  config:
+    # Variables locales en un .env (formato CLAVE=valor). Las variables del sistema tienen prioridad. Ver .env.example.
+    import: "optional:file:./.env[.properties],optional:file:../.env[.properties]"
   web:
     error:
       # Spring Boot 4 lee los mensajes de error desde aquí (server.error.* ya no aplica a la respuesta JSON).
