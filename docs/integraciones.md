@@ -8,7 +8,7 @@ Todas las credenciales globales llegan por variables de entorno. Las credenciale
 | Variable | Uso |
 |----------|-----|
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | PostgreSQL |
-| `SECRETS_ENCRYPTION_KEY` | Clave maestra AES-256 (32 bytes en Base64: `openssl rand -base64 32`). Sin ella no se guardan tokens |
+| `SECRETS_ENCRYPTION_KEY` | Clave maestra AES-256 (32 bytes en Base64: `openssl rand -base64 32`). Sin ella no se guardan tokens ni se puede activar la verificación en dos pasos; el backend lo avisa en el log al arrancar |
 | `PUBLIC_API_BASE_URL` | URL pública del backend (para URLs de webhook), p. ej. `https://api.tusaas.com` |
 | `STOREFRONT_BASE_URL` | URL pública del frontend (retorno desde Mercado Pago) |
 | `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_WEBHOOK_SECRET` | Evolution API (key global solo para administración) |
@@ -17,7 +17,7 @@ Todas las credenciales globales llegan por variables de entorno. Las credenciale
 | `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, `MP_REDIRECT_URI`, `MP_WEBHOOK_SECRET` | Aplicación de Mercado Pago del SaaS (marketplace) |
 | `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD_HASH`, `SUPERADMIN_TOTP_SECRET` | Superadmin |
 | `APISPERU_*` | Facturación electrónica |
-| `GOOGLE_GENAI_API_KEY`, `GEMINI_MODEL` | Clave de Gemini (Google AI Studio) para la IA vendedora y modelo (por defecto `gemini-flash-latest`). Sin clave la IA no responde y el panel lo indica |
+| `GOOGLE_GENAI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | Clave de Gemini (Google AI Studio) para la IA vendedora, modelo (por defecto `gemini-3.5-flash`) y modelo de respaldo ante saturación (por defecto `gemini-flash-latest`). Sin clave la IA no responde y el panel lo indica |
 | `GOOGLE_CLIENT_ID` | Client ID web de Google (OAuth) para "Continuar con Google" en la tienda pública. Sin él, el botón no aparece |
 
 ## WhatsApp: dos categorías
@@ -113,8 +113,11 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`).
 ## IA vendedora (Gemini)
 
 - **Clave:** `GOOGLE_GENAI_API_KEY` desde Google AI Studio.
-- **Modelo:** `GEMINI_MODEL`, por defecto `gemini-flash-latest` (alias de Google que siempre apunta al Flash vigente).
-  Los modelos con versión fija se retiran y entonces responden 404; la familia `gemini-1.5` ya no existe.
+- **Modelo:** `GEMINI_MODEL`, por defecto `gemini-3.5-flash`. Los modelos con versión fija se retiran y entonces
+  responden 404; la familia `gemini-1.5` ya no existe.
+- **Saturación (429/503 "high demand"):** se reintenta el mismo modelo con espera creciente
+  (`assistant.gemini-retry-delay-ms`, 1,5 s y luego 3 s) y el último intento usa `GEMINI_FALLBACK_MODEL`
+  (por defecto `gemini-flash-latest`). Los errores 4xx distintos de 429 no se reintentan.
   Al arrancar, el backend consulta `GET /v1beta/models/{modelo}`: si no existe deja en ERROR la respuesta de Google y la
   lista de modelos disponibles para la clave.
 - **Errores:** cada fallo de Gemini queda en ERROR con código HTTP, estado y mensaje de Google

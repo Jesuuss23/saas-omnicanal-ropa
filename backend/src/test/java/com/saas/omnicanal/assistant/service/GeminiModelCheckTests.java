@@ -37,7 +37,7 @@ class GeminiModelCheckTests {
         });
         google.start();
         return new GeminiResponder(mock(ObjectProvider.class), mock(PublicCatalogRepository.class), "clave-prueba", model,
-                "http://127.0.0.1:" + google.getAddress().getPort() + "/v1beta");
+                "http://127.0.0.1:" + google.getAddress().getPort() + "/v1beta", "gemini-flash-latest", 0);
     }
 
     @Test
@@ -50,6 +50,14 @@ class GeminiModelCheckTests {
         var r = responder("gemini-1.5-flash");
         assertEquals("gemini-1.5-flash", r.model());
         assertFalse(r.checkModel());
+    }
+
+    @Test
+    void overloadIsRetriedButBadRequestsAreNot() {
+        assertTrue(GeminiResponder.transientFailure(new RuntimeException(new ApiException(503, "UNAVAILABLE", "high demand"))));
+        assertTrue(GeminiResponder.transientFailure(new ApiException(429, "RESOURCE_EXHAUSTED", "quota")));
+        assertFalse(GeminiResponder.transientFailure(new ApiException(404, "NOT_FOUND", "no model")));
+        assertFalse(GeminiResponder.transientFailure(new IllegalStateException("otro")));
     }
 
     @Test

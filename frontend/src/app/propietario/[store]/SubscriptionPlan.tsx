@@ -40,15 +40,13 @@ function loadCulqi():Promise<CulqiGlobal> {
 /** Plan del SaaS: el pago se tokeniza con Culqi Checkout y la activación llega por webhook al backend. */
 export default function SubscriptionPlan({store,send}:{store:string;send:Send}) {
   const path = "stores/"+store+"/subscription";
-  const [open,setOpen] = useState(false);
-  const [data,setData] = useState<Overview|null>(null);
+    const [data,setData] = useState<Overview|null>(null);
   const [plan,setPlan] = useState<Plan|null>(null);
   const [notice,setNotice] = useState("");
   const [busy,setBusy] = useState(false);
   const [version,setVersion] = useState(0);
 
   useEffect(()=>{
-    if (!open) return;
     const controller = new AbortController();
     apiFetch(ownerApi.url(path),{signal:controller.signal}).then(async r=>{
       if (!r.ok) throw new Error();
@@ -56,7 +54,7 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
       if (!controller.signal.aborted) setData(body);
     }).catch(()=>{if (!controller.signal.aborted) setNotice("No se pudo cargar tu plan.");});
     return ()=>controller.abort();
-  },[open,path,version]);
+  },[path,version]);
 
   useEffect(()=>{
     if (data?.status!=="PENDING_PAYMENT") return;
@@ -93,8 +91,8 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
     finally {setBusy(false);}
   }
 
-  return <details className="rounded-xl border bg-card p-5 shadow-card" onToggle={e=>setOpen(e.currentTarget.open)}>
-    <summary className="cursor-pointer font-semibold">Plan y suscripción</summary>
+  return <section className="rounded-xl border bg-card p-5 shadow-card" aria-labelledby="plan-title">
+    <h2 id="plan-title" className="font-semibold">Plan y suscripción</h2>
     {notice && <p role="status" className="my-3">{notice}</p>}
     {!data ? <p className="my-3">Cargando…</p> : <>
       <p className="my-3"><span className="font-medium">{statusLabels[data.status] ?? data.status}</span>
@@ -125,5 +123,5 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
         </div>
       </form>}
     </>}
-  </details>;
+  </section>;
 }

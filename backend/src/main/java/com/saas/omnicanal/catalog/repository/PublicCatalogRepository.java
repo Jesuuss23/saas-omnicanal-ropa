@@ -45,8 +45,9 @@ public class PublicCatalogRepository {
     }
 
     public List<String> sizes(UUID tenant, Filters f) {
-        return db.queryForList("SELECT DISTINCT v.size " + MATCHES + CATEGORY + COLOR
-                + " AND v.size <> '' ORDER BY v.size", String.class,
+        // Agrupado para poder ordenar las tallas de forma natural (XS, S, M, L…, luego 28, 30…).
+        return db.queryForList("SELECT v.size " + MATCHES + CATEGORY + COLOR
+                + " AND v.size <> '' GROUP BY v.size ORDER BY array_position(ARRAY['XXS','XS','S','M','L','XL','XXL','XXXL'], upper(trim(v.size))) NULLS LAST, length(v.size), v.size", String.class,
                 tenant, f.query(), f.category(), f.category(), f.color(), f.color());
     }
 
@@ -65,7 +66,7 @@ public class PublicCatalogRepository {
                          ORDER BY i.position LIMIT 1) AS cover
                 """ + MATCHES + CATEGORY + SIZE + COLOR + """
                    AND (CAST(? AS uuid) IS NULL OR v.id = ?)
-                 ORDER BY p.name, p.id, v.size, v.color, v.id LIMIT ? OFFSET ?
+                 ORDER BY p.name, p.id, array_position(ARRAY['XXS','XS','S','M','L','XL','XXL','XXXL'], upper(trim(v.size))) NULLS LAST, length(v.size), v.size, v.color, v.id LIMIT ? OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3),
                 rs.getString(4), rs.getString(5), rs.getString(6), rs.getBigDecimal(7), rs.getInt("available"),
                 rs.getObject("cover", UUID.class)),
