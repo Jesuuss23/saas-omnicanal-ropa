@@ -10,7 +10,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * Cuenta del comprador: sin sesión de Spring (la cookie propia la valida CustomerAccountService).
- * Sin CSRF de Spring: la cookie es SameSite=Lax y los POST exigen JSON, que un formulario de otro sitio no puede enviar.
+ * Sin CSRF de Spring: la cookie es SameSite=Lax y los POST y PUT exigen JSON, que un formulario de otro sitio no puede enviar.
  */
 @Configuration
 class CustomerAccountSecurity {
@@ -23,7 +23,8 @@ class CustomerAccountSecurity {
                 .requestCache(c -> c.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
-                        .requestMatchers(HttpMethod.GET, base, base + "/config").permitAll()
+                        .requestMatchers(HttpMethod.GET, base, base + "/config", base + "/preferences").permitAll()
+                        .requestMatchers(HttpMethod.PUT, base + "/preferences").permitAll()
                         .requestMatchers(HttpMethod.POST, base + "/google", base + "/logout").permitAll()
                         .anyRequest().denyAll())
                 .build();

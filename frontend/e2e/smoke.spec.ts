@@ -67,7 +67,7 @@ test("panel del propietario carga todas sus secciones", async ({page}, info) => 
   await expect(page.getByRole("heading", {name: "Hola, Tienda E2E"})).toBeVisible();
   await expect(page.getByText("Configura tu tienda")).toBeVisible();
   const nav = page.getByRole("navigation");
-  for (const link of ["Pedidos web", "Punto de venta", "Catálogo", "Clientes", "WhatsApp", "Apariencia", "Asistente IA", "Cobros", "Facturación", "Equipo", "Plan", "Cuenta y seguridad"]) {
+  for (const link of ["Pedidos web", "Punto de venta", "Catálogo", "Clientes", "WhatsApp", "Apariencia", "Asistente IA", "Marketing", "Cobros", "Facturación", "Equipo", "Plan", "Cuenta y seguridad"]) {
     await nav.getByRole("link", {name: link, exact: true}).click();
     await expect(page.getByRole("heading", {name: link, exact: true, level: 1})).toBeVisible();
     if (link === "WhatsApp") {
@@ -76,6 +76,8 @@ test("panel del propietario carga todas sus secciones", async ({page}, info) => 
       await expect(page.getByRole("heading", {name: "WhatsApp de la tienda"})).toBeVisible();
     }
     if (link === "Asistente IA") await expect(page.getByRole("heading", {name: "Pruébala"})).toBeVisible();
+    if (link === "Marketing") await expect(page.getByText("Nueva campaña")).toBeVisible();
+    if (link === "Facturación") await expect(page.getByText("Emisión en producción")).toBeVisible();
     if (link === "Cobros") await expect(page.getByRole("heading", {name: "Cobros en línea con Mercado Pago"})).toBeVisible();
     if (link === "Catálogo") await expect(page.getByRole("cell", {name: /Polo E2E/})).toBeVisible();
   }
@@ -169,6 +171,33 @@ test("bandeja de WhatsApp: tomar y devolver a la IA", async ({page}, info) => {
   await page.getByLabel("Indicaciones para tu tienda").fill("Tutea al cliente.");
   await page.getByRole("button", {name: "Guardar"}).click();
   await expect(page.getByText("Configuración guardada")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("marketing: borrador de campaña con segmento", async ({page}, info) => {
+  test.skip(!process.env.E2E_SEEDED || info.project.name !== "desktop", "Requiere e2e/seed.sql; usa la cuenta sembrada antes de activar 2FA");
+  const errors = watchErrors(page);
+  await page.goto("/propietario/" + seededStore + "/marketing");
+  await page.getByLabel("Correo electrónico").fill("propietario@e2e.test");
+  await page.getByLabel("Contraseña").fill("e2e-propietario-2026");
+  await page.getByRole("button", {name: "Ingresar"}).click();
+  await expect(page.getByText("Aceptan correos")).toBeVisible();
+  await page.getByLabel("Nombre interno").fill("Colección E2E");
+  await page.getByLabel("Asunto").fill("Llegaron polos nuevos");
+  await page.getByLabel("Mensaje").fill("Pasa a verlos en la tienda.");
+  await page.getByLabel("Clientes").selectOption("BUYERS");
+  await page.getByRole("button", {name: "Calcular destinatarios"}).click();
+  await expect(page.getByText(/recibirían? esta campaña/)).toBeVisible();
+  await page.getByRole("button", {name: "Guardar borrador"}).click();
+  await expect(page.getByRole("cell", {name: /Colección E2E/})).toBeVisible();
+  await expect(page.getByText("Borrador", {exact: true})).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("baja de comunicaciones con enlace inválido", async ({page}) => {
+  const errors = watchErrors(page);
+  await page.goto("/baja/00000000000000000000000000000000");
+  await expect(page.getByText("Este enlace no es válido o ya no existe.")).toBeVisible();
   expect(errors).toEqual([]);
 });
 

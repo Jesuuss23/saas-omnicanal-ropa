@@ -127,6 +127,16 @@ public class BetaPosEmission {
     Result reconcile(@PathVariable UUID store, @PathVariable UUID sale, Principal owner) {
         if (owner == null || !store.toString().equals(owner.getName()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        return reconcileResult(store, sale);
+    }
+
+    /** Solo consulta el estado en SUNAT; nunca reenvía. La usa también {@link FiscalReconciler}. */
+    String reconcileNow(UUID store, UUID sale) {
+        return reconcileResult(store, sale).status();
+    }
+
+
+    private Result reconcileResult(UUID store, UUID sale) {
         Attempt attempt = db.query("""
                 SELECT f.status,n.issuer_ruc,f.kind,n.series,n.number,b.company_id,b.emission_token_ciphertext
                   FROM pos_fiscal_request f JOIN beta_pos_document_number n USING (tenant_id,sale_id)

@@ -17,6 +17,7 @@ const proxied = [
   "/public/stores/:store/account/config",
   "/public/stores/:store/account/google",
   "/public/stores/:store/account/logout",
+  "/public/stores/:store/account/preferences",
   "/public/stores/:store/reservation",
   "/public/stores/:store/reservation/guest",
   "/public/stores/:store/reservation/guest/quote",
@@ -28,6 +29,7 @@ const proxied = [
   "/public/signup/confirm",
   "/public/password-reset",
   "/public/password-reset/confirm",
+  "/public/unsubscribe/:token",
 ];
 
 const nextConfig: NextConfig = {

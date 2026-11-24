@@ -6,6 +6,7 @@ import com.saas.omnicanal.checkout.repository.WebOrderItemRepository;
 import com.saas.omnicanal.contact.controller.CustomerCookie;
 import com.saas.omnicanal.contact.service.ContactService;
 import com.saas.omnicanal.contact.service.CustomerAccountService;
+import com.saas.omnicanal.marketing.service.MarketingService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -32,7 +33,11 @@ class GuestCheckoutController {
     private final ContactService contacts;
     private final CustomerAccountService customers;
 
-    GuestCheckoutController(JdbcTemplate db, WebOrderItemRepository orderItems, ContactService contacts, CustomerAccountService customers) {
+    private final MarketingService marketing;
+
+    GuestCheckoutController(JdbcTemplate db, WebOrderItemRepository orderItems, ContactService contacts, CustomerAccountService customers,
+                            MarketingService marketing) {
+        this.marketing = marketing;
         this.db = db;
         this.orderItems = orderItems;
         this.contacts = contacts;
@@ -40,7 +45,8 @@ class GuestCheckoutController {
     }
 
     record Contact(@NotBlank @Size(max=150) String name,
-                   @NotBlank @Pattern(regexp="[+]?[0-9]{7,15}") String phone) {}
+                   @NotBlank @Pattern(regexp="[+]?[0-9]{7,15}") String phone,
+                   Boolean marketingOptIn) {}
 
     record Order(UUID id, BigDecimal total, List<WebOrderItemRepository.Item> items, String trackingToken, boolean freeDelivery, BigDecimal deliveryFee, String method) {}
     record Header(UUID id, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee, String method) {}
@@ -132,7 +138,8 @@ class GuestCheckoutController {
                 GROUP BY r.tenant_id,r.id,t.free_delivery_minimum RETURNING id,merchandise_total,free_delivery,delivery_fee,delivery_method
                 """,(rs,n)->new Header(rs.getObject(1,UUID.class),rs.getBigDecimal(2),rs.getBoolean(3),rs.getBigDecimal(4),rs.getString(5)),choice.method().name(),address,hours,charge,destination==null?null:destination.latitude(),destination==null?null:destination.longitude(),choice.method().name(),store,key,choice.method().name(),choice.freeDeliveryMinimum())
                 .stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT));
-        contacts.attachOrder(store,header.id(),customers.contactFor(store,customer).orElse(null));
+        UUID contact=contacts.attachOrder(store,header.id(),customers.contactFor(store,customer).orElse(null));
+        marketing.optInFromCheckout(store,header.id(),contact);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(order(store,key,header.id(),header.total(),header.freeDelivery(),header.deliveryFee(),header.method()));
     }
 
@@ -161,12 +168,12 @@ class GuestCheckoutController {
     ResponseEntity<Contact> save(@PathVariable UUID store, @RequestHeader("X-Reservation-Key") UUID key,
                                  @Valid @RequestBody Contact input) {
         lockActive(store,key);
-        var contact = new Contact(input.name().strip(), input.phone());
+        var contact = new Contact(input.name().strip(), input.phone(), Boolean.TRUE.equals(input.marketingOptIn()));
         int changed = db.update("""
-                UPDATE cart_reservation SET guest_name=?, guest_phone=?
+                UPDATE cart_reservation SET guest_name=?, guest_phone=?, marketing_opt_in=?
                 WHERE tenant_id=? AND id=? AND NOT EXISTS (SELECT 1 FROM web_checkout_order o
                     WHERE (o.tenant_id,o.reservation_id)=(cart_reservation.tenant_id,cart_reservation.id))
-                """, contact.name(), contact.phone(), store, key);
+                """, contact.name(), contact.phone(), contact.marketingOptIn(), store, key);
         if (changed==0) throw new ResponseStatusException(HttpStatus.CONFLICT);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(contact);
     }

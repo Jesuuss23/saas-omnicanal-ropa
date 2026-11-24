@@ -5,7 +5,7 @@ import {useState} from "react";
 import {usePathname} from "next/navigation";
 import {EmptyState} from "@/components/ui/empty-state";
 import {Ban, CreditCard, ExternalLink, Home, Landmark, LogOut, MessageCircle, Package, Palette, Receipt, ShieldCheck,
-  Bot, ShoppingBag, Sparkles, Store as StoreIcon, UserCog, Users} from "lucide-react";
+  Bot, Megaphone, ShoppingBag, Sparkles, Store as StoreIcon, UserCog, Users} from "lucide-react";
 import {ConsoleShell, type NavSection} from "@/components/console/ConsoleShell";
 import {Button} from "@/components/ui/button";
 import {roleAccess, useStore} from "./StoreContext";
@@ -27,6 +27,7 @@ export function StoreShell({onLogout, children}: {onLogout: () => Promise<void>;
     ...(access.configure ? [{title: "Configurar", items: [
       {href: base + "/apariencia", label: "Apariencia", icon: Palette},
       {href: base + "/asistente", label: "Asistente IA", icon: Bot},
+      {href: base + "/marketing", label: "Marketing", icon: Megaphone},
       ...(access.ownerOnly ? [{href: base + "/cobros", label: "Cobros", icon: CreditCard}] : []),
       {href: base + "/facturacion", label: "Facturación", icon: Landmark},
       ...(access.ownerOnly ? [

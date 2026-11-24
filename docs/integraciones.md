@@ -116,3 +116,25 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`).
 - **Datos que ve el modelo:** los últimos 12 mensajes de la conversación, las indicaciones de la tienda, la nota del
   equipo al devolver la conversación y lo que devuelven las herramientas (catálogo público, recojo y delivery).
   Nunca ve tokens, datos de pago ni otras tiendas.
+
+## Marketing
+
+- El consentimiento vive en `contact` (`email_opt_in`, `whatsapp_opt_in`, `unsubscribed_at`, `unsubscribe_token`). Se da en
+  el checkout (casilla de novedades por WhatsApp) o en la cuenta del comprador, y se retira con `/baja/<token>` (el GET
+  solo muestra; el POST con JSON da de baja, así un antivirus que abre el enlace no da de baja a nadie).
+- Al lanzar una campaña se fija la lista en `campaign_recipient`; `CampaignWorker` envía en lotes de 25 cada
+  `marketing.worker-delay-ms` (10 s), vuelve a comprobar el consentimiento antes de cada envío y nunca reintenta un envío
+  dudoso. La cuota es `campaigns.email` / `campaigns.whatsapp` por destinatario y mes (hora de Lima).
+- WhatsApp solo usa plantillas aprobadas de Cloud API, sin variables o con `{{1}}` = primer nombre del cliente.
+- Carrito abandonado: un recordatorio por reserva con datos y aceptación de novedades, pasada la espera configurada y
+  dentro de 24 horas.
+
+## Facturación en producción (SUNAT)
+
+- `fiscal_production_setup` guarda usuario SOL, clave SOL, certificado `.pfx` y su clave cifrados con `SecretCipher`
+  (contexto por tienda), más sujeto y vencimiento del certificado. Cambiar cualquier paso vuelve el alta a borrador.
+- La activación exige los 4 pasos, la capacidad `fiscal.production` y que el propietario escriba su RUC.
+- `FiscalReconciler` consulta cada minuto los comprobantes en `BETA_REVIEW` con espera creciente (2, 4, 8… min, tope 6 h,
+  máximo 10 intentos). Solo consulta el estado: nunca reenvía.
+- **Pendiente:** el envío real a producción en APISPERU no está conectado. La activación deja todo listo, pero hay que
+  validarlo con una cuenta de APISPERU de producción y un certificado real antes de emitir comprobantes con validez.

@@ -34,7 +34,7 @@ Culqi), Pagos (webhooks de Culqi y Mercado Pago), Auditoría y Seguridad. Los ti
 `src/app/propietario/[store]/layout.tsx` monta `OwnerGate`: muestra ingreso o activación por invitación hasta que hay
 sesión, y luego `StoreShell` (barra lateral) con `useStore()` disponible para cada página. Secciones: Inicio (métricas,
 ventas por día y pasos de configuración), Pedidos web, Punto de venta, Catálogo (con fotos y etiquetas QR), Clientes,
-WhatsApp, Apariencia (nombre, logo, color, contacto), Cobros, Facturación, Equipo, Plan y Cuenta. Los componentes de cada
+WhatsApp, Apariencia (nombre, logo, color, contacto), Asistente IA, Marketing, Cobros, Facturación, Equipo, Plan y Cuenta. Los componentes de cada
 módulo (`Catalog`, `WebOrders`, `PointOfSale`…) siguen en la carpeta de la ruta.
 
 El menú depende de `profile.role` (`roleAccess` en `StoreContext`): el vendedor solo ve las secciones de venta y el
@@ -47,13 +47,17 @@ de la IA y del equipo, y acciones para tomar, devolver a la IA con nota, pausar 
 bandeja toma la conversación primero, así la IA no contesta encima de una persona. Asistente IA configura la IA de la
 tienda y permite probarla sin enviar nada.
 
+Marketing (`marketing/page.tsx`) crea borradores de campaña con segmento y conteo previo, los lanza o cancela, y configura el
+recordatorio de carrito abandonado. Facturación suma, solo para el propietario, el alta para producción en 4 pasos
+(`facturacion/ProductionSetup.tsx`).
+
 ## Tienda pública
 
 `src/app/tienda/[store]` se renderiza en el servidor. La cabecera usa la apariencia de la tienda: el color del dueño
 llega como `--store` y el texto encima (`--store-fg`) se calcula por luminancia en `brand.ts`. `CatalogCart` agrupa las
 variantes por producto, deja elegir talla y color, y mantiene la reserva de 15 minutos y el contacto del invitado.
 `tienda/[store]/cuenta` es la cuenta del comprador: botón de Google Identity Services (si el backend devuelve
-`googleClientId`) y "Mis pedidos" con su enlace de seguimiento. La pestaña Contactos de Clientes muestra el contacto
+`googleClientId`) y "Mis pedidos" con su enlace de seguimiento, más sus preferencias de novedades. El checkout pide aceptación expresa de novedades por WhatsApp. `/baja/[token]` es la baja desde el enlace de cada correo (pide confirmar). La pestaña Contactos de Clientes muestra el contacto
 unificado, los posibles duplicados y el historial de fusiones con opción de deshacer.
 
 ## Diseño

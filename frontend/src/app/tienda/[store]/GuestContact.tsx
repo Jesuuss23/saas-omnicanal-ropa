@@ -9,6 +9,7 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
   const url="/api/public/stores/"+store+"/reservation/guest";
   const [name,setName]=useState("");
   const [phone,setPhone]=useState("");
+  const [optIn,setOptIn]=useState(false);
   const [saved,setSaved]=useState(false);
   const [order,setOrder]=useState<Order|null>(null);
   const [ready,setReady]=useState(false);
@@ -61,7 +62,7 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
     setMessage("");
     try {
       const response=await apiFetch(url,{method:"PUT",headers:{"Content-Type":"application/json","X-Reservation-Key":reservation},
-        body:JSON.stringify({name:name.trim(),phone:phone.replace(/[\s()-]/g,"")})});
+        body:JSON.stringify({name:name.trim(),phone:phone.replace(/[\s()-]/g,""),marketingOptIn:optIn})});
       if (!response.ok) {
         setMessage(response.status===410?"La reserva ya no está activa.":response.status===400?"Revisa el nombre y el teléfono.":"No se pudo guardar el contacto.");
         return;
@@ -134,6 +135,9 @@ export default function GuestContact({store,reservation,disabled}:{store:string;
         onChange={e=>{setName(e.target.value);setMessage("");setSaved(false);}} className="mt-1 block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"/></label>
       <label>Teléfono de contacto <input type="tel" autoComplete="tel" required maxLength={30} value={phone}
         onChange={e=>{setPhone(e.target.value);setMessage("");setSaved(false);}} className="mt-1 block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"/></label>
+      <label className="flex items-start gap-2 text-xs text-muted-foreground">
+        <input type="checkbox" checked={optIn} onChange={e=>{setOptIn(e.target.checked);setSaved(false);}} className="mt-0.5 size-4 accent-[var(--store)]"/>
+        <span>Quiero recibir novedades y ofertas de esta tienda por WhatsApp. Puedo darme de baja cuando quiera.</span></label>
       <button className="h-10 w-full rounded-full bg-[var(--store)] px-4 text-sm font-semibold text-[var(--store-fg)] disabled:opacity-50">{busy?"Guardando…":"Guardar contacto"}</button>
       {saved && <>
         <label>Forma de entrega <select value={method} onChange={e=>setMethod(e.target.value)} className="h-10 rounded-lg border border-input bg-background px-3 text-sm">

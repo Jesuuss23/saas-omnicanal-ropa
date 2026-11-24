@@ -32,11 +32,12 @@ class OwnerSecurity {
                         .requestMatchers("/api/owner/csrf", "/api/owner/activate", "/api/owner/members/activate", "/api/owner/login").permitAll()
                         // Solo el propietario: equipo, plan, cobros y su propia verificación en dos pasos.
                         .requestMatchers("/api/owner/stores/*/team/**", "/api/owner/stores/*/subscription/**",
-                                "/api/owner/stores/*/payments/**", "/api/owner/payments/**", "/api/owner/security/**").hasRole("OWNER")
+                                "/api/owner/stores/*/payments/**", "/api/owner/payments/**", "/api/owner/security/**",
+                                "/api/owner/stores/*/billing/production/**").hasRole("OWNER")
                         // Propietario o encargado: configuración de la tienda.
                         .requestMatchers("/api/owner/stores/*/appearance/**", "/api/owner/stores/*/billing/issuer/**",
                                 "/api/owner/stores/*/whatsapp/cloud/**", "/api/owner/stores/*/pickup/**",
-                                "/api/owner/stores/*/assistant/**").hasAnyRole("OWNER", "MANAGER")
+                                "/api/owner/stores/*/assistant/**", "/api/owner/stores/*/marketing/**").hasAnyRole("OWNER", "MANAGER")
                         // Fusionar contactos (y deshacerlo) cambia la identidad de clientes: no lo hace el vendedor.
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/owner/stores/*/contacts/**").hasAnyRole("OWNER", "MANAGER")
                         .anyRequest().hasAnyRole("OWNER", "MANAGER", "SELLER"))
