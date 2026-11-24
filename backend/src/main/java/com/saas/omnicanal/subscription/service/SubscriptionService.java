@@ -90,7 +90,7 @@ public class SubscriptionService {
                     input.phone(), input.address(), input.city()));
         }
         String card = culqi.createCard(customer, input.culqiToken());
-        subscriptions.saveCulqiCustomer(tenant, customer, card);
+        subscriptions.saveCulqiCustomer(tenant, customer, card, input.email());
         JsonNode created;
         try {
             created = culqi.createSubscription(card, plan.culqiPlanId(),

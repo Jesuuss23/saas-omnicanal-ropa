@@ -147,4 +147,62 @@ class SubscriptionLifecycleTests {
         verify(culqi).cancelSubscription(fresh);
         assertEquals(retry, db.queryForObject("SELECT culqi_subscription_id FROM tenant_subscription WHERE tenant_id=?", String.class, store));
     }
+
+    /** Payloads reales del sandbox de Culqi: la suscripción trae message.object.subsId y el cargo solo correo y monto. */
+    @Test
+    void sandboxPayloadsActivateOnceAndChargesAreMatchedByEmail() throws Exception {
+        db.update("UPDATE saas_plan SET culqi_plan_id=coalesce(culqi_plan_id,'pln_test_premium') WHERE code='PREMIUM'");
+        String planId = db.queryForObject("SELECT culqi_plan_id FROM saas_plan WHERE code='PREMIUM'", String.class);
+        int price = db.queryForObject("SELECT monthly_price_cents FROM saas_plan WHERE code='PREMIUM'", Integer.class);
+
+        // 1) Evento de suscripción (sin envoltura, sin type): activa el plan. Culqi no devuelve metadata: se acepta.
+        UUID store = newTrialStore();
+        String key = store.toString().replace("-", "").substring(0, 12);
+        String subsId = "sxn_test_" + key, email = key + "@correo.test";
+        pending(store, "PREMIUM", subsId, email);
+        when(culqi.subscription(subsId)).thenReturn(json.readTree("{\"id\":\"" + subsId + "\"}"));
+        String subscriptionPayload = """
+                {"message":{"object":{"planId":"%s","subsId":"%s","merchantId":"pk_test_x","email":"%s"}}}
+                """.formatted(planId, subsId, email);
+        assertEquals("ACTIVATED", culqiWebhooks.receive("culqi-hook-token", subscriptionPayload).get("result"));
+        assertEquals("duplicate", culqiWebhooks.receive("culqi-hook-token", subscriptionPayload).get("result"));
+        var activated = subscriptions.overview(store);
+        assertEquals("ACTIVE", activated.status());
+        assertEquals("PREMIUM", activated.planCode());
+
+        // 2) El cargo de esa misma compra llega después: se reconoce por correo, pero no extiende otro mes.
+        String charge = """
+                {"object":"charge","id":"chr_test_%s","creationDate":1795544567908,"amount":%d,"amountRefunded":0,
+                 "currentAmount":%d,"installments":0,"installmentsAmount":0,"currencyCode":"PEN",
+                 "email":"%s","description":"Subs plan-mensual-premium"}
+                """.formatted(key, price, price, email.toUpperCase());
+        assertEquals("ACTIVATED", culqiWebhooks.receive("culqi-hook-token", charge).get("result"));
+        assertEquals(activated.currentPeriodEnd(), subscriptions.overview(store).currentPeriodEnd());
+
+        // 3) Si solo llega el cargo (sin subsId), también activa la tienda que pagó con ese correo y ese monto.
+        UUID other = newTrialStore();
+        String key2 = other.toString().replace("-", "").substring(0, 12);
+        pending(other, "PREMIUM", "sxn_test_" + key2, key2 + "@correo.test");
+        when(culqi.subscription("sxn_test_" + key2)).thenReturn(json.readTree("{\"id\":\"sxn_test_" + key2 + "\"}"));
+        String onlyCharge = """
+                {"object":"event","id":"evt_%s","type":"charge.creation.succeeded",
+                 "data":"{\\"object\\":\\"charge\\",\\"id\\":\\"chr_%s\\",\\"amount\\":%d,\\"email\\":\\"%s\\"}"}
+                """.formatted(key2, key2, price, key2 + "@correo.test");
+        assertEquals("ACTIVATED", culqiWebhooks.receive("culqi-hook-token", onlyCharge).get("result"));
+        assertEquals("ACTIVE", subscriptions.overview(other).status());
+
+        // 4) Un cargo con otro monto no activa nada.
+        UUID third = newTrialStore();
+        String key3 = third.toString().replace("-", "").substring(0, 12);
+        pending(third, "PREMIUM", "sxn_test_" + key3, key3 + "@correo.test");
+        String wrongAmount = "{\"object\":\"charge\",\"id\":\"chr_x%s\",\"amount\":100,\"email\":\"%s@correo.test\"}".formatted(key3, key3);
+        assertEquals("ignored", culqiWebhooks.receive("culqi-hook-token", wrongAmount).get("result"));
+        assertEquals("PENDING_PAYMENT", subscriptions.overview(third).status());
+    }
+
+    private void pending(UUID store, String plan, String subsId, String email) {
+        db.update("""
+                UPDATE tenant_subscription SET status='PENDING_PAYMENT', pending_plan_code=?, culqi_subscription_id=?, culqi_email=?
+                 WHERE tenant_id=?""", plan, subsId, email, store);
+    }
 }

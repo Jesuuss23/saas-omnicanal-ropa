@@ -57,7 +57,18 @@ Endpoints: `GET/PUT/DELETE /api/owner/stores/{id}/whatsapp/cloud`, `POST .../ver
 3. El dueño elige plan en *Plan y suscripción*; Culqi Checkout tokeniza la tarjeta en el navegador y el backend
    crea cliente, tarjeta y suscripción. La suscripción queda `PENDING_PAYMENT`.
 4. Solo el webhook activa el plan: se registra el evento por id (idempotente), se re-consulta la suscripción a
-   Culqi y se comprueba `metadata.tenant_id` antes de cambiar estado y entitlements.
+   Culqi y, si trae `metadata.tenant_id`, se comprueba que sea de la tienda antes de cambiar estado y entitlements.
+   Formatos aceptados (`CulqiWebhookService.parse`):
+   - evento `{id, type, data}` con `data` en texto JSON u objeto;
+   - suscripción suelta del sandbox: `{"message":{"object":{"subsId","planId","email"}}}`;
+   - cargo suelto: `{"object":"charge","id","amount","email"}`.
+
+   El id de suscripción se busca en `subsId`, `subscription_id`, `subscriptionId`, `subscription.id` o en el `id` de
+   un objeto `subscription`/`sxn_…`. Los cargos (`charge.creation.succeeded`) no lo traen: se ubica la suscripción
+   pendiente o activa por el correo con que se pagó (`culqi_email`, guardado en el checkout) y el monto o `planId`
+   del plan; si hay varias candidatas o ninguna, el evento queda "Ignorado" con el motivo. Como Culqi avisa la misma
+   compra dos veces (suscripción y cargo), un aviso de pago no extiende el plan si el periodo ya está cubierto por
+   más de 7 días.
 5. **Intentos que no se confirmaron.** Culqi no permite dos suscripciones del mismo cliente al mismo plan
    ("Ya te encuentras registrado a este plan"). Por eso el intento guardado se cancela en Culqi
    (`DELETE culqi.subscriptions.cancel-path`) y se limpia (`culqi_subscription_id`, `pending_plan_code`) cuando:
@@ -70,7 +81,8 @@ Endpoints: `GET/PUT/DELETE /api/owner/stores/{id}/whatsapp/cloud`, `POST .../ver
    coinciden con ninguna suscripción guardada.
 
 **Pendiente de validar en sandbox**: rutas de la API recurrente (`culqi.subscriptions.*` en `application.yml`)
-y nombres exactos de eventos (`CulqiWebhookService.classify`).
+y nombres exactos de eventos (`CulqiWebhookService.classify`). Sin `type`, un cargo suelto cuenta como
+`charge.creation.succeeded` y una suscripción suelta como `subscription.creation.succeeded`.
 
 ## Mercado Pago (cobros de cada tienda)
 1. Crear una aplicación en Mercado Pago Developers (tipo marketplace/OAuth) y configurar `MP_REDIRECT_URI`

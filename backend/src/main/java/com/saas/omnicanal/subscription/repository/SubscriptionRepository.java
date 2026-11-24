@@ -49,9 +49,20 @@ public class SubscriptionRepository {
                 """, tenant, days);
     }
 
-    public void saveCulqiCustomer(UUID tenant, String customerId, String cardId) {
-        db.update("UPDATE tenant_subscription SET culqi_customer_id=?, culqi_card_id=?, updated_at=now() WHERE tenant_id=?",
-                customerId, cardId, tenant);
+    public void saveCulqiCustomer(UUID tenant, String customerId, String cardId, String email) {
+        db.update("""
+                UPDATE tenant_subscription SET culqi_customer_id=?, culqi_card_id=?, culqi_email=lower(?), updated_at=now()
+                 WHERE tenant_id=?""", customerId, cardId, email, tenant);
+    }
+
+    /**
+     * Suscripciones con un intento de Culqi vivo (pendiente o pagado) hechas con este correo. Sirve para los eventos de
+     * cargo, que no traen el id de la suscripción. Bloquea las filas como {@link #findByCulqiSubscription}.
+     */
+    public java.util.List<Subscription> findByCulqiEmail(String email) {
+        return db.query("SELECT " + COLUMNS + " FROM tenant_subscription"
+                + " WHERE lower(culqi_email)=lower(?) AND culqi_subscription_id IS NOT NULL"
+                + " AND status IN ('PENDING_PAYMENT','ACTIVE','GRACE') ORDER BY updated_at DESC FOR UPDATE", ROW, email);
     }
 
     public void markPending(UUID tenant, String planCode, String culqiSubscriptionId) {
