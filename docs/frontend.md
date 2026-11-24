@@ -40,12 +40,13 @@ módulo (`Catalog`, `WebOrders`, `PointOfSale`…) siguen en la carpeta de la ru
 Catálogo: el alta (`NewProduct`) arma una variante por cada combinación de tallas y colores elegidos; las tallas y
 categorías salen de selects (`catalogOptions.tsx`, categorías desde `GET catalog/categories`). Si el SKU queda vacío el
 backend lo genera legible (`NOMBRE-COLOR-TALLA`, sin tildes, con `-2`, `-3`… si ya existe). Las etiquetas son **una por
-producto**: el QR lleva el id del producto y el PDF muestra sus tallas y colores.
+variante** (talla y color), sin copias: el QR guarda el id de la variante y la etiqueta muestra nombre, talla, color,
+precio y SKU. Se eligen con la casilla de cada fila o con el botón QR de la fila.
 
 Punto de venta: buscador de productos (`GET pos/products?query=`) con una tarjeta por variante (talla, color, SKU, precio
-y stock). Al escanear un QR (`GET pos/products/{código}`) se elige la talla y el color; si el producto tiene una sola
-variante con stock se agrega directo. Las etiquetas antiguas (QR con id de variante) siguen funcionando, y Enter con un SKU
-exacto lo agrega al carrito.
+y stock). Al escanear una etiqueta (`GET pos/products/{código}`) la variante entra directo al carrito con todos sus datos.
+Si el QR es de un producto (etiquetas impresas antes del cambio) se elige la talla y el color. Enter con un SKU exacto lo
+agrega al carrito.
 
 El menú depende de `profile.role` (`roleAccess` en `StoreContext`): el vendedor solo ve las secciones de venta y el
 encargado no ve Cobros, Equipo, Plan ni Cuenta. Si alguien abre por enlace una sección fuera de su rol, `StoreShell`
