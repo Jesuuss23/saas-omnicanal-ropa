@@ -74,8 +74,11 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`).
 
 ## Correos transaccionales (Resend)
 
-- **Configuración:** `RESEND_API_KEY`, `EMAIL_FROM` (dominio verificado en Resend), `EMAIL_REPLY_TO` opcional y `APP_BASE_URL` (frontend, para armar los enlaces).
-- **Sin clave (desarrollo y pruebas):** los correos no salen. Se registran en `email_log` con su cuerpo y en el log de la aplicación, así se pueden abrir los enlaces a mano.
+- **Configuración:** `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO` opcional y `APP_BASE_URL` (frontend, para armar los enlaces).
+- **Remitente:** por defecto `Omnicanal <onboarding@resend.dev>`, que Resend acepta sin dominio verificado pero **solo entrega al correo dueño de la cuenta de Resend**. Para enviar a cualquier persona, verifica tu dominio en Resend y pon `EMAIL_FROM` con ese dominio.
+- **Al arrancar** el log dice si Resend está activo (`Correo: Resend activo…`) o si falta la clave (WARN). Cada envío deja `Resend: enviando…` y luego `Resend: aceptado… (id …)` o `Resend: rechazó… → HTTP 4xx: <motivo>` (ERROR).
+- **Errores:** si Resend rechaza o no responde, el registro, la recuperación de contraseña y las invitaciones responden 502 y el frontend muestra el error. La bienvenida, las alertas y las campañas usan `sendQuietly`: el fallo queda en el log y en `email_log` sin deshacer la operación.
+- **Sin clave (desarrollo y pruebas):** los correos no salen. Se registran en `email_log` con su cuerpo y en el log de la aplicación (WARN), así se pueden abrir los enlaces a mano.
 - **Plantillas** (`notifications/service/EmailTemplates`):
   - confirmación de prueba gratis (vence en 48 h);
   - bienvenida;

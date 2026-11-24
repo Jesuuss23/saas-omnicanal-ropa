@@ -77,7 +77,8 @@ public class SignupService {
         signups.markConfirmed(pending.id(), store);
         var overview = subscriptions.overview(store);
         String ends = overview.trialEndsAt() == null ? "fin de tu prueba" : DATE.format(overview.trialEndsAt());
-        email.send(templates.welcome(pending.email(), pending.ownerName(), pending.storeName(),
+        // La tienda ya está creada: un fallo del correo de bienvenida no debe deshacerla.
+        email.sendQuietly(templates.welcome(pending.email(), pending.ownerName(), pending.storeName(),
                 templates.url("/propietario/" + store), ends));
         return new Created(store, pending.email());
     }
