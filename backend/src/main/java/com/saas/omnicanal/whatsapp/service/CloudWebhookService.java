@@ -5,6 +5,8 @@ import com.saas.omnicanal.whatsapp.model.ChatIds;
 import com.saas.omnicanal.whatsapp.model.CloudApiCredentials;
 import com.saas.omnicanal.whatsapp.model.WhatsAppProvider;
 import com.saas.omnicanal.whatsapp.repository.WhatsAppMessageRepository;
+import com.saas.omnicanal.whatsapp.model.InboundMessageEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -23,8 +25,11 @@ public class CloudWebhookService {
     private final CloudApiService cloud;
     private final WhatsAppMessageRepository messages;
     private final ObjectMapper json;
+    private final ApplicationEventPublisher events;
 
-    public CloudWebhookService(CloudApiService cloud, WhatsAppMessageRepository messages, ObjectMapper json) {
+    public CloudWebhookService(CloudApiService cloud, WhatsAppMessageRepository messages, ObjectMapper json,
+                               ApplicationEventPublisher events) {
+        this.events = events;
         this.cloud = cloud;
         this.messages = messages;
         this.json = json;
@@ -83,7 +88,10 @@ public class CloudWebhookService {
             default -> "";
         };
         if (body.isBlank()) return 0;
-        return messages.saveInbound(store, ChatIds.fromPhone(from), id, body, WhatsAppProvider.CLOUD_API);
+        String chat = ChatIds.fromPhone(from);
+        int saved = messages.saveInbound(store, chat, id, body, WhatsAppProvider.CLOUD_API);
+        if (saved == 1) events.publishEvent(new InboundMessageEvent(store, chat, id, body));
+        return saved;
     }
 
     private int saveStatus(UUID store, JsonNode status) {

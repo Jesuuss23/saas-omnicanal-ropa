@@ -47,6 +47,7 @@ export const auditLabels: Record<string, string> = {
   PLAN_CULQI_LINKED: "Plan vinculado a Culqi",
   MFA_ENROLLED: "2FA configurada",
   RECOVERY_CODES_REGENERATED: "Códigos de recuperación nuevos",
+  AI_PLATFORM_TOGGLED: "Interruptor global de IA",
 };
 
 export {formatDate, limaDate, shortDay} from "./utils";

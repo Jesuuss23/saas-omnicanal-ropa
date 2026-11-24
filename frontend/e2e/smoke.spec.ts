@@ -67,10 +67,15 @@ test("panel del propietario carga todas sus secciones", async ({page}, info) => 
   await expect(page.getByRole("heading", {name: "Hola, Tienda E2E"})).toBeVisible();
   await expect(page.getByText("Configura tu tienda")).toBeVisible();
   const nav = page.getByRole("navigation");
-  for (const link of ["Pedidos web", "Punto de venta", "Catálogo", "Clientes", "WhatsApp", "Apariencia", "Cobros", "Facturación", "Equipo", "Plan", "Cuenta y seguridad"]) {
+  for (const link of ["Pedidos web", "Punto de venta", "Catálogo", "Clientes", "WhatsApp", "Apariencia", "Asistente IA", "Cobros", "Facturación", "Equipo", "Plan", "Cuenta y seguridad"]) {
     await nav.getByRole("link", {name: link, exact: true}).click();
     await expect(page.getByRole("heading", {name: link, exact: true, level: 1})).toBeVisible();
-    if (link === "WhatsApp") await expect(page.getByRole("heading", {name: "WhatsApp de la tienda"})).toBeVisible();
+    if (link === "WhatsApp") {
+      await expect(page.getByText("Elige una conversación").or(page.getByText("Sin conversaciones aquí")).first()).toBeVisible();
+      await page.getByRole("tab", {name: "Conexión"}).click();
+      await expect(page.getByRole("heading", {name: "WhatsApp de la tienda"})).toBeVisible();
+    }
+    if (link === "Asistente IA") await expect(page.getByRole("heading", {name: "Pruébala"})).toBeVisible();
     if (link === "Cobros") await expect(page.getByRole("heading", {name: "Cobros en línea con Mercado Pago"})).toBeVisible();
     if (link === "Catálogo") await expect(page.getByRole("cell", {name: /Polo E2E/})).toBeVisible();
   }
@@ -143,6 +148,29 @@ test("equipo: invitar a una vendedora y entrar con su rol", async ({page}, info)
 });
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+
+test("bandeja de WhatsApp: tomar y devolver a la IA", async ({page}, info) => {
+  test.skip(!process.env.E2E_SEEDED || info.project.name !== "desktop", "Requiere e2e/seed.sql; usa la cuenta sembrada antes de activar 2FA");
+  const errors = watchErrors(page);
+  await page.goto("/propietario/" + seededStore + "/whatsapp");
+  await page.getByLabel("Correo electrónico").fill("propietario@e2e.test");
+  await page.getByLabel("Contraseña").fill("e2e-propietario-2026");
+  await page.getByRole("button", {name: "Ingresar"}).click();
+  await page.getByRole("button", {name: /\+51999888777/}).click();
+  await expect(page.getByText("Hola, ¿tienen el polo en talla M?").last()).toBeVisible();
+  await page.getByRole("button", {name: "Tomar"}).click();
+  await expect(page.getByText("Atiende propietario@e2e.test")).toBeVisible();
+  await page.getByRole("button", {name: "Devolver a la IA"}).click();
+  await page.getByLabel("Nota para la IA (opcional)").fill("Ya le confirmé la talla.");
+  await page.getByRole("dialog").getByRole("button", {name: "Devolver a la IA"}).click();
+  await expect(page.getByRole("button", {name: "Tomar"})).toBeVisible();
+
+  await page.getByRole("navigation").getByRole("link", {name: "Asistente IA"}).click();
+  await page.getByLabel("Indicaciones para tu tienda").fill("Tutea al cliente.");
+  await page.getByRole("button", {name: "Guardar"}).click();
+  await expect(page.getByText("Configuración guardada")).toBeVisible();
+  expect(errors).toEqual([]);
+});
 
 test.describe.serial("verificación en dos pasos del propietario", () => {
   test("activa con QR y luego pide el código al ingresar", async ({page}, info) => {

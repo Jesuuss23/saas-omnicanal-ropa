@@ -11,7 +11,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 | # | Módulo | Estado | Incluye | Pendiente |
 |---|--------|--------|---------|-----------|
 | 0.1 | Estructura por módulos | ✅ | Paquetes `modulo/{model,repository,service,controller,config}`; `shared/` para seguridad, cifrado y clientes HTTP | Extraer SQL de los controladores que aún lo tienen (ver [arquitectura.md](arquitectura.md#deuda-conocida)) |
-| 0.2 | Migraciones Flyway | ✅ | V1–V38 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
+| 0.2 | Migraciones Flyway | ✅ | V1–V39 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
 | 0.3 | Cifrado de secretos | ✅ | `SecretCipher` AES-256-GCM con contexto por tienda (`SECRETS_ENCRYPTION_KEY`) | Rotación de clave maestra (re-cifrado por lotes) |
 | 0.4 | CI | ✅ | GitHub Actions: tests del backend con PostgreSQL, lint/tipos/build del frontend y pruebas de humo con Playwright | — |
 | 0.5 | Acceso y 2FA | ✅ | TOTP enrolable con QR para superadmin y propietarios, códigos de recuperación, ingreso de propietarios por correo ([seguridad.md](seguridad.md)) | — |
@@ -45,9 +45,9 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 
 | # | Módulo | Pendiente |
 |---|--------|-----------|
-| 3.1 | IA vendedora | Function calling sobre catálogo/stock, prompt por tienda, kill switch por conversación/tienda/plataforma |
+| 3.1 | IA vendedora | ✅ Gemini (Spring AI) con herramientas sobre catálogo y stock (`buscarPrendas`, `infoTienda`, `escalar`), indicaciones por tienda, interruptores por conversación, tienda y plataforma, cuota `ai.responses.monthly`, idempotencia por mensaje (`ai_reply`) y prueba desde el panel. Pendiente: memoria de largo plazo y respuestas con imágenes |
 | 3.2 | Identidad unificada del contacto | ✅ `contact` por tienda (teléfono E.164, correo, `google_sub`), pedidos web enlazados, posibles duplicados, fusión manual reversible (`contact_merge_log`) y vista en Clientes. Pendiente: enlazar ventas POS y comprobantes al contacto |
-| 3.3 | Inbox avanzado y escalamiento | Estados de conversación, asignación, SLA, alertas, devolución a la IA con resumen |
+| 3.3 | Inbox avanzado y escalamiento | ✅ Bandeja con estados (abierta, para el equipo, cerrada), tomar conversación, SLA por tienda con marca de vencida, alerta por correo al escalar, devolución a la IA con nota y resumen de la IA para el equipo. Pendiente: asignación entre miembros y notificaciones push |
 | 3.4 | Facturación en producción | 4 pasos de alta fiscal, activación explícita, reintentos de emisión y envío |
 | 3.5 | Pedidos y logística | Preparación, recojo con código, reparto con estados y línea de tiempo |
 | 3.6 | Marketing | Segmentos, carrito abandonado, colas de trabajo, campañas por email y plantillas de WhatsApp |
@@ -60,3 +60,4 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 2. Validar Culqi y Mercado Pago en sandbox con cuentas reales de prueba y ajustar el mapeo de eventos (2.2, 2.3).
 3. Correos transaccionales + trial con magic link (2.4, 2.5): cierran el escenario B de aceptación.
 4. Aplicar el resto de cuotas de entitlements (2.1).
+5. Configurar `GOOGLE_GENAI_API_KEY` y probar la IA vendedora con conversaciones reales antes de activarla en pilotos.

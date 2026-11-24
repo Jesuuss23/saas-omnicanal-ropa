@@ -60,13 +60,13 @@ public class WhatsAppMessageRepository {
     }
 
     /** Reserva la respuesta (idempotencia por request_id) solo si el chat existe en el historial de la tienda. */
-    public boolean claimReply(UUID tenant, UUID requestId, String chat, String text, WhatsAppProvider provider) {
+    public boolean claimReply(UUID tenant, UUID requestId, String chat, String text, WhatsAppProvider provider, String author) {
         return db.update("""
-                INSERT INTO whatsapp_manual_reply(tenant_id,request_id,chat_id,body,status,provider)
-                SELECT ?,?,?,?,'REVIEW',? WHERE EXISTS (
+                INSERT INTO whatsapp_manual_reply(tenant_id,request_id,chat_id,body,status,provider,author)
+                SELECT ?,?,?,?,'REVIEW',?,? WHERE EXISTS (
                     SELECT 1 FROM whatsapp_inbound_message m WHERE m.tenant_id=? AND m.chat_id=?)
                 ON CONFLICT (tenant_id,request_id) DO NOTHING
-                """, tenant, requestId, chat, text, provider.name(), tenant, chat) == 1;
+                """, tenant, requestId, chat, text, provider.name(), author, tenant, chat) == 1;
     }
 
     public Optional<String> existingReplyStatus(UUID tenant, UUID requestId, String chat, String text) {
