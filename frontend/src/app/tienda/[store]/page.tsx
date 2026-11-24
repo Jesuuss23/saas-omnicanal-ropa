@@ -4,7 +4,7 @@ import type {CSSProperties} from "react";
 import {cache} from "react";
 import Link from "next/link";
 import {notFound} from "next/navigation";
-import {AtSign, Clock, MapPin, MessageCircle, Search, X} from "lucide-react";
+import {AtSign, Clock, MapPin, MessageCircle, Search, UserRound, X} from "lucide-react";
 
 import ShareCatalog from "./ShareCatalog";
 import CatalogCart, {type Variant} from "./CatalogCart";
@@ -107,6 +107,7 @@ export default async function StoreCatalog(props:Props) {
             {instagram && <a href={instagram} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 font-medium underline-offset-4 hover:underline">
               <AtSign className="size-4"/>Instagram</a>}
             <ShareCatalog key={sharePath} path={sharePath} title={"Catálogo · "+catalog.storeName} label="Compartir catálogo" tone="inherit"/>
+            <Link href={path+"/cuenta"} className="inline-flex items-center gap-1.5 font-medium underline-offset-4 hover:underline"><UserRound className="size-4"/>Mi cuenta</Link>
           </div>
         </div>
       </div>

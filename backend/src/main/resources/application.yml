@@ -69,3 +69,8 @@ email:
 app:
   # URL pública del frontend, usada en los enlaces de los correos.
   base-url: ${APP_BASE_URL:${STOREFRONT_BASE_URL:http://localhost:3000}}
+
+# Cuentas de compradores en la tienda pública. Sin GOOGLE_CLIENT_ID el botón de Google no aparece.
+customers:
+  google-client-id: ${GOOGLE_CLIENT_ID:}
+  session-days: 30

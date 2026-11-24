@@ -15,6 +15,7 @@ com.saas.omnicanal
 ├── checkout/          # reservas, pedidos web, seguimiento
 ├── pos/               # punto de venta
 ├── fiscal/            # facturación electrónica (SUNAT vía APISPERU)
+├── contact/           # contacto unificado y cuenta del comprador (Google)
 ├── crm/
 ├── fulfillment/       # recojo y delivery
 ├── whatsapp/          # Evolution API (QR) y WhatsApp Cloud API
@@ -37,6 +38,7 @@ Cada módulo se divide en:
 | Ruta | Cadena | Autenticación |
 |------|--------|---------------|
 | `/api/webhooks/**` | `PublicApiSecurityConfig.webhooks` | Sin sesión; cada servicio valida firma/credencial (Evolution: HMAC por tienda; Meta: `X-Hub-Signature-256`; Culqi: token en URL + re-consulta; Mercado Pago: `x-signature` + re-consulta) |
+| `/api/public/stores/*/account/**` | `CustomerAccountSecurity` | Cookie `omni_customer` del comprador (sesión propia, sin sesión de Spring) |
 | `/api/public/**` | `PublicApiSecurityConfig.publicStoreApi` | Pública, con tokens de reserva o de seguimiento |
 | `/api/superadmin/**` | `AdminSecurity` | Contraseña + TOTP |
 | `/api/owner/**` | `OwnerSecurity` | Sesión del dueño o de un miembro + CSRF; `OwnerAccess.requireOwner` en cada endpoint y reglas por rol (ver abajo) |
@@ -74,4 +76,4 @@ Se movieron todas las clases a su capa, pero estos controladores todavía contie
 `service` + `repository` cuando se toquen: `checkout` (GuestCheckout, CartReservation, OrderTracking,
 OwnerWebOrders), `fiscal` (FiscalIssuer, BetaPosDocuments), `pos`, `crm`, `catalog` (CategoryResource,
 VariantLabels, PublicCatalogFile), `fulfillment`, `owner`, `tenant`, `platformadmin`.
-Ya siguen el patrón completo: `whatsapp`, `subscription`, `payments`, `team`, `catalog/OwnerCatalog` y `catalog/PublicStoreCatalog`.
+Ya siguen el patrón completo: `whatsapp`, `subscription`, `payments`, `team`, `contact`, `catalog/OwnerCatalog` y `catalog/PublicStoreCatalog`.

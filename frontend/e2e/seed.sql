@@ -27,3 +27,9 @@ INSERT INTO tenant_subscription (tenant_id, plan_code, status, trial_ends_at)
 VALUES ('e2e00000-0000-4000-8000-000000000001', 'TRIAL', 'TRIAL', now() + interval '14 days')
 ON CONFLICT (tenant_id) DO UPDATE SET plan_code = 'TRIAL', status = 'TRIAL', trial_ends_at = EXCLUDED.trial_ends_at,
     pending_plan_code = NULL, revision = tenant_subscription.revision + 1, updated_at = now();
+-- Contactos de corridas anteriores.
+UPDATE web_checkout_order SET contact_id = NULL WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+DELETE FROM customer_session WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+DELETE FROM contact_merge_log WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+UPDATE contact SET merged_into = NULL WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+DELETE FROM contact WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';

@@ -47,6 +47,9 @@ muestra un aviso en vez de la página. La invitación de un miembro llega como `
 `src/app/tienda/[store]` se renderiza en el servidor. La cabecera usa la apariencia de la tienda: el color del dueño
 llega como `--store` y el texto encima (`--store-fg`) se calcula por luminancia en `brand.ts`. `CatalogCart` agrupa las
 variantes por producto, deja elegir talla y color, y mantiene la reserva de 15 minutos y el contacto del invitado.
+`tienda/[store]/cuenta` es la cuenta del comprador: botón de Google Identity Services (si el backend devuelve
+`googleClientId`) y "Mis pedidos" con su enlace de seguimiento. La pestaña Contactos de Clientes muestra el contacto
+unificado, los posibles duplicados y el historial de fusiones con opción de deshacer.
 
 ## Diseño
 
