@@ -5,6 +5,9 @@ Todas las credenciales globales llegan por variables de entorno. Las credenciale
 
 ## Variables de entorno del backend
 
+Lista completa, con formato, cómo generarlas y valores de local y producción: [configuracion.md](configuracion.md).
+Resumen:
+
 | Variable | Uso |
 |----------|-----|
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | PostgreSQL |
