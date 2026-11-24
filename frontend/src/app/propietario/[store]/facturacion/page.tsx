@@ -3,11 +3,15 @@
 import {PageHeader} from "@/components/console/ConsoleShell";
 import {useStore} from "../_panel/StoreContext";
 import FiscalIssuer from "../FiscalIssuer";
+import ProductionSetup from "./ProductionSetup";
 
 export default function Billing() {
-  const {store, send} = useStore();
+  const {store, send, profile} = useStore();
   return <>
     <PageHeader title="Facturación" description="Datos de tu empresa para emitir boletas y facturas electrónicas ante SUNAT."/>
-    <FiscalIssuer store={store} send={send}/>
+    <div className="grid gap-6">
+      <FiscalIssuer store={store} send={send}/>
+      {profile.role === "OWNER" && <ProductionSetup store={store}/>}
+    </div>
   </>;
 }

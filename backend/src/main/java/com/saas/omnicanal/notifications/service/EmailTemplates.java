@@ -81,6 +81,15 @@ public class EmailTemplates {
                 "Tu tienda " + storeName + " está lista. Entra a tu panel: " + panelLink);
     }
 
+    /** Campaña de la tienda: texto del dueño (escapado) y enlace de baja siempre visible. */
+    public EmailMessage campaign(String to, String storeName, String subject, String body, String unsubscribeLink) {
+        String html = "<p style=\"margin:0 0 20px;white-space:pre-line\">" + esc(body) + "</p>"
+                + "<p style=\"margin:0 0 12px;font-size:12px;color:#78716c\">Recibes este correo porque aceptaste novedades de "
+                + esc(storeName) + ". <a href=\"" + esc(unsubscribeLink) + "\" style=\"color:#0f766e\">Darte de baja</a>.</p>";
+        String text = body + "\n\n—\n" + storeName + ". Para no recibir más correos: " + unsubscribeLink;
+        return new EmailMessage(to, "campaign", subject, layout(storeName, html, null, null, null), text);
+    }
+
     private EmailMessage message(String to, String template, String subject, String title, String introHtml,
                                  String action, String link, String footnote, String text) {
         return new EmailMessage(to, template, subject, layout(title, "<p style=\"margin:0 0 20px\">" + introHtml + "</p>",

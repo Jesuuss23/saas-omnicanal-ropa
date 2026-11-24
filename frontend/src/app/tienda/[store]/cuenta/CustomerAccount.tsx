@@ -74,6 +74,7 @@ export default function CustomerAccount({store, storeName}: {store: string; stor
         <p className="text-sm text-muted-foreground">{[profile.email, profile.phone && "+" + profile.phone].filter(Boolean).join(" · ")}</p></div>
       <button type="button" onClick={logout} className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border px-4 text-sm"><LogOut className="size-4"/>Cerrar sesión</button>
     </div>
+    <Preferences base={base}/>
     <div>
       <h2 className="mb-3 text-lg font-semibold">Mis pedidos</h2>
       {!profile.orders.length ? <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
@@ -88,4 +89,36 @@ export default function CustomerAccount({store, storeName}: {store: string; stor
           </Link></li>)}</ul>}
     </div>
   </section>;
+}
+
+type Prefs = {storeName: string; email: string | null; emailOptIn: boolean; whatsappOptIn: boolean};
+
+/** Consentimiento para recibir novedades (Ley 29733): el comprador lo da y lo retira cuando quiere. */
+function Preferences({base}: {base: string}) {
+  const prefs = useApiData<Prefs>(base + "/preferences");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  if (!prefs.data) return null;
+  const current = prefs.data;
+
+  async function toggle(change: Partial<Pick<Prefs, "emailOptIn" | "whatsappOptIn">>) {
+    setSaving(true); setError("");
+    try {
+      const res = await apiFetch(base + "/preferences", {method: "PUT", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({emailOptIn: current.emailOptIn, whatsappOptIn: current.whatsappOptIn, ...change})});
+      if (!res.ok) throw new Error();
+      prefs.mutate(await res.json());
+    } catch { setError("No se pudo guardar tu preferencia."); }
+    finally { setSaving(false); }
+  }
+
+  return <fieldset disabled={saving} className="grid gap-3 rounded-2xl border border-border bg-card p-5">
+    <legend className="sr-only">Comunicaciones</legend>
+    <h2 className="text-lg font-semibold">Novedades de {current.storeName}</h2>
+    {current.email && <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={current.emailOptIn}
+      onChange={e => toggle({emailOptIn: e.target.checked})} className="size-4 accent-[var(--store)]"/>Recibir ofertas por correo</label>}
+    <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={current.whatsappOptIn}
+      onChange={e => toggle({whatsappOptIn: e.target.checked})} className="size-4 accent-[var(--store)]"/>Recibir ofertas por WhatsApp</label>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+  </fieldset>;
 }
