@@ -37,6 +37,10 @@ spring:
     google:
       genai:
         api-key: ${GOOGLE_GENAI_API_KEY:sin-configurar}
+        chat:
+          # Alias de Google que siempre apunta al Flash vigente (los modelos fijos se retiran y dan 404).
+          # Para fijar uno, p. ej. GEMINI_MODEL=gemini-2.5-flash; al arrancar se verifica que exista.
+          model: ${GEMINI_MODEL:gemini-flash-latest}
 
 # Integraciones. Todos los secretos llegan por variables de entorno (ver docs/configuracion.md).
 whatsapp:

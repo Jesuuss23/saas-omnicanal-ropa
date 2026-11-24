@@ -17,7 +17,7 @@ Todas las credenciales globales llegan por variables de entorno. Las credenciale
 | `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, `MP_REDIRECT_URI`, `MP_WEBHOOK_SECRET` | Aplicación de Mercado Pago del SaaS (marketplace) |
 | `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD_HASH`, `SUPERADMIN_TOTP_SECRET` | Superadmin |
 | `APISPERU_*` | Facturación electrónica |
-| `GOOGLE_GENAI_API_KEY` | Clave de Gemini (Google AI Studio) para la IA vendedora. Sin ella la IA no responde y el panel lo indica |
+| `GOOGLE_GENAI_API_KEY`, `GEMINI_MODEL` | Clave de Gemini (Google AI Studio) para la IA vendedora y modelo (por defecto `gemini-flash-latest`). Sin clave la IA no responde y el panel lo indica |
 | `GOOGLE_CLIENT_ID` | Client ID web de Google (OAuth) para "Continuar con Google" en la tienda pública. Sin él, el botón no aparece |
 
 ## WhatsApp: dos categorías
@@ -112,8 +112,13 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`).
 
 ## IA vendedora (Gemini)
 
-- **Clave:** `GOOGLE_GENAI_API_KEY` desde Google AI Studio. El modelo se puede cambiar con
-  `spring.ai.google.genai.chat.options.model` si hace falta.
+- **Clave:** `GOOGLE_GENAI_API_KEY` desde Google AI Studio.
+- **Modelo:** `GEMINI_MODEL`, por defecto `gemini-flash-latest` (alias de Google que siempre apunta al Flash vigente).
+  Los modelos con versión fija se retiran y entonces responden 404; la familia `gemini-1.5` ya no existe.
+  Al arrancar, el backend consulta `GET /v1beta/models/{modelo}`: si no existe deja en ERROR la respuesta de Google y la
+  lista de modelos disponibles para la clave.
+- **Errores:** cada fallo de Gemini queda en ERROR con código HTTP, estado y mensaje de Google
+  (`Gemini HTTP 404 NOT_FOUND: …`), y el mismo texto se guarda en `ai_reply` del mensaje.
 - **Interruptores:** global en la consola del superadmin (queda en auditoría), por tienda en Asistente IA y por
   conversación en la bandeja. La cuota mensual sale del plan (`ai.responses.monthly`).
 - **Datos que ve el modelo:** los últimos 12 mensajes de la conversación, las indicaciones de la tienda, la nota del
