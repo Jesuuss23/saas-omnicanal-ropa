@@ -4,6 +4,10 @@ server:
     include-message: always
 
 spring:
+  web:
+    error:
+      # Spring Boot 4 lee los mensajes de error desde aquí (server.error.* ya no aplica a la respuesta JSON).
+      include-message: always
   autoconfigure:
     exclude: org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
   servlet:
@@ -38,9 +42,8 @@ spring:
       genai:
         api-key: ${GOOGLE_GENAI_API_KEY:sin-configurar}
         chat:
-          # Alias de Google que siempre apunta al Flash vigente (los modelos fijos se retiran y dan 404).
-          # Para fijar uno, p. ej. GEMINI_MODEL=gemini-2.5-flash; al arrancar se verifica que exista.
-          model: ${GEMINI_MODEL:gemini-flash-latest}
+          # Modelo principal; al arrancar se verifica que exista para la clave.
+          model: ${GEMINI_MODEL:gemini-3.5-flash}
 
 # Integraciones. Todos los secretos llegan por variables de entorno (ver docs/configuracion.md).
 whatsapp:
@@ -70,6 +73,11 @@ email:
   from: ${EMAIL_FROM:Omnicanal <onboarding@resend.dev>}
   reply-to: ${EMAIL_REPLY_TO:}
   api-url: https://api.resend.com
+
+assistant:
+  # Si el modelo principal está saturado (503/429) se reintenta y el último intento usa este alias, que apunta al Flash vigente.
+  gemini-fallback-model: ${GEMINI_FALLBACK_MODEL:gemini-flash-latest}
+  gemini-retry-delay-ms: 1500
 
 app:
   # URL pública del frontend, usada en los enlaces de los correos.

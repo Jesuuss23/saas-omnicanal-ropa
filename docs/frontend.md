@@ -37,6 +37,16 @@ ventas por día y pasos de configuración), Pedidos web, Punto de venta, Catálo
 WhatsApp, Apariencia (nombre, logo, color, contacto), Asistente IA, Marketing, Cobros, Facturación, Equipo, Plan y Cuenta. Los componentes de cada
 módulo (`Catalog`, `WebOrders`, `PointOfSale`…) siguen en la carpeta de la ruta.
 
+Catálogo: el alta (`NewProduct`) arma una variante por cada combinación de tallas y colores elegidos; las tallas y
+categorías salen de selects (`catalogOptions.tsx`, categorías desde `GET catalog/categories`). Si el SKU queda vacío el
+backend lo genera legible (`NOMBRE-COLOR-TALLA`, sin tildes, con `-2`, `-3`… si ya existe). Las etiquetas son **una por
+producto**: el QR lleva el id del producto y el PDF muestra sus tallas y colores.
+
+Punto de venta: buscador de productos (`GET pos/products?query=`) con una tarjeta por variante (talla, color, SKU, precio
+y stock). Al escanear un QR (`GET pos/products/{código}`) se elige la talla y el color; si el producto tiene una sola
+variante con stock se agrega directo. Las etiquetas antiguas (QR con id de variante) siguen funcionando, y Enter con un SKU
+exacto lo agrega al carrito.
+
 El menú depende de `profile.role` (`roleAccess` en `StoreContext`): el vendedor solo ve las secciones de venta y el
 encargado no ve Cobros, Equipo, Plan ni Cuenta. Si alguien abre por enlace una sección fuera de su rol, `StoreShell`
 muestra un aviso en vez de la página. La invitación de un miembro llega como `#m.<id>.<token>` y la del propietario como

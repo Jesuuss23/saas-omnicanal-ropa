@@ -1,7 +1,14 @@
 "use client";
-import type {Send} from "@/lib/api";
+import {errorMessage, ownerApi, type Send} from "@/lib/api";
 
 import {useState, type FormEvent} from "react";
+import {Alert} from "@/components/ui/alert";
+import {Button} from "@/components/ui/button";
+import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from "@/components/ui/dialog";
+import {Input} from "@/components/ui/input";
+import {Field} from "@/components/ui/label";
+import {useApiData} from "@/lib/useApiData";
+import {CategorySelect, COMMON_COLORS, SizeSelect, skuBase} from "./catalogOptions";
 
 export type InventoryRow = {
   id:string; name:string; category:string|null; sku:string; size:string; color:string|null;
@@ -9,49 +16,65 @@ export type InventoryRow = {
   productId:string; coverImage:string|null;
 };
 type Props = {row:InventoryRow; path:string; send:Send; close:()=>void; reload:()=>void};
-const input = "mt-1 block w-full rounded-lg border border-border bg-card px-3 py-2";
 
 export default function EditVariant({row,path,send,close,reload}:Props) {
+  const categories = useApiData<string[]>(ownerApi.url(path+"/categories")).data;
+  const [name,setName] = useState(row.name);
+  const [category,setCategory] = useState(row.category ?? "");
+  const [sku,setSku] = useState(row.sku);
+  const [size,setSize] = useState(row.size);
+  const [color,setColor] = useState(row.color ?? "");
+  const [price,setPrice] = useState(String(row.price));
+  const [stock,setStock] = useState(String(row.physical));
   const [busy,setBusy] = useState(false);
   const [stale,setStale] = useState(false);
   const [error,setError] = useState("");
+
   async function save(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || stale) return;
-    const fields = new FormData(event.currentTarget);
     setBusy(true); setError("");
     try {
       const res = await send(path + "/variants/" + row.id, JSON.stringify({
-        name:fields.get("name"), category:fields.get("category"),
-        productVersion:row.productVersion, variantVersion:row.variantVersion,
-        variant:{sku:fields.get("sku"), size:fields.get("size"), color:fields.get("color"),
-          price:fields.get("price"), stock:Number(fields.get("stock"))}
+        name, category:category.trim() || null, productVersion:row.productVersion, variantVersion:row.variantVersion,
+        variant:{sku, size, color, price, stock:Number(stock)}
       }), "PUT");
       if (res.ok) {reload(); return;}
       if (res.status === 412) {
         setStale(true);
         setError("El registro cambió o hay más unidades reservadas. Recarga el inventario antes de editar.");
-      } else if (res.status === 409) setError("Ese SKU ya pertenece a otra variante.");
-      else setError("No se guardaron los cambios. Revisa los datos y tu sesión.");
+      } else setError(await errorMessage(res, res.status === 409 ? "Ese SKU ya pertenece a otra variante." : "No se guardaron los cambios. Revisa los datos y tu sesión."));
     } catch {setError("No se pudo confirmar el guardado. Recarga el inventario para comprobarlo.");}
     finally {setBusy(false);}
   }
 
-  return <form onSubmit={save} className="my-4 rounded-xl border border-brand-100 bg-accent p-5">
-    <fieldset disabled={busy || stale} className="grid gap-3 sm:grid-cols-2">
-      <legend className="mb-3 text-lg font-semibold">Editar {row.sku}</legend>
-      <p className="sm:col-span-2 text-sm">El nombre y la categoría se aplican a todas las variantes de esta prenda.</p>
-      <label>Nombre<input name="name" defaultValue={row.name} maxLength={150} required className={input}/></label>
-      <label>Categoría<input name="category" defaultValue={row.category ?? ""} maxLength={50} className={input}/></label>
-      <label>SKU<input name="sku" defaultValue={row.sku} maxLength={50} required className={input}/></label>
-      <label>Talla<input name="size" defaultValue={row.size} maxLength={10} required className={input}/></label>
-      <label>Color<input name="color" defaultValue={row.color ?? ""} maxLength={30} required className={input}/></label>
-      <label>Precio (S/)<input name="price" type="number" defaultValue={row.price} min="0.01" max="99999999.99" step="0.01" required className={input}/></label>
-      <label>Stock físico<input name="stock" type="number" defaultValue={row.physical} min={Math.max(0,row.reserved)} max="2147483647" required className={input}/></label>
-      <p className="self-end py-2 text-sm">Unidades reservadas: {row.reserved}</p>
-      <button className="rounded-lg bg-primary px-4 py-2 text-white">{busy ? "Guardando…" : "Guardar cambios"}</button>
-    </fieldset>
-    <button type="button" disabled={busy} onClick={stale ? reload : close} className="mt-3 text-primary underline">{stale ? "Recargar inventario" : "Cancelar"}</button>
-    <p role="status" className="mt-2 text-sm">{error}</p>
-  </form>;
+  const suggested = skuBase(name, color, size);
+  return <Dialog open onOpenChange={open=>{ if (!open && !busy) (stale ? reload : close)(); }}>
+    <DialogContent className="max-w-2xl">
+      <DialogHeader><DialogTitle>Editar {row.sku}</DialogTitle>
+        <DialogDescription>El nombre y la categoría se aplican a todas las variantes de esta prenda.</DialogDescription></DialogHeader>
+      <form onSubmit={save}>
+        <fieldset disabled={busy || stale} className="grid gap-4 sm:grid-cols-2">
+          <Field label="Nombre" htmlFor="ev-name"><Input id="ev-name" value={name} onChange={e=>setName(e.target.value)} maxLength={150} required/></Field>
+          <Field label="Categoría" htmlFor="ev-category">
+            {categories ? <CategorySelect id="ev-category" value={category} onChange={setCategory} categories={categories}/>
+              : <Input id="ev-category" value={category} onChange={e=>setCategory(e.target.value)} maxLength={50}/>}</Field>
+          <Field label="Talla" htmlFor="ev-size"><SizeSelect id="ev-size" value={size} onChange={setSize} required/></Field>
+          <Field label="Color" htmlFor="ev-color"><Input id="ev-color" list="ev-colors" value={color} onChange={e=>setColor(e.target.value)} maxLength={30} required/>
+            <datalist id="ev-colors">{COMMON_COLORS.map(c=><option key={c} value={c}/>)}</datalist></Field>
+          <Field label="SKU" htmlFor="ev-sku" className="sm:col-span-2"
+            hint={sku !== suggested ? <button type="button" className="text-primary underline" onClick={()=>setSku(suggested)}>Usar {suggested}</button> : "Coincide con nombre, color y talla."}>
+            <Input id="ev-sku" value={sku} onChange={e=>setSku(e.target.value.toUpperCase())} maxLength={50} required className="font-mono"/></Field>
+          <Field label="Precio (S/)" htmlFor="ev-price"><Input id="ev-price" type="number" value={price} onChange={e=>setPrice(e.target.value)} min="0.01" max="99999999.99" step="0.01" required/></Field>
+          <Field label="Stock físico" htmlFor="ev-stock" hint={row.reserved>0 ? `${row.reserved} reservadas en pedidos web: no puede bajar de ahí.` : undefined}>
+            <Input id="ev-stock" type="number" value={stock} onChange={e=>setStock(e.target.value)} min={Math.max(0,row.reserved)} max="2147483647" required/></Field>
+          {error && <Alert variant="destructive" className="sm:col-span-2">{error}</Alert>}
+        </fieldset>
+        <DialogFooter className="mt-4">
+          <Button type="button" variant="outline" disabled={busy} onClick={stale ? reload : close}>{stale ? "Recargar inventario" : "Cancelar"}</Button>
+          {!stale && <Button type="submit" loading={busy}>Guardar cambios</Button>}
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }

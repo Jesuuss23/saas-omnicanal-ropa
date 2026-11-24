@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -34,20 +35,43 @@ public class GeminiResponder implements AssistantResponder {
     private final String apiKey;
     private final String model;
     private final String apiBase;
+    private final String fallbackModel;
+    private final long retryDelayMs;
 
     public GeminiResponder(ObjectProvider<ChatClient.Builder> builders, PublicCatalogRepository catalog,
                            @Value("${spring.ai.google.genai.api-key:}") String apiKey,
-                           @Value("${spring.ai.google.genai.chat.model:gemini-flash-latest}") String model,
-                           @Value("${assistant.gemini-api-base:https://generativelanguage.googleapis.com/v1beta}") String apiBase) {
+                           @Value("${spring.ai.google.genai.chat.model:gemini-3.5-flash}") String model,
+                           @Value("${assistant.gemini-api-base:https://generativelanguage.googleapis.com/v1beta}") String apiBase,
+                           @Value("${assistant.gemini-fallback-model:gemini-flash-latest}") String fallbackModel,
+                           @Value("${assistant.gemini-retry-delay-ms:1500}") long retryDelayMs) {
         this.builders = builders;
         this.catalog = catalog;
         this.apiKey = apiKey == null ? "" : apiKey.strip();
-        this.model = model == null || model.isBlank() ? "gemini-flash-latest" : model.strip();
+        this.model = model == null || model.isBlank() ? "gemini-3.5-flash" : model.strip();
         this.apiBase = apiBase.replaceAll("/+$", "");
+        this.fallbackModel = fallbackModel == null || fallbackModel.isBlank() ? this.model : fallbackModel.strip();
+        this.retryDelayMs = Math.max(0, retryDelayMs);
     }
 
     public String model() {
         return model;
+    }
+
+    /** 429 (cuota por minuto), 500, 503 (alta demanda) y 504 suelen pasar solos: vale la pena reintentar. */
+    static boolean transientFailure(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof ApiException api) return api.code() == 429 || api.code() >= 500;
+            if (t.getCause() == t) break;
+        }
+        return false;
+    }
+
+    private static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /** Al arrancar confirma que el modelo existe para esta clave; si no, deja en ERROR la respuesta de Google y los modelos disponibles. */
@@ -112,18 +136,32 @@ public class GeminiResponder implements AssistantResponder {
         var tools = new StoreTools(tenant, catalog, facts);
         List<Message> messages = new ArrayList<>();
         for (Turn t : history) messages.add("CUSTOMER".equals(t.author()) ? new UserMessage(t.text()) : new AssistantMessage(t.text()));
-        String text;
-        try {
-            text = builders.getObject().build().prompt()
-                    .system(system(facts, instructions, note))
-                    .messages(messages)
-                    .user(message)
-                    .tools(tools)
-                    .call().content();
-        } catch (RuntimeException ex) {
-            log.error("IA vendedora: falló la llamada a Gemini (modelo '{}') → {}", model, describe(ex), ex);
-            throw ex;
+        String text = null;
+        RuntimeException last = null;
+        // Gemini responde 503/429 cuando el modelo está saturado: reintenta con espera y, al final, usa el modelo de respaldo.
+        String[] plan = fallbackModel.equals(model) ? new String[]{model, model, model} : new String[]{model, model, fallbackModel};
+        for (int attempt = 0; attempt < plan.length; attempt++) {
+            String current = plan[attempt];
+            try {
+                text = builders.getObject().build().prompt()
+                        .options(GoogleGenAiChatOptions.builder().model(current))
+                        .system(system(facts, instructions, note))
+                        .messages(messages)
+                        .user(message)
+                        .tools(tools)
+                        .call().content();
+                last = null;
+                break;
+            } catch (RuntimeException ex) {
+                last = ex;
+                boolean transient_ = transientFailure(ex);
+                log.error("IA vendedora: falló la llamada a Gemini (modelo '{}', intento {}/{}) → {}", current, attempt + 1,
+                        plan.length, describe(ex), transient_ ? null : ex);
+                if (!transient_ || attempt == plan.length - 1) break;
+                sleep(retryDelayMs * (1L << attempt));
+            }
         }
+        if (last != null) throw last;
         boolean escalate = tools.escalationReason != null;
         if (text == null || text.isBlank()) text = escalate ? "Gracias por escribirnos. Una persona del equipo te responderá pronto."
                 : "Gracias por escribirnos. ¿Me cuentas qué prenda buscas y en qué talla?";

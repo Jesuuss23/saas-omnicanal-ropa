@@ -112,8 +112,8 @@ export default function FiscalIssuer({store,send}:Props) {
     setIssuer(current=>current && {...current,[key]:value});
   }
 
-  return <details className="rounded-xl border bg-card p-5 shadow-card">
-    <summary className="cursor-pointer font-semibold">Facturación electrónica · Datos del emisor</summary>
+  return <section className="rounded-xl border bg-card p-5 shadow-card" aria-labelledby="issuer-title">
+    <h2 id="issuer-title" className="font-semibold">Facturación electrónica · Datos del emisor</h2>
     {issuer && <form onSubmit={save}>
       <fieldset disabled={busy || retry} className="mt-4 grid gap-4 sm:grid-cols-2">
         <label>RUC<input className={input} value={issuer.ruc} onChange={e=>change("ruc",e.target.value)} inputMode="numeric" pattern="[0-9]{11}" maxLength={11} required/></label>
@@ -137,5 +137,5 @@ export default function FiscalIssuer({store,send}:Props) {
     {issuer && issuer.revision > 0 && <BetaCompany key={issuer.revision} path={path} ruc={savedRuc} revision={issuer.revision} send={send}/>}
     <p role="status" className="mt-2 text-sm">{message}</p>
     {retry && <button className="text-primary underline" onClick={()=>{setIssuer(null); setRetry(false); setMessage("Cargando datos fiscales…"); setReload(v=>v+1);}}>Recargar ficha</button>}
-  </details>;
+  </section>;
 }

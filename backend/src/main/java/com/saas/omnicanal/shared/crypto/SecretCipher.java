@@ -27,6 +27,13 @@ public class SecretCipher {
 
     public SecretCipher(@Value("${SECRETS_ENCRYPTION_KEY:}") String encoded) {
         this.key = parse(encoded);
+        var log = org.slf4j.LoggerFactory.getLogger(SecretCipher.class);
+        if (key != null) log.info("Cifrado: SECRETS_ENCRYPTION_KEY cargada");
+        else if (encoded == null || encoded.isBlank())
+            log.warn("Cifrado: falta SECRETS_ENCRYPTION_KEY. No funcionarán la verificación en dos pasos, WhatsApp Cloud API, "
+                    + "Mercado Pago ni la facturación. Genera una con: openssl rand -base64 32");
+        else
+            log.error("Cifrado: SECRETS_ENCRYPTION_KEY no es válida (debe ser Base64 de 32 bytes). Genera una con: openssl rand -base64 32");
     }
 
     private static SecretKeySpec parse(String encoded) {

@@ -21,7 +21,8 @@ public class OwnerCatalogController {
         this.catalog = catalog;
     }
 
-    record Variant(@NotBlank @Size(max=50) String sku, @NotBlank @Size(max=10) String size,
+    /** El SKU puede venir vacío al crear: se genera con nombre, color y talla. */
+    record Variant(@Size(max=50) String sku, @NotBlank @Size(max=10) String size,
                    @NotBlank @Size(max=30) String color,
                    @NotNull @Positive @Digits(integer=8, fraction=2) BigDecimal price,
                    @NotNull @PositiveOrZero Integer stock) {}
@@ -37,6 +38,12 @@ public class OwnerCatalogController {
                                     @RequestParam(defaultValue="false") boolean availableOnly) {
         requireOwner(store, principal);
         return catalog.page(store, page, query, availableOnly);
+    }
+
+    @GetMapping("/categories")
+    List<String> categories(@PathVariable UUID store, Principal principal) {
+        requireOwner(store, principal);
+        return catalog.categories(store);
     }
 
     @PutMapping("/variants/{id}")

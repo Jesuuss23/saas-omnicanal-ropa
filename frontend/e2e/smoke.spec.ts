@@ -79,7 +79,14 @@ test("panel del propietario carga todas sus secciones", async ({page}, info) => 
     if (link === "Marketing") await expect(page.getByText("Nueva campaña")).toBeVisible();
     if (link === "Facturación") await expect(page.getByText("Emisión en producción")).toBeVisible();
     if (link === "Cobros") await expect(page.getByRole("heading", {name: "Cobros en línea con Mercado Pago"})).toBeVisible();
-    if (link === "Catálogo") await expect(page.getByRole("cell", {name: /Polo E2E/})).toBeVisible();
+    if (link === "Catálogo") await expect(page.getByRole("checkbox", {name: "Etiqueta QR de Polo E2E"})).toBeVisible();
+    if (link === "Punto de venta") {
+      // El buscador muestra la prenda con su SKU; Enter con el SKU exacto la agrega al carrito.
+      await page.getByLabel("Buscar prenda o SKU").fill("E2E-POLO-M");
+      await expect(page.getByRole("button", {name: /Agregar Polo E2E talla M/})).toBeVisible();
+      await page.getByLabel("Buscar prenda o SKU").press("Enter");
+      await expect(page.getByRole("list", {name: "Carrito de mostrador"}).getByText("Polo E2E")).toBeVisible();
+    }
   }
   await page.getByRole("button", {name: "Cerrar sesión"}).click();
   await expect(page.getByLabel(/contraseña/i)).toBeVisible();
