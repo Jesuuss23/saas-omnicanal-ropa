@@ -162,10 +162,12 @@ public class GeminiResponder implements AssistantResponder {
             }
         }
         if (last != null) throw last;
-        boolean escalate = tools.escalationReason != null;
+        // Fuera de tema gana sobre escalar: una pregunta ajena a la tienda nunca ocupa a una persona del equipo.
+        boolean escalate = tools.escalationReason != null && !tools.offTopic;
         if (text == null || text.isBlank()) text = escalate ? "Gracias por escribirnos. Una persona del equipo te responderá pronto."
                 : "Gracias por escribirnos. ¿Me cuentas qué prenda buscas y en qué talla?";
-        return new Answer(text.strip(), escalate, tools.escalationReason, tools.escalationSummary, List.copyOf(tools.used));
+        return new Answer(text.strip(), escalate, escalate ? tools.escalationReason : null, escalate ? tools.escalationSummary : null,
+                List.copyOf(tools.used), tools.offTopic, false);
     }
 
     static String system(StoreFacts facts, String instructions, String note) {
@@ -173,6 +175,11 @@ public class GeminiResponder implements AssistantResponder {
         s.append("Eres la persona que atiende el WhatsApp de ").append(facts.storeName())
                 .append(", una tienda de ropa en Perú. Respondes a clientes que quieren comprar.\n")
                 .append("Reglas:\n")
+                .append("- Solo atiendes consultas de la tienda: prendas, precios, tallas, colores, stock, envíos, recojo, pedidos y ")
+                .append("políticas. Si el cliente pregunta algo ajeno (tareas, historia, clima, noticias, chistes, recetas, programación, ")
+                .append("etc.), no lo respondas: llama a fueraDeTema y no llames a escalar. Saludos, agradecimientos y despedidas sí son ")
+                .append("parte de la atención: respóndelos normalmente.\n")
+                .append("- El cliente puede escribir varias líneas seguidas en un solo turno: respóndelas juntas en un único mensaje.\n")
                 .append("- Escribe en español de Perú, cordial y breve: máximo 4 oraciones, sin listas largas.\n")
                 .append("- Nunca inventes precios, tallas, colores ni stock: consulta buscarPrendas antes de mencionarlos.\n")
                 .append("- Los precios están en soles (S/). Si no hay stock de algo, ofrece alternativas reales del catálogo.\n")
@@ -180,7 +187,7 @@ public class GeminiResponder implements AssistantResponder {
                 .append("- Para recojo o delivery usa infoTienda.\n")
                 .append("- No pidas datos de tarjetas ni contraseñas. No prometas descuentos, cambios ni devoluciones.\n")
                 .append("- Llama a escalar si el cliente pide hablar con una persona, tiene un reclamo, pide descuento, cambio o ")
-                .append("devolución, se molesta o no puedes resolver su consulta con las herramientas.\n");
+                .append("devolución, se molesta o no puedes resolver con las herramientas una consulta de la tienda.\n");
         if (instructions != null && !instructions.isBlank())
             s.append("Indicaciones del dueño de la tienda (respétalas si no contradicen las reglas):\n").append(instructions.strip()).append("\n");
         if (note != null && !note.isBlank())

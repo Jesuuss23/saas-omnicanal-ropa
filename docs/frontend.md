@@ -56,7 +56,9 @@ muestra un aviso en vez de la página. La invitación de un miembro llega como `
 La página WhatsApp tiene la bandeja (`whatsapp/Inbox.tsx`): conversaciones por estado, hilo con mensajes del cliente,
 de la IA y del equipo, y acciones para tomar, devolver a la IA con nota, pausar la IA o cerrar. Responder desde la
 bandeja toma la conversación primero, así la IA no contesta encima de una persona. Asistente IA configura la IA de la
-tienda y permite probarla sin enviar nada.
+tienda y permite probarla sin enviar nada: la prueba agrupa los mensajes seguidos con la misma espera que WhatsApp
+(`debounceMs` del estado) y lleva el contador de preguntas fuera de tema; a la segunda muestra la pausa y no vuelve a
+llamar al modelo hasta "Empezar de nuevo". La bandeja marca "IA pausada: fuera de tema" y explica cómo reactivarla.
 
 Marketing (`marketing/page.tsx`) crea borradores de campaña con segmento y conteo previo, los lanza o cancela, y configura el
 recordatorio de carrito abandonado. Facturación suma, solo para el propietario, el alta para producción en 4 pasos

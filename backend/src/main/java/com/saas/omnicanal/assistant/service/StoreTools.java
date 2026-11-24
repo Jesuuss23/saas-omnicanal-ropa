@@ -21,6 +21,7 @@ public class StoreTools {
     final List<String> used = new ArrayList<>();
     String escalationReason;
     String escalationSummary;
+    boolean offTopic;
 
     StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts) {
         this.tenant = tenant;
@@ -47,13 +48,23 @@ public class StoreTools {
     }
 
     @Tool(description = "Pasa la conversación a una persona del equipo. Úsala si el cliente pide hablar con alguien, tiene un "
-            + "reclamo, pide descuento, cambio o devolución, pregunta algo que no puedes responder con las herramientas, o se molesta.")
+            + "reclamo, pide descuento, cambio o devolución, hace una consulta de la tienda que no puedes responder con las "
+            + "herramientas, o se molesta. Nunca la uses para preguntas ajenas a la tienda: para eso está fueraDeTema.")
     public String escalar(@ToolParam(description = "Motivo breve, por ejemplo 'Pide un cambio de talla'.") String motivo,
                           @ToolParam(description = "Resumen de 1 a 3 frases para la persona que tomará la conversación.") String resumen) {
         used.add("escalar");
         escalationReason = clean(motivo, 300);
         escalationSummary = clean(resumen, 2000);
         return "Listo. Dile al cliente que una persona del equipo le responderá pronto.";
+    }
+
+    @Tool(description = "Marca el mensaje como ajeno a la tienda. Úsala cuando el cliente pregunta algo que no tiene que ver con "
+            + "las prendas, precios, tallas, stock, envíos, recojo, pedidos o políticas de la tienda (por ejemplo tareas, historia, "
+            + "clima, noticias, chistes, recetas o programación). No la uses para saludos, agradecimientos ni despedidas.")
+    public String fueraDeTema(@ToolParam(description = "Tema de la pregunta en 1 a 4 palabras, por ejemplo 'tarea de historia'.", required = false) String tema) {
+        used.add("fueraDeTema");
+        offTopic = true;
+        return "Registrado. No respondas la pregunta; el sistema enviará el aviso al cliente.";
     }
 
     private static String clean(String value, int max) {

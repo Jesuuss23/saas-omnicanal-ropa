@@ -149,6 +149,20 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`). Sin `type`, un ca
 - **Datos que ve el modelo:** los últimos 12 mensajes de la conversación, las indicaciones de la tienda, la nota del
   equipo al devolver la conversación y lo que devuelven las herramientas (catálogo público, recojo y delivery).
   Nunca ve tokens, datos de pago ni otras tiendas.
+- **Agrupación de mensajes:** cada mensaje entrante queda `PENDING` en `ai_reply` y reinicia una espera por chat de
+  `AI_DEBOUNCE_MS` (`assistant.debounce-ms`, por defecto 8000 ms). Al vencer sin mensajes nuevos, todos los pendientes
+  se concatenan en orden de llegada (uno por línea) y van en una sola llamada a Gemini; la respuesta queda en el último
+  mensaje y los demás pasan a `BATCHED` con `batch_of`. Los pendientes se toman con un único `UPDATE … RETURNING`
+  (`PENDING → WORKING`), así dos hilos o dos instancias nunca responden el mismo mensaje; dentro de una instancia nunca
+  corren dos lotes del mismo chat a la vez. Cada minuto se recuperan pendientes huérfanos (reinicio del servidor) y los
+  lotes `WORKING` de más de 15 minutos se marcan `FAILED` sin reintentar.
+- **Solo temas de la tienda:** el modelo marca las preguntas ajenas (tareas, clima, chistes…) con la herramienta
+  `fueraDeTema`, que gana sobre `escalar`: nunca se deriva a una persona. La primera recibe un aviso fijo y suma
+  `conversation.off_topic_count`; una consulta válida lo vuelve a cero. La segunda seguida envía un cierre corto y pausa
+  la IA en la conversación (`ai_enabled = false`, `ai_paused_reason = 'OFF_TOPIC'`, sigue abierta). Desde ahí los
+  mensajes quedan `SKIPPED` con `off_topic_paused` antes de llamar al modelo (0 tokens). Se reinicia cuando el equipo
+  activa la IA, toma o devuelve la conversación, o la cierra y el cliente vuelve a escribir. La prueba del panel aplica
+  las mismas reglas (el panel envía `offTopicCount`) y agrupa igual los mensajes seguidos.
 
 ## Marketing
 

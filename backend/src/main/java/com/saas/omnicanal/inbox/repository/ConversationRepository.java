@@ -19,7 +19,7 @@ public class ConversationRepository {
     /** Fila de la bandeja: último mensaje (de cualquiera de los lados), nombre del contacto y si venció el SLA. */
     private static final String ROW_SELECT = """
             SELECT c.chat_id, c.status, c.ai_enabled, c.assignee, c.last_inbound_at, c.last_outbound_at, c.escalated_at,
-                   c.escalation_reason, c.summary, c.handback_note, c.revision,
+                   c.escalation_reason, c.summary, c.handback_note, c.revision, c.ai_paused_reason, c.off_topic_count,
                    (SELECT k.full_name FROM contact k WHERE k.tenant_id = c.tenant_id AND k.merged_into IS NULL
                      AND k.phone = split_part(c.chat_id, '@', 1)) AS contact_name,
                    last.body AS last_body, last.author AS last_author,
@@ -52,15 +52,45 @@ public class ConversationRepository {
                 rs.getString("contact_name"), Status.valueOf(rs.getString("status")), rs.getBoolean("ai_enabled"),
                 rs.getString("assignee"), rs.getString("last_body"), rs.getString("last_author"),
                 instant(rs.getTimestamp("last_inbound_at")), instant(rs.getTimestamp("last_outbound_at")),
-                instant(rs.getTimestamp("escalated_at")), rs.getBoolean("overdue"));
+                instant(rs.getTimestamp("escalated_at")), rs.getBoolean("overdue"), rs.getString("ai_paused_reason"),
+                rs.getInt("off_topic_count"));
     }
 
-    /** Registra el mensaje entrante: crea la conversación o reabre una cerrada. */
+    /**
+     * Registra el mensaje entrante: crea la conversación o reabre una cerrada. Reabrir una conversación que la IA había
+     * pausado por preguntas fuera de tema la reinicia: la IA vuelve a atender con el contador en cero.
+     */
     public void inbound(UUID tenant, String chat) {
         db.update("""
                 INSERT INTO conversation(tenant_id, chat_id, last_inbound_at) VALUES (?,?,now())
                 ON CONFLICT (tenant_id, chat_id) DO UPDATE SET last_inbound_at = now(), updated_at = now(),
-                    status = CASE WHEN conversation.status = 'CLOSED' THEN 'OPEN' ELSE conversation.status END
+                    status = CASE WHEN conversation.status = 'CLOSED' THEN 'OPEN' ELSE conversation.status END,
+                    ai_enabled = CASE WHEN conversation.status = 'CLOSED' AND conversation.ai_paused_reason = 'OFF_TOPIC'
+                                      THEN true ELSE conversation.ai_enabled END,
+                    off_topic_count = CASE WHEN conversation.status = 'CLOSED' THEN 0 ELSE conversation.off_topic_count END,
+                    ai_paused_reason = CASE WHEN conversation.status = 'CLOSED' THEN NULL ELSE conversation.ai_paused_reason END
+                """, tenant, chat);
+    }
+
+    /** Suma una pregunta fuera de tema y devuelve cuántas lleva la conversación. */
+    public int offTopic(UUID tenant, String chat) {
+        Integer n = db.queryForObject("""
+                UPDATE conversation SET off_topic_count = off_topic_count + 1, updated_at = now()
+                 WHERE tenant_id = ? AND chat_id = ? RETURNING off_topic_count
+                """, Integer.class, tenant, chat);
+        return n == null ? 0 : n;
+    }
+
+    /** Una consulta válida de la tienda borra los avisos anteriores. */
+    public void resetOffTopic(UUID tenant, String chat) {
+        db.update("UPDATE conversation SET off_topic_count = 0 WHERE tenant_id = ? AND chat_id = ? AND off_topic_count > 0", tenant, chat);
+    }
+
+    /** La IA deja de responder (sin escalar) hasta que el equipo la reactive, tome o devuelva la conversación, o se reabra. */
+    public void pauseForOffTopic(UUID tenant, String chat) {
+        db.update("""
+                UPDATE conversation SET ai_enabled = false, ai_paused_reason = 'OFF_TOPIC', revision = revision + 1, updated_at = now()
+                 WHERE tenant_id = ? AND chat_id = ?
                 """, tenant, chat);
     }
 
@@ -109,6 +139,7 @@ public class ConversationRepository {
                 UPDATE conversation SET status = 'ESCALATED', escalated_at = coalesce(escalated_at, now()),
                        escalation_reason = left(?, 300), summary = coalesce(left(?, 2000), summary),
                        assignee = coalesce(?, assignee), ai_enabled = ai_enabled AND NOT ?, handback_note = NULL,
+                       off_topic_count = 0, ai_paused_reason = NULL,
                        revision = revision + 1, updated_at = now()
                  WHERE tenant_id = ? AND chat_id = ?
                 """, reason, summary, assignee, disableAi, tenant, chat);
@@ -117,7 +148,8 @@ public class ConversationRepository {
     public void handback(UUID tenant, String chat, String note) {
         db.update("""
                 UPDATE conversation SET status = 'OPEN', escalated_at = NULL, escalation_reason = NULL, assignee = NULL,
-                       ai_enabled = true, alerted_at = NULL, handback_note = left(?, 1000), revision = revision + 1, updated_at = now()
+                       ai_enabled = true, alerted_at = NULL, handback_note = left(?, 1000),
+                       off_topic_count = 0, ai_paused_reason = NULL, revision = revision + 1, updated_at = now()
                  WHERE tenant_id = ? AND chat_id = ?
                 """, note, tenant, chat);
     }
@@ -130,7 +162,10 @@ public class ConversationRepository {
     }
 
     public void setAi(UUID tenant, String chat, boolean enabled) {
-        db.update("UPDATE conversation SET ai_enabled = ?, revision = revision + 1, updated_at = now() WHERE tenant_id=? AND chat_id=?",
+        db.update("""
+                UPDATE conversation SET ai_enabled = ?, off_topic_count = 0, ai_paused_reason = NULL, revision = revision + 1,
+                       updated_at = now() WHERE tenant_id=? AND chat_id=?
+                """,
                 enabled, tenant, chat);
     }
 
