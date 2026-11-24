@@ -46,9 +46,13 @@ class CatalogTests {
         assertEquals("POLO-BASICO-NEGRO-M-2", catalog.cards(store, List.of(second)).get(0).variants().get(0).sku());
         assertEquals(List.of("Polos"), catalog.categories(store));
 
-        // El QR nuevo es el id del producto; el de una etiqueta antigua (variante) lleva al mismo producto.
-        assertEquals(first, catalog.byCode(store, first).id());
-        assertEquals(first, catalog.byCode(store, card.variants().get(0).id()).id());
+        // Una etiqueta por variante con sus propios datos; su QR (id de la variante) lleva a esa misma prenda.
+        var m = card.variants().get(2);
+        var label = catalog.labels(store, List.of(m.id())).get(0);
+        assertEquals(List.of("POLO-BASICO-NEGRO-M", "M", "Negro", price), List.of(label.sku(), label.size(), label.color(), label.price()));
+        assertTrue(catalog.labels(UUID.randomUUID(), List.of(m.id())).isEmpty(), "otra tienda no imprime mis etiquetas");
+        assertEquals(first, catalog.byCode(store, m.id()).id());
+        assertEquals(first, catalog.byCode(store, first).id(), "las etiquetas por producto ya impresas siguen sirviendo");
         assertThrows(ResponseStatusException.class, () -> catalog.byCode(UUID.randomUUID(), first), "otra tienda no lo ve");
 
         assertEquals(2, catalog.search(store, "negro-m", 20).size());

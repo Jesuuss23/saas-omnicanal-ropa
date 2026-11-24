@@ -3,6 +3,7 @@ package com.saas.omnicanal.catalog.service;
 import com.saas.omnicanal.catalog.model.CatalogRow;
 import com.saas.omnicanal.catalog.model.ProductCard;
 import com.saas.omnicanal.catalog.model.VariantDraft;
+import com.saas.omnicanal.catalog.model.VariantLabel;
 import com.saas.omnicanal.catalog.repository.ProductRepository;
 import com.saas.omnicanal.subscription.model.Entitlements;
 import com.saas.omnicanal.subscription.service.EntitlementService;
@@ -81,10 +82,14 @@ public class ProductCatalogService {
         return products.categories(store);
     }
 
-    /** Ficha del producto al que apunta un QR (producto o, en etiquetas antiguas, variante). */
+    /** Ficha del producto al que apunta un QR: el de una variante (etiquetas actuales) o el de un producto. */
     public ProductCard byCode(UUID store, UUID code) {
         return products.productForCode(store, code).flatMap(id -> products.cards(store, List.of(id)).stream().findFirst())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ese código no es de un producto de tu tienda"));
+    }
+
+    public List<VariantLabel> labels(UUID store, List<UUID> variants) {
+        return products.labels(store, variants);
     }
 
     public List<ProductCard> cards(UUID store, List<UUID> ids) {

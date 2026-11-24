@@ -39,7 +39,7 @@ function downloadPdf(base64:string, name:string) {
 }
 
 export default function Catalog({store, send}:Props) {
-  // Una etiqueta (un QR) por producto: en caja se elige la talla y el color al escanearla.
+  // Una etiqueta (un QR) por variante: al escanearla en caja la prenda entra con su talla, color y precio.
   const [labels,setLabels] = useState<Record<string,string>>({});
   const [labelBusy,setLabelBusy] = useState(false);
   const selected = Object.keys(labels);
@@ -55,13 +55,13 @@ export default function Catalog({store, send}:Props) {
   if (query) params.set("query", query);
   const {data,error:listError,loading} = useApiData<Page>(ownerApi.url(path+"?"+params),refresh);
 
-  async function downloadLabels(products:string[]) {
+  async function downloadLabels(variants:string[]) {
     setLabelBusy(true);
     try {
-      const res = await send(path + "/labels", JSON.stringify({products}));
+      const res = await send(path + "/labels", JSON.stringify({variants}));
       if (!res.ok) throw new Error(await errorMessage(res, "Comprueba la sesión y la selección."));
       const {pdf,labels:count} = await res.json() as {pdf:string; labels:number};
-      downloadPdf(pdf, products.length === 1 ? "etiqueta-prenda.pdf" : "etiquetas-prendas.pdf");
+      downloadPdf(pdf, variants.length === 1 ? "etiqueta-prenda.pdf" : "etiquetas-prendas.pdf");
       toast.success(count === 1 ? "Etiqueta generada" : count + " etiquetas generadas", {description:"Imprime en A4 a tamaño real. Hay 18 etiquetas por hoja."});
     } catch (e) {toast.error("No se pudo generar el PDF", {description:e instanceof Error ? e.message : undefined});}
     finally {setLabelBusy(false);}
@@ -70,7 +70,7 @@ export default function Catalog({store, send}:Props) {
   function toggleLabel(row:Row) {
     setLabels(old=>{
       const next = {...old};
-      if (next[row.productId]) delete next[row.productId]; else next[row.productId] = row.name;
+      if (next[row.id]) delete next[row.id]; else next[row.id] = row.sku;
       return next;
     });
   }
@@ -81,9 +81,9 @@ export default function Catalog({store, send}:Props) {
     setQuery(draft.trim());
   }
 
-  const productsOnPage = data ? [...new Map(data.rows.map(r=>[r.productId,r])).values()] : [];
-  const allOnPage = productsOnPage.length > 0 && productsOnPage.every(r=>labels[r.productId]);
-  const tooMany = selected.length>100;
+  const rowsOnPage = data?.rows ?? [];
+  const allOnPage = rowsOnPage.length > 0 && rowsOnPage.every(r=>labels[r.id]);
+  const tooMany = selected.length>200;
   return <div className="grid gap-4">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <form onSubmit={search} role="search" className="relative min-w-56 flex-1 sm:max-w-sm">
@@ -95,10 +95,10 @@ export default function Catalog({store, send}:Props) {
 
     {selected.length>0 && <Card className="flex flex-wrap items-center gap-3 p-3 text-sm" role="region" aria-label="Etiquetas seleccionadas">
       <QrCode className="size-4 text-primary"/>
-      <span>{selected.length === 1 ? "1 etiqueta QR" : selected.length + " etiquetas QR"} · una por producto</span>
+      <span>{selected.length === 1 ? "1 etiqueta QR" : selected.length + " etiquetas QR"} · una por talla y color</span>
       <Button size="sm" loading={labelBusy} disabled={tooMany} onClick={()=>downloadLabels(selected)}>Descargar PDF</Button>
       <Button size="sm" variant="ghost" disabled={labelBusy} onClick={()=>setLabels({})}>Limpiar</Button>
-      {tooMany && <span className="text-destructive">Hasta 100 productos por PDF.</span>}
+      {tooMany && <span className="text-destructive">Hasta 200 etiquetas por PDF.</span>}
     </Card>}
 
     {editing && <EditVariant key={editing.id} row={editing} path={path} send={send} close={()=>setEditing(null)}
@@ -117,10 +117,10 @@ export default function Catalog({store, send}:Props) {
             action={!query && <Button onClick={()=>setCreating(true)}><Plus/>Nueva prenda</Button>}/>
         : <Table aria-busy={loading}>
           <TableHeader><TableRow>
-            <TableHead className="w-10"><input type="checkbox" className="size-4 accent-primary" aria-label="Elegir todas las prendas de esta página para etiquetas"
+            <TableHead className="w-10"><input type="checkbox" className="size-4 accent-primary" aria-label="Elegir todas las variantes de esta página para etiquetas"
               checked={allOnPage} onChange={()=>setLabels(old=>{
                 const next = {...old};
-                productsOnPage.forEach(r=>{ if (allOnPage) delete next[r.productId]; else next[r.productId] = r.name; });
+                rowsOnPage.forEach(r=>{ if (allOnPage) delete next[r.id]; else next[r.id] = r.sku; });
                 return next;
               })}/></TableHead>
             <TableHead>Prenda</TableHead><TableHead>SKU</TableHead><TableHead>Talla / color</TableHead>
@@ -130,8 +130,8 @@ export default function Catalog({store, send}:Props) {
           <TableBody>{data.rows.map((row,i)=>{
             const first = i===0 || data.rows[i-1].productId !== row.productId;
             return <TableRow key={row.id} className={cn(!first && "border-t-0")}>
-            <TableCell>{first && <input type="checkbox" className="size-4 accent-primary" checked={!!labels[row.productId]}
-              onChange={()=>toggleLabel(row)} aria-label={"Etiqueta QR de "+row.name}/>}</TableCell>
+            <TableCell><input type="checkbox" className="size-4 accent-primary" checked={!!labels[row.id]}
+              onChange={()=>toggleLabel(row)} aria-label={"Etiqueta QR de "+row.sku}/></TableCell>
             <TableCell>{first ? <div className="flex items-center gap-3">
               <button type="button" onClick={()=>setPhotos(row)} aria-label={"Fotos de "+row.name}
                 className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-md border bg-muted text-muted-foreground hover:border-primary">
@@ -150,7 +150,7 @@ export default function Catalog({store, send}:Props) {
               {row.reserved>0 && <span className="block text-xs text-muted-foreground">{row.reserved} reservadas</span>}
             </TableCell>
             <TableCell className="text-right whitespace-nowrap">
-              {first && <Button variant="ghost" size="sm" disabled={labelBusy} onClick={()=>downloadLabels([row.productId])} aria-label={"Imprimir etiqueta de "+row.name}><QrCode/>QR</Button>}
+              <Button variant="ghost" size="sm" disabled={labelBusy} onClick={()=>downloadLabels([row.id])} aria-label={"Imprimir etiqueta de "+row.sku}><QrCode/>QR</Button>
               {first && <Button variant="ghost" size="sm" onClick={()=>setPhotos(row)}><Camera/>Fotos</Button>}
               <Button variant="ghost" size="sm" disabled={!!editing} onClick={()=>setEditing(row)} aria-label={"Editar "+row.sku}><Pencil/>Editar</Button>
             </TableCell>

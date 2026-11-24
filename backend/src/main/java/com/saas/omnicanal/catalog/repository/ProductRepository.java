@@ -3,6 +3,7 @@ package com.saas.omnicanal.catalog.repository;
 import com.saas.omnicanal.catalog.model.CatalogRow;
 import com.saas.omnicanal.catalog.model.ProductCard;
 import com.saas.omnicanal.catalog.model.VariantDraft;
+import com.saas.omnicanal.catalog.model.VariantLabel;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -95,7 +96,7 @@ public class ProductRepository {
                 Boolean.class, tenant, sku));
     }
 
-    /** Resuelve el contenido de un QR: el id de un producto o, en etiquetas antiguas, el id de una variante. */
+    /** Resuelve el contenido de un QR: el id de una variante (etiqueta por talla y color) o el de un producto. */
     public Optional<UUID> productForCode(UUID tenant, UUID code) {
         return db.queryForList("""
                 SELECT id FROM product WHERE tenant_id = ? AND id = ?
@@ -142,6 +143,22 @@ public class ProductRepository {
             }).variants().add(new ProductCard.Option(rs.getObject("id", UUID.class), rs.getString("sku"),
                     rs.getString("size"), rs.getString("color"), rs.getBigDecimal("price"), rs.getInt("available")));
         }, tenant, array);
+        return ids.stream().distinct().map(found::get).filter(java.util.Objects::nonNull).toList();
+    }
+
+    /** Variantes para imprimir etiquetas, en el orden de {@code ids}. Omite las que no son de la tienda. */
+    public List<VariantLabel> labels(UUID tenant, List<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        var found = new java.util.HashMap<UUID, VariantLabel>();
+        db.query("""
+                SELECT v.id, p.name, v.sku, v.size, v.color, v.price
+                FROM product_variant v JOIN product p ON (p.tenant_id, p.id) = (v.tenant_id, v.product_id)
+                WHERE v.tenant_id = ? AND v.id = ANY (CAST(? AS uuid[]))
+                """, rs -> {
+            UUID id = rs.getObject("id", UUID.class);
+            found.put(id, new VariantLabel(id, rs.getString("name"), rs.getString("sku"), rs.getString("size"),
+                    rs.getString("color"), rs.getBigDecimal("price")));
+        }, tenant, ids.stream().map(UUID::toString).toArray(String[]::new));
         return ids.stream().distinct().map(found::get).filter(java.util.Objects::nonNull).toList();
     }
 }

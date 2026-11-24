@@ -17,6 +17,9 @@ INSERT INTO product_variant (id, product_id, tenant_id, sku, size, color, price,
 VALUES ('e2e00000-0000-4000-8000-0000000000b1', 'e2e00000-0000-4000-8000-0000000000a1',
         'e2e00000-0000-4000-8000-000000000001', 'E2E-POLO-M', 'M', 'Negro', 49.90, 5)
 ON CONFLICT (id) DO NOTHING;
+-- Las campañas que crea la prueba de marketing se borran para poder repetir la suite en la misma base.
+DELETE FROM campaign_recipient WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+DELETE FROM campaign WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
 DELETE FROM product_image WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
 DELETE FROM store_appearance WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
 -- El equipo empieza vacío en cada corrida (el plan de prueba admite al propietario y un miembro).
