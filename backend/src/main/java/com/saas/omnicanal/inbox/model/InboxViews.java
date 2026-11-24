@@ -8,10 +8,13 @@ public final class InboxViews {
 
     public enum Status { OPEN, ESCALATED, CLOSED }
 
-    /** {@code overdue}: escalada, el cliente escribió último y pasó el tiempo de respuesta (SLA) de la tienda. */
+    /**
+     * {@code overdue}: escalada, el cliente escribió último y pasó el tiempo de respuesta (SLA) de la tienda.
+     * {@code aiPausedReason}: OFF_TOPIC si la IA se pausó sola tras preguntas ajenas a la tienda, o null.
+     */
     public record Row(String chat, String phone, String contactName, Status status, boolean aiEnabled, String assignee,
                       String lastMessage, String lastAuthor, Instant lastInboundAt, Instant lastOutboundAt,
-                      Instant escalatedAt, boolean overdue) {}
+                      Instant escalatedAt, boolean overdue, String aiPausedReason, int offTopicCount) {}
 
     public record Message(String author, String body, Instant at, String status) {}
 

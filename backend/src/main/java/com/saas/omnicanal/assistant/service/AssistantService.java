@@ -3,6 +3,7 @@ package com.saas.omnicanal.assistant.service;
 import com.saas.omnicanal.assistant.model.AssistantModels.Answer;
 import com.saas.omnicanal.assistant.model.AssistantModels.Settings;
 import com.saas.omnicanal.assistant.model.AssistantModels.Status;
+import com.saas.omnicanal.assistant.model.AssistantModels.StoreFacts;
 import com.saas.omnicanal.assistant.model.AssistantModels.Turn;
 import com.saas.omnicanal.assistant.repository.AssistantRepository;
 import com.saas.omnicanal.inbox.model.InboxViews.Message;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import jakarta.annotation.PreDestroy;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -30,6 +32,13 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * IA vendedora. Cada mensaje entrante pasa por tres interruptores (plataforma, tienda y conversación), la cuota
  * mensual del plan y el estado de la conversación antes de llegar al modelo. Todo queda en {@code ai_reply}.
+ *
+ * <p>Mensajes seguidos del mismo chat se agrupan: cada uno queda PENDING y reinicia una espera de
+ * {@code assistant.debounce-ms}; al vencer, todos los pendientes van juntos al modelo y reciben una sola respuesta.
+ *
+ * <p>Solo atiende temas de la tienda. Una pregunta ajena recibe un aviso fijo; la segunda seguida pausa la IA en la
+ * conversación (sin escalar), y desde ahí los mensajes se ignoran antes de llamar al modelo hasta que el equipo
+ * intervenga (activar IA, tomar o devolver la conversación) o la conversación se cierre y el cliente vuelva a escribir.
  */
 @Service
 public class AssistantService {
@@ -39,6 +48,10 @@ public class AssistantService {
     private static final Pattern HUMAN = Pattern.compile(
             "\\b(humano|una persona|asesor|asesora|encargad[oa]|hablar con alguien|reclamo|queja|libro de reclamaciones)\\b");
     private static final String HANDOFF = "Gracias por escribirnos. Te comunico con una persona del equipo, que te responderá pronto.";
+    /** Preguntas fuera de tema seguidas que pausan la IA en la conversación. */
+    public static final int OFF_TOPIC_LIMIT = 2;
+    static final String OFF_TOPIC_PAUSE = "Como tus consultas no son sobre la tienda, pausaré el asistente automático en esta "
+            + "conversación. ¡Gracias por escribirnos!";
 
     private final AssistantRepository repo;
     private final ConversationRepository conversations;
@@ -48,10 +61,12 @@ public class AssistantService {
     private final WhatsAppReplyService replies;
     private final String baseUrl;
     private final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    private final Debouncer batches;
 
     public AssistantService(AssistantRepository repo, ConversationRepository conversations, InboxService inbox,
                             EntitlementService entitlements, AssistantResponder responder, WhatsAppReplyService replies,
-                            @Value("${app.base-url:http://localhost:3000}") String baseUrl) {
+                            @Value("${app.base-url:http://localhost:3000}") String baseUrl,
+                            @Value("${assistant.debounce-ms:8000}") long debounceMs) {
         this.repo = repo;
         this.conversations = conversations;
         this.inbox = inbox;
@@ -64,6 +79,12 @@ public class AssistantService {
         executor.setQueueCapacity(500);
         executor.setThreadNamePrefix("ia-vendedora-");
         executor.initialize();
+        batches = new Debouncer(executor, debounceMs);
+    }
+
+    static String offTopicWarning(String store) {
+        return "Solo puedo ayudarte con consultas sobre " + store + ": prendas, precios, tallas, stock, envíos y pedidos. "
+                + "¿Qué estás buscando?";
     }
 
     // --- Panel ---
@@ -80,48 +101,97 @@ public class AssistantService {
 
     public Status status(UUID tenant) {
         var quota = entitlements.get(tenant, QUOTA);
-        return new Status(responder.configured(), repo.platformEnabled(), quota.enabled(), repo.sentThisMonth(tenant), quota.limit());
+        return new Status(responder.configured(), repo.platformEnabled(), quota.enabled(), repo.sentThisMonth(tenant), quota.limit(),
+                batches.delayMs());
     }
 
-    /** Prueba desde el panel: responde sin enviar nada al cliente ni contar para la cuota. */
-    public Answer test(UUID tenant, List<Turn> history, String message) {
+    /**
+     * Prueba desde el panel: responde sin enviar nada al cliente ni contar para la cuota. Aplica las mismas reglas que
+     * WhatsApp; el panel guarda {@code offTopicCount} (avisos seguidos fuera de tema) y lo manda en cada prueba.
+     */
+    public Answer test(UUID tenant, List<Turn> history, String message, int offTopicCount) {
         if (!responder.configured()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "La IA no está configurada en el servidor.");
         var facts = repo.facts(tenant, baseUrl).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        // Pausada: igual que en WhatsApp, se ignora sin llamar al modelo.
+        if (offTopicCount >= OFF_TOPIC_LIMIT) return new Answer("", false, null, null, List.of(), false, true);
         if (HUMAN.matcher(normalize(message)).find())
             return new Answer(HANDOFF, true, "Pidió hablar con una persona", message, List.of());
+        Answer answer;
         try {
-            return responder.answer(tenant, facts, repo.settings(tenant).instructions(), history, null, message);
+            answer = responder.answer(tenant, facts, repo.settings(tenant).instructions(), history, null, message);
         } catch (RuntimeException ex) {
             log.error("Prueba de IA falló en {}: {}", tenant, GeminiResponder.describe(ex));
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "El modelo no respondió. Intenta de nuevo en un momento.");
         }
+        if (!answer.offTopic()) return answer;
+        boolean pause = offTopicCount + 1 >= OFF_TOPIC_LIMIT;
+        return new Answer(pause ? OFF_TOPIC_PAUSE : offTopicWarning(facts.storeName()), false, null, null, answer.toolsUsed(), true, pause);
     }
 
     // --- Mensajes entrantes ---
 
     /**
-     * Corre después de confirmar el mensaje (fuera de la transacción del webhook) en un ejecutor propio, así el
-     * proveedor recibe su 200 de inmediato y una respuesta lenta del modelo no bloquea otros webhooks.
+     * Corre después de confirmar el mensaje (fuera de la transacción del webhook): reserva el mensaje y reinicia la
+     * espera del chat. El proveedor recibe su 200 de inmediato; el modelo corre en un ejecutor propio al vencer la espera.
      */
     @TransactionalEventListener(fallbackExecution = true)
     public void onInbound(InboundMessageEvent event) {
-        executor.execute(() -> {
-            try {
-                handle(event);
-            } catch (RuntimeException ex) {
-                log.error("IA vendedora: error procesando {} de {}", event.messageId(), event.tenant(), ex);
-            }
-        });
+        try {
+            if (receive(event)) schedule(event.tenant(), event.chat());
+        } catch (RuntimeException ex) {
+            log.error("IA vendedora: error recibiendo {} de {}", event.messageId(), event.tenant(), ex);
+        }
     }
 
     @PreDestroy
     void shutdown() {
+        batches.close();
         executor.shutdown();
     }
 
+    /** Reserva el mensaje (PENDING); false si no es un chat de teléfono o ya se había recibido (webhook repetido). */
+    public boolean receive(InboundMessageEvent e) {
+        return ChatIds.isPhoneChat(e.chat()) && repo.claim(e.tenant(), e.chat(), e.messageId());
+    }
+
+    private void schedule(UUID tenant, String chat) {
+        batches.submit(tenant + "|" + chat, () -> {
+            try {
+                flush(tenant, chat);
+            } catch (RuntimeException ex) {
+                log.error("IA vendedora: error respondiendo el chat {} de {}", chat, tenant, ex);
+            }
+        });
+    }
+
+    /** Recupera mensajes que quedaron en espera (por ejemplo, si el servidor se reinició antes de responderlos). */
+    @Scheduled(fixedDelayString = "${assistant.sweep-ms:60000}", initialDelayString = "${assistant.sweep-initial-delay-ms:30000}")
+    public void sweep() {
+        int failed = repo.failStuckWorking(15);
+        if (failed > 0) log.warn("IA vendedora: {} mensajes quedaron a medias y se marcaron FAILED", failed);
+        int seconds = (int) (batches.delayMs() / 1000) + 30;
+        for (var key : repo.stalePending(seconds))
+            if (!batches.waiting(key.tenant() + "|" + key.chat())) schedule(key.tenant(), key.chat());
+    }
+
+    /** Recibe y responde en el acto, sin esperar la ventana de agrupación. */
     public void handle(InboundMessageEvent e) {
+        if (receive(e)) flush(e.tenant(), e.chat());
+    }
+
+    /** Toma todos los mensajes en espera del chat y los responde con una sola llamada al modelo. */
+    public void flush(UUID tenant, String chat) {
+        var batch = repo.takeBatch(tenant, chat);
+        if (batch.isEmpty()) return;
+        var lead = batch.get(batch.size() - 1);
+        var others = batch.subList(0, batch.size() - 1).stream().map(AssistantRepository.Pending::messageId).toList();
+        repo.markBatched(tenant, chat, others, lead.messageId());
+        String body = String.join("\n", batch.stream().map(AssistantRepository.Pending::body).filter(b -> !b.isBlank()).toList());
+        answer(new InboundMessageEvent(tenant, chat, lead.messageId(), body), batch.size());
+    }
+
+    private void answer(InboundMessageEvent e, int batchSize) {
         UUID tenant = e.tenant();
-        if (!ChatIds.isPhoneChat(e.chat()) || !repo.claim(tenant, e.chat(), e.messageId())) return;
         String skip = skipReason(tenant, e.chat());
         if (skip != null) {
             repo.finish(tenant, e.chat(), e.messageId(), "SKIPPED", skip, null, null, null, null);
@@ -134,10 +204,11 @@ public class AssistantService {
             return;
         }
         Answer answer;
+        StoreFacts facts;
         try {
-            var facts = repo.facts(tenant, baseUrl).orElseThrow();
+            facts = repo.facts(tenant, baseUrl).orElseThrow();
             var full = conversations.find(tenant, e.chat()).orElseThrow();
-            answer = responder.answer(tenant, facts, repo.settings(tenant).instructions(), history(tenant, e.chat()),
+            answer = responder.answer(tenant, facts, repo.settings(tenant).instructions(), history(tenant, e.chat(), batchSize),
                     full.handbackNote(), e.body());
         } catch (RuntimeException ex) {
             log.error("IA vendedora: el modelo falló en {}: {}", tenant, GeminiResponder.describe(ex));
@@ -145,10 +216,22 @@ public class AssistantService {
             repo.finish(tenant, e.chat(), e.messageId(), "FAILED", null, null, null, elapsed(started), GeminiResponder.describe(ex));
             return;
         }
+        String tools = String.join(",", answer.toolsUsed());
+        if (answer.offTopic()) {
+            // Nunca se escala ni se reenvía el texto del modelo: el aviso es fijo y corto.
+            if (conversations.offTopic(tenant, e.chat()) >= OFF_TOPIC_LIMIT) {
+                conversations.pauseForOffTopic(tenant, e.chat());
+                send(e, OFF_TOPIC_PAUSE, "SENT", tools, started);
+            } else {
+                send(e, offTopicWarning(facts.storeName()), "SENT", tools, started);
+            }
+            return;
+        }
+        conversations.resetOffTopic(tenant, e.chat());
         if (answer.escalate())
             inbox.escalateByAssistant(tenant, e.chat(), answer.reason() == null || answer.reason().isBlank() ? "La IA pidió ayuda" : answer.reason(),
                     answer.summary());
-        send(e, answer.text(), answer.escalate() ? "ESCALATED" : "SENT", String.join(",", answer.toolsUsed()), started);
+        send(e, answer.text(), answer.escalate() ? "ESCALATED" : "SENT", tools, started);
     }
 
     private void send(InboundMessageEvent e, String text, String okStatus, String tools, long started) {
@@ -171,7 +254,8 @@ public class AssistantService {
         if (!responder.configured()) return "not_configured";
         var conversation = conversations.find(tenant, chat);
         if (conversation.isEmpty()) return "no_conversation";
-        if (!conversation.get().row().aiEnabled()) return "conversation_off";
+        if (!conversation.get().row().aiEnabled())
+            return "OFF_TOPIC".equals(conversation.get().row().aiPausedReason()) ? "off_topic_paused" : "conversation_off";
         if (conversation.get().row().status() != com.saas.omnicanal.inbox.model.InboxViews.Status.OPEN) return "escalated";
         var quota = entitlements.get(tenant, QUOTA);
         if (!quota.enabled()) return "plan";
@@ -179,11 +263,13 @@ public class AssistantService {
         return null;
     }
 
-    private List<Turn> history(UUID tenant, String chat) {
-        List<Message> all = conversations.messages(tenant, chat, 13);
-        // El último es el mensaje actual del cliente: va aparte como "user".
-        var previous = all.isEmpty() ? all : all.subList(0, all.size() - 1);
-        return previous.stream().map(m -> new Turn(m.author(), m.body())).toList();
+    /** Últimos 12 mensajes antes del lote actual (los {@code batchSize} mensajes del cliente van aparte como "user"). */
+    private List<Turn> history(UUID tenant, String chat, int batchSize) {
+        List<Message> all = new java.util.ArrayList<>(conversations.messages(tenant, chat, 12 + batchSize));
+        for (int dropped = 0; dropped < batchSize && !all.isEmpty() && "CUSTOMER".equals(all.get(all.size() - 1).author()); dropped++)
+            all.remove(all.size() - 1);
+        if (all.size() > 12) all = all.subList(all.size() - 12, all.size());
+        return all.stream().map(m -> new Turn(m.author(), m.body())).toList();
     }
 
     private static Integer elapsed(long started) {

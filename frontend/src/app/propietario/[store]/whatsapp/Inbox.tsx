@@ -17,7 +17,7 @@ import {useApiData} from "@/lib/useApiData";
 type Status = "OPEN" | "ESCALATED" | "CLOSED";
 type Row = {chat: string; phone: string | null; contactName: string | null; status: Status; aiEnabled: boolean; assignee: string | null;
   lastMessage: string | null; lastAuthor: string | null; lastInboundAt: string | null; lastOutboundAt: string | null;
-  escalatedAt: string | null; overdue: boolean};
+  escalatedAt: string | null; overdue: boolean; aiPausedReason: "OFF_TOPIC" | null; offTopicCount: number};
 type Message = {author: "CUSTOMER" | "AI" | "HUMAN"; body: string; at: string; status: string | null};
 type Conversation = {row: Row; escalationReason: string | null; summary: string | null; handbackNote: string | null; revision: number; messages: Message[]};
 type Counts = {open: number; escalated: number; overdue: number};
@@ -72,7 +72,7 @@ export default function Inbox({store, initialChat}: {store: string; initialChat:
             <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
               {r.lastAuthor === "AI" && <Bot className="size-3.5 shrink-0"/>}{r.lastAuthor === "HUMAN" && <UserRound className="size-3.5 shrink-0"/>}
               <span className="truncate">{r.lastMessage ?? ""}</span>
-              {!r.aiEnabled && <span className="ml-auto shrink-0 text-xs">IA pausada</span>}
+              {!r.aiEnabled && <span className="ml-auto shrink-0 text-xs">{r.aiPausedReason === "OFF_TOPIC" ? "IA pausada: fuera de tema" : "IA pausada"}</span>}
             </span>
           </button></li>)}</ul>}
     </Card>
@@ -137,6 +137,9 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
       {r.status === "CLOSED" ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => act("status", {status: "OPEN"}, "PUT")}><RotateCcw/>Reabrir</Button>
         : <Button size="sm" variant="ghost" disabled={busy} onClick={() => act("status", {status: "CLOSED"}, "PUT", "Conversación cerrada")}><CheckCheck/>Cerrar</Button>}
     </header>
+    {r.aiPausedReason === "OFF_TOPIC" && !r.aiEnabled && <div className="border-b bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
+      La IA se pausó sola en esta conversación porque el cliente hizo dos preguntas seguidas ajenas a la tienda. No responde ni gasta respuestas del plan
+      hasta que la actives, tomes la conversación o la cierres y el cliente vuelva a escribir.</div>}
     {r.status === "ESCALATED" && (data.escalationReason || data.summary) && <div className="border-b bg-warning/10 px-4 py-3 text-sm">
       <p className="font-medium">{data.escalationReason}</p>{data.summary && <p className="mt-0.5 text-muted-foreground">{data.summary}</p>}
       {r.overdue && <p className="mt-1 flex items-center gap-1 font-medium text-destructive"><AlarmClock className="size-4"/>Pasó el tiempo de respuesta acordado.</p>}

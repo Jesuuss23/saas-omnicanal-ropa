@@ -79,6 +79,8 @@ assistant:
   # Si el modelo principal está saturado (503/429) se reintenta y el último intento usa este alias, que apunta al Flash vigente.
   gemini-fallback-model: ${GEMINI_FALLBACK_MODEL:gemini-flash-latest}
   gemini-retry-delay-ms: 1500
+  # Ventana de agrupación: mensajes seguidos del mismo chat dentro de este tiempo reciben una sola respuesta.
+  debounce-ms: ${AI_DEBOUNCE_MS:8000}
 
 app:
   # URL pública del frontend, usada en los enlaces de los correos.

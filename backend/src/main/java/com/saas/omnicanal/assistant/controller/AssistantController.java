@@ -32,7 +32,9 @@ class AssistantController {
     record Save(@NotNull Boolean enabled, @NotNull @Size(max = 2000) String instructions,
                 @Min(1) @Max(1440) int slaMinutes, @Min(0) long revision) {}
     record TestTurn(@NotNull @Pattern(regexp = "CUSTOMER|AI") String author, @NotBlank @Size(max = 1000) String text) {}
-    record Test(@NotBlank @Size(max = 1000) String message, @Size(max = 12) List<@Valid TestTurn> history) {}
+    /** {@code message} puede traer varias líneas: los mensajes que el cliente escribió seguidos dentro de la ventana de agrupación. */
+    record Test(@NotBlank @Size(max = 3000) String message, @Size(max = 12) List<@Valid TestTurn> history,
+                @Min(0) @Max(10) Integer offTopicCount) {}
 
     @GetMapping("/settings")
     Settings settings(@PathVariable UUID store, Principal principal) {
@@ -56,6 +58,6 @@ class AssistantController {
     Answer test(@PathVariable UUID store, Principal principal, @Valid @RequestBody Test in) {
         requireOwner(store, principal);
         var history = in.history() == null ? List.<Turn>of() : in.history().stream().map(t -> new Turn(t.author(), t.text())).toList();
-        return assistant.test(store, history, in.message());
+        return assistant.test(store, history, in.message(), in.offTopicCount() == null ? 0 : in.offTopicCount());
     }
 }
