@@ -90,8 +90,8 @@ public class CampaignWorker {
 
     private void sendEmail(Recipient r, Campaign c, String store) {
         String link = templates.url("/baja/" + r.unsubscribeToken());
-        email.send(templates.campaign(r.destination(), store, c.subject(), c.body(), link));
-        repo.mark(r, "SENT", null);
+        boolean sent = email.sendQuietly(templates.campaign(r.destination(), store, c.subject(), c.body(), link));
+        repo.mark(r, sent ? "SENT" : "FAILED", sent ? null : "Resend no aceptó el correo");
     }
 
     private void sendWhatsApp(Recipient r, Campaign c, Optional<CloudApiCredentials> creds) {

@@ -62,7 +62,8 @@ subscription:
 # Sin RESEND_API_KEY los correos se registran en email_log y en el log de la aplicación (modo desarrollo).
 email:
   resend-api-key: ${RESEND_API_KEY:}
-  from: ${EMAIL_FROM:Omnicanal <no-reply@localhost>}
+  # Sin dominio verificado en Resend usa onboarding@resend.dev (solo entrega al correo dueño de la cuenta Resend).
+  from: ${EMAIL_FROM:Omnicanal <onboarding@resend.dev>}
   reply-to: ${EMAIL_REPLY_TO:}
   api-url: https://api.resend.com
 
