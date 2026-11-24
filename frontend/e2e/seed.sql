@@ -33,3 +33,13 @@ DELETE FROM customer_session WHERE tenant_id = 'e2e00000-0000-4000-8000-00000000
 DELETE FROM contact_merge_log WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
 UPDATE contact SET merged_into = NULL WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
 DELETE FROM contact WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+-- Una conversación de WhatsApp para la bandeja, sin IA configurada.
+DELETE FROM ai_reply WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+DELETE FROM whatsapp_manual_reply WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+DELETE FROM conversation WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+DELETE FROM store_ai_settings WHERE tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+INSERT INTO whatsapp_inbound_message (tenant_id, chat_id, message_id, body)
+VALUES ('e2e00000-0000-4000-8000-000000000001', '51999888777@s.whatsapp.net', 'e2e-m1', 'Hola, ¿tienen el polo en talla M?')
+ON CONFLICT DO NOTHING;
+INSERT INTO conversation (tenant_id, chat_id, last_inbound_at)
+VALUES ('e2e00000-0000-4000-8000-000000000001', '51999888777@s.whatsapp.net', now());

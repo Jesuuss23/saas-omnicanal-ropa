@@ -4,6 +4,8 @@ import com.saas.omnicanal.shared.crypto.Hmac;
 import com.saas.omnicanal.whatsapp.model.WhatsAppProvider;
 import com.saas.omnicanal.whatsapp.repository.WhatsAppChannelSettingRepository;
 import com.saas.omnicanal.whatsapp.repository.WhatsAppMessageRepository;
+import com.saas.omnicanal.whatsapp.model.InboundMessageEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -25,9 +27,12 @@ public class EvolutionWebhookService {
     private final String secret;
     private final WhatsAppChannelSettingRepository channels;
     private final WhatsAppMessageRepository messages;
+    private final ApplicationEventPublisher events;
 
     public EvolutionWebhookService(@Value("${EVOLUTION_WEBHOOK_SECRET:}") String secret,
-                                   WhatsAppChannelSettingRepository channels, WhatsAppMessageRepository messages) {
+                                   WhatsAppChannelSettingRepository channels, WhatsAppMessageRepository messages,
+                                   ApplicationEventPublisher events) {
+        this.events = events;
         this.secret = secret;
         this.channels = channels;
         this.messages = messages;
@@ -85,6 +90,8 @@ public class EvolutionWebhookService {
         if (body.isBlank()) body = message.path("extendedTextMessage").path("text").asText("");
         if (body.isBlank()) return 0;
         if (id.isBlank() || id.length() > 200 || chat.length() > 160) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        return messages.saveInbound(store, chat, id, body, WhatsAppProvider.EVOLUTION);
+        int saved = messages.saveInbound(store, chat, id, body, WhatsAppProvider.EVOLUTION);
+        if (saved == 1) events.publishEvent(new InboundMessageEvent(store, chat, id, body));
+        return saved;
     }
 }

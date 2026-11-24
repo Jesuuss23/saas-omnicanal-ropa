@@ -19,6 +19,8 @@ com.saas.omnicanal
 ├── crm/
 ├── fulfillment/       # recojo y delivery
 ├── whatsapp/          # Evolution API (QR) y WhatsApp Cloud API
+├── inbox/             # estado de las conversaciones (abierta, para el equipo, cerrada) y SLA
+├── assistant/         # IA vendedora (Gemini con herramientas sobre el catálogo)
 ├── subscription/      # planes, entitlements y suscripción SaaS (Culqi)
 └── payments/          # cobros de la tienda con Mercado Pago
 ```
@@ -60,6 +62,24 @@ La sesión del panel guarda el id de la tienda como principal y el rol como auto
 
 `MemberSessionFilter` cierra la sesión de un miembro desactivado en su siguiente pedido (401 `member_disabled`).
 
+## IA vendedora
+
+```
+webhook (Evolution / Cloud API) ──► whatsapp_inbound_message ──► InboundMessageEvent
+        │ misma transacción                                   │
+        └─► InboxService.onInbound (crea o reabre la conversación)
+                                                              │ después del commit, ejecutor propio
+                                                              ▼
+                       AssistantService.handle: ai_reply (una vez por mensaje)
+                       ├─ interruptores: plataforma (platform_flag) → tienda (store_ai_settings) → conversación
+                       ├─ estado ESCALATED o cuota ai.responses.monthly agotada → SKIPPED con motivo
+                       ├─ "quiero hablar con una persona" → escala sin llamar al modelo
+                       └─ GeminiResponder + StoreTools → WhatsAppReplyService (autor AI) o escalamiento con resumen
+```
+
+Las herramientas (`StoreTools`) se crean por mensaje atadas a una tienda y solo leen el catálogo público. Si el modelo
+falla, la conversación se escala para que el equipo responda.
+
 ## Secretos
 
 Tokens de Meta, Mercado Pago y similares se guardan con `SecretCipher` (AES-256-GCM). El contexto AAD
@@ -76,4 +96,4 @@ Se movieron todas las clases a su capa, pero estos controladores todavía contie
 `service` + `repository` cuando se toquen: `checkout` (GuestCheckout, CartReservation, OrderTracking,
 OwnerWebOrders), `fiscal` (FiscalIssuer, BetaPosDocuments), `pos`, `crm`, `catalog` (CategoryResource,
 VariantLabels, PublicCatalogFile), `fulfillment`, `owner`, `tenant`, `platformadmin`.
-Ya siguen el patrón completo: `whatsapp`, `subscription`, `payments`, `team`, `contact`, `catalog/OwnerCatalog` y `catalog/PublicStoreCatalog`.
+Ya siguen el patrón completo: `whatsapp`, `subscription`, `payments`, `team`, `contact`, `inbox`, `assistant`, `catalog/OwnerCatalog` y `catalog/PublicStoreCatalog`.

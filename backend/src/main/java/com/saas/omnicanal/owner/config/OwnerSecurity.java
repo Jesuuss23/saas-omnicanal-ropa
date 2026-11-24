@@ -35,7 +35,8 @@ class OwnerSecurity {
                                 "/api/owner/stores/*/payments/**", "/api/owner/payments/**", "/api/owner/security/**").hasRole("OWNER")
                         // Propietario o encargado: configuración de la tienda.
                         .requestMatchers("/api/owner/stores/*/appearance/**", "/api/owner/stores/*/billing/issuer/**",
-                                "/api/owner/stores/*/whatsapp/cloud/**", "/api/owner/stores/*/pickup/**").hasAnyRole("OWNER", "MANAGER")
+                                "/api/owner/stores/*/whatsapp/cloud/**", "/api/owner/stores/*/pickup/**",
+                                "/api/owner/stores/*/assistant/**").hasAnyRole("OWNER", "MANAGER")
                         // Fusionar contactos (y deshacerlo) cambia la identidad de clientes: no lo hace el vendedor.
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/owner/stores/*/contacts/**").hasAnyRole("OWNER", "MANAGER")
                         .anyRequest().hasAnyRole("OWNER", "MANAGER", "SELLER"))

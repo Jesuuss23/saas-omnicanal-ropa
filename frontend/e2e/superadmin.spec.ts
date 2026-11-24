@@ -15,6 +15,7 @@ test("consola del superadmin: alta, suspensión y auditoría", async ({page}, in
   await page.getByRole("button", {name: "Verificar e ingresar"}).click();
   await expect(page.getByRole("heading", {name: "Resumen de plataforma"})).toBeVisible();
   await expect(page.getByText("Ingreso mensual recurrente")).toBeVisible();
+  await expect(page.getByRole("button", {name: "IA activa"})).toBeVisible();
 
   await page.getByRole("navigation").getByRole("link", {name: "Tiendas"}).click();
   await expect(page.getByRole("heading", {name: "Tiendas", exact: true})).toBeVisible();

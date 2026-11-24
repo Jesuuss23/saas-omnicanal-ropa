@@ -1,5 +1,6 @@
 package com.saas.omnicanal.whatsapp.service;
 
+import com.saas.omnicanal.inbox.service.InboxService;
 import com.saas.omnicanal.whatsapp.model.ChatIds;
 import com.saas.omnicanal.whatsapp.model.ManualReply;
 import com.saas.omnicanal.whatsapp.model.SendResult;
@@ -20,9 +21,11 @@ public class WhatsAppReplyService {
     private final EvolutionApiClient evolution;
     private final CloudApiService cloud;
     private final CloudApiClient cloudClient;
+    private final InboxService inbox;
 
     public WhatsAppReplyService(WhatsAppMessageRepository messages, WhatsAppChannelSettingRepository channels,
-                                EvolutionApiClient evolution, CloudApiService cloud, CloudApiClient cloudClient) {
+                                EvolutionApiClient evolution, CloudApiService cloud, CloudApiClient cloudClient, InboxService inbox) {
+        this.inbox = inbox;
         this.messages = messages;
         this.channels = channels;
         this.evolution = evolution;
@@ -34,7 +37,17 @@ public class WhatsAppReplyService {
         return messages.recentReplies(store, chat, 5);
     }
 
+    /** Respuesta escrita por una persona del equipo desde el inbox. */
     public String reply(UUID store, UUID requestId, String chat, String rawText) {
+        return send(store, requestId, chat, rawText, "HUMAN");
+    }
+
+    /** Respuesta de la IA vendedora; el request id se deriva del mensaje entrante, así no se envía dos veces. */
+    public String replyAsAssistant(UUID store, UUID requestId, String chat, String text) {
+        return send(store, requestId, chat, text, "AI");
+    }
+
+    private String send(UUID store, UUID requestId, String chat, String rawText, String author) {
         String text = rawText.strip();
         if (!ChatIds.isPhoneChat(chat)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         WhatsAppProvider provider = channels.activeProvider(store);
@@ -43,7 +56,7 @@ public class WhatsAppReplyService {
             if (!channels.evolutionInstanceBound(store, EvolutionApiClient.instanceName(store)))
                 throw new ResponseStatusException(HttpStatus.CONFLICT);
         }
-        if (!messages.claimReply(store, requestId, chat, text, provider)) {
+        if (!messages.claimReply(store, requestId, chat, text, provider, author)) {
             return messages.existingReplyStatus(store, requestId, chat, text)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT));
         }
@@ -59,6 +72,7 @@ public class WhatsAppReplyService {
             default -> "REVIEW";
         };
         messages.finishReply(store, requestId, status, result.providerMessageId());
+        if (!"REJECTED".equals(status)) inbox.outbound(store, chat);
         return status;
     }
 }

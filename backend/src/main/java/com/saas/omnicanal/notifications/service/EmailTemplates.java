@@ -65,6 +65,14 @@ public class EmailTemplates {
                 "El enlace vence en 72 horas.", "Te sumaron a " + storeName + " como " + role + ". Crea tu acceso (vence en 72 horas):\n" + link);
     }
 
+    public EmailMessage conversationEscalated(String to, String storeName, String customer, String reason, String link) {
+        return message(to, "conversation_escalated", "Un cliente necesita atención en " + storeName, "Te toca responder",
+                "<strong>" + esc(customer) + "</strong> necesita a una persona del equipo en WhatsApp. Motivo: " + esc(reason)
+                        + ". La IA dejó de responder en esa conversación hasta que la devuelvas.", "Abrir la conversación", link,
+                "Recibes este aviso una vez por cada conversación escalada.",
+                customer + " necesita atención en WhatsApp (" + reason + "). Abre la conversación: " + link);
+    }
+
     public EmailMessage welcome(String to, String name, String storeName, String panelLink, String trialEnds) {
         return message(to, "welcome", "¡Bienvenido a " + BRAND + "!", "Tu tienda está lista",
                 "Hola " + esc(name) + ", <strong>" + esc(storeName) + "</strong> ya está creada. Tu prueba gratis dura hasta el "

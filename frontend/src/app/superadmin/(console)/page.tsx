@@ -15,6 +15,7 @@ import {statusInfo} from "@/lib/subscription";
 import {auditLabels, formatDate, limaDate, shortDay, type Dashboard} from "@/lib/superadmin";
 import {limaDateTime, money} from "@/lib/utils";
 import {useApiData} from "@/lib/useApiData";
+import {PlatformAiSwitch} from "./PlatformAiSwitch";
 
 export default function Overview() {
   const {data, error, reload} = useApiData<Dashboard>(superadminApi.url("dashboard"));
@@ -26,7 +27,7 @@ export default function Overview() {
   const totalStatuses = Object.values(data.statuses).reduce((a, b) => a + b, 0);
   return <>
     <PageHeader title="Resumen de plataforma" description="Cómo van las tiendas, las pruebas gratis y los cobros del SaaS."
-      actions={<Button asChild><Link href="/superadmin/tiendas?nueva=1"><Store/>Nueva tienda</Link></Button>}/>
+      actions={<><PlatformAiSwitch/><Button asChild><Link href="/superadmin/tiendas?nueva=1"><Store/>Nueva tienda</Link></Button></>}/>
 
     <section aria-label="Indicadores" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard label="Ingreso mensual recurrente" icon={CircleDollarSign} value={money.format(k.mrrCents / 100)}

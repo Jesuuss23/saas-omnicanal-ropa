@@ -18,6 +18,7 @@ public class AuditService {
     public static final String PLAN_CULQI_LINKED = "PLAN_CULQI_LINKED";
     public static final String MFA_ENROLLED = "MFA_ENROLLED";
     public static final String RECOVERY_CODES_REGENERATED = "RECOVERY_CODES_REGENERATED";
+    public static final String AI_PLATFORM_TOGGLED = "AI_PLATFORM_TOGGLED";
 
     private final AuditRepository audit;
 

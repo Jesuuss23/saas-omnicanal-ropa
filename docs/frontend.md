@@ -42,6 +42,11 @@ encargado no ve Cobros, Equipo, Plan ni Cuenta. Si alguien abre por enlace una s
 muestra un aviso en vez de la página. La invitación de un miembro llega como `#m.<id>.<token>` y la del propietario como
 `#<token>`; ambas se activan en `OwnerGate`.
 
+La página WhatsApp tiene la bandeja (`whatsapp/Inbox.tsx`): conversaciones por estado, hilo con mensajes del cliente,
+de la IA y del equipo, y acciones para tomar, devolver a la IA con nota, pausar la IA o cerrar. Responder desde la
+bandeja toma la conversación primero, así la IA no contesta encima de una persona. Asistente IA configura la IA de la
+tienda y permite probarla sin enviar nada.
+
 ## Tienda pública
 
 `src/app/tienda/[store]` se renderiza en el servidor. La cabecera usa la apariencia de la tienda: el color del dueño
