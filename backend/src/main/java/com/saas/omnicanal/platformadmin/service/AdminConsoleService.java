@@ -9,6 +9,7 @@ import com.saas.omnicanal.subscription.model.Subscription;
 import com.saas.omnicanal.subscription.model.SubscriptionStatus;
 import com.saas.omnicanal.subscription.repository.PlanRepository;
 import com.saas.omnicanal.subscription.repository.SubscriptionRepository;
+import com.saas.omnicanal.subscription.service.SubscriptionService;
 import java.security.Principal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -29,14 +30,16 @@ public class AdminConsoleService {
     private final AuditService audit;
     private final SubscriptionRepository subscriptions;
     private final PlanRepository plans;
+    private final SubscriptionService lifecycle;
 
     public AdminConsoleService(AdminConsoleRepository console, AuditRepository auditLog, AuditService audit,
-                               SubscriptionRepository subscriptions, PlanRepository plans) {
+                               SubscriptionRepository subscriptions, PlanRepository plans, SubscriptionService lifecycle) {
         this.console = console;
         this.auditLog = auditLog;
         this.audit = audit;
         this.subscriptions = subscriptions;
         this.plans = plans;
+        this.lifecycle = lifecycle;
     }
 
     public record Dashboard(String email, Kpis kpis, List<WeekCount> newStores, Map<String, Long> statuses,
@@ -85,6 +88,16 @@ public class AdminConsoleService {
         Subscription current = subscriptions.findForUpdate(id).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.CONFLICT, "La tienda no tiene suscripción."));
         String reason = change.reason().strip();
+        // Un ajuste manual reemplaza cualquier intento de pago con Culqi que no llegó a confirmarse: se cancela en Culqi
+        // y se limpia, para que el propietario pueda volver a suscribirse. Cancelar también corta el cobro recurrente.
+        // Activar a mano sobre un plan ya pagado por Culqi (ACTIVE o GRACE) no toca esa suscripción.
+        boolean paidByCulqi = current.status() == SubscriptionStatus.ACTIVE || current.status() == SubscriptionStatus.GRACE;
+        String culqiNote = "";
+        if (change.action() == SubscriptionChange.Action.CANCEL || !paidByCulqi) {
+            boolean hadAttempt = current.culqiSubscriptionId() != null || current.pendingPlanCode() != null;
+            if (hadAttempt) culqiNote = lifecycle.discardCulqiAttempt(current)
+                    ? " Intento de Culqi descartado." : " Culqi no confirmó la cancelación del intento; revísalo en su panel.";
+        }
         switch (change.action()) {
             case EXTEND_TRIAL -> {
                 if (change.days() == null) throw bad("Indica cuántos días extender.");
@@ -93,7 +106,7 @@ public class AdminConsoleService {
                 subscriptions.extendTrial(id, change.days());
                 subscriptions.logEvent(id, current.status(), SubscriptionStatus.TRIAL, current.planCode(), "SUPERADMIN",
                         "+" + change.days() + " días: " + reason);
-                audit.record(actor, AuditService.SUBSCRIPTION_CHANGED, id, "Prueba +" + change.days() + " días. " + reason);
+                audit.record(actor, AuditService.SUBSCRIPTION_CHANGED, id, "Prueba +" + change.days() + " días. " + reason + culqiNote);
             }
             case ACTIVATE -> {
                 if (change.planCode() == null || change.months() == null) throw bad("Indica plan y meses.");
@@ -102,14 +115,14 @@ public class AdminConsoleService {
                 subscriptions.logEvent(id, current.status(), SubscriptionStatus.ACTIVE, plan.code(), "SUPERADMIN",
                         change.months() + " meses: " + reason);
                 audit.record(actor, AuditService.SUBSCRIPTION_CHANGED, id,
-                        "Plan " + plan.code() + " por " + change.months() + " meses. " + reason);
+                        "Plan " + plan.code() + " por " + change.months() + " meses. " + reason + culqiNote);
             }
             case CANCEL -> {
                 if (current.status() == SubscriptionStatus.CANCELLED) throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "La suscripción ya está cancelada.");
                 subscriptions.setStatus(id, SubscriptionStatus.CANCELLED, null);
                 subscriptions.logEvent(id, current.status(), SubscriptionStatus.CANCELLED, current.planCode(), "SUPERADMIN", reason);
-                audit.record(actor, AuditService.SUBSCRIPTION_CHANGED, id, "Cancelada. " + reason);
+                audit.record(actor, AuditService.SUBSCRIPTION_CHANGED, id, "Cancelada. " + reason + culqiNote);
             }
         }
         return tenant(id);

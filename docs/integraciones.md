@@ -58,6 +58,16 @@ Endpoints: `GET/PUT/DELETE /api/owner/stores/{id}/whatsapp/cloud`, `POST .../ver
    crea cliente, tarjeta y suscripción. La suscripción queda `PENDING_PAYMENT`.
 4. Solo el webhook activa el plan: se registra el evento por id (idempotente), se re-consulta la suscripción a
    Culqi y se comprueba `metadata.tenant_id` antes de cambiar estado y entitlements.
+5. **Intentos que no se confirmaron.** Culqi no permite dos suscripciones del mismo cliente al mismo plan
+   ("Ya te encuentras registrado a este plan"). Por eso el intento guardado se cancela en Culqi
+   (`DELETE culqi.subscriptions.cancel-path`) y se limpia (`culqi_subscription_id`, `pending_plan_code`) cuando:
+   - el superadmin ajusta la suscripción (extender prueba, activar a mano sobre algo que no estaba pagado por
+     Culqi, o cancelar; cancelar también corta el cobro recurrente);
+   - el dueño vuelve a hacer checkout y el intento anterior no está activo. Un `PENDING_PAYMENT` del mismo plan
+     es idempotente durante 15 minutos (doble clic); después se descarta y se crea uno nuevo.
+
+   El cliente de Culqi (`culqi_customer_id`) se reutiliza. Los eventos del intento viejo se ignoran porque ya no
+   coinciden con ninguna suscripción guardada.
 
 **Pendiente de validar en sandbox**: rutas de la API recurrente (`culqi.subscriptions.*` en `application.yml`)
 y nombres exactos de eventos (`CulqiWebhookService.classify`).

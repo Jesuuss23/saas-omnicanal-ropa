@@ -56,6 +56,7 @@ culqi:
   subscriptions:
     create-path: /v2/recurrent/subscriptions/create
     get-path: /v2/recurrent/subscriptions/{id}
+    cancel-path: /v2/recurrent/subscriptions/{id}
 
 mercadopago:
   api-url: https://api.mercadopago.com

@@ -19,19 +19,23 @@ import tools.jackson.databind.JsonNode;
  */
 @Component
 public class CulqiClient {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CulqiClient.class);
     private final RestClient api;
     private final String publicKey;
     private final String subscriptionCreatePath;
     private final String subscriptionGetPath;
+    private final String subscriptionCancelPath;
 
     public CulqiClient(@Value("${CULQI_SECRET_KEY:}") String secretKey,
                        @Value("${CULQI_PUBLIC_KEY:}") String publicKey,
                        @Value("${culqi.api-url:https://api.culqi.com}") String url,
                        @Value("${culqi.subscriptions.create-path:/v2/recurrent/subscriptions/create}") String createPath,
-                       @Value("${culqi.subscriptions.get-path:/v2/recurrent/subscriptions/{id}}") String getPath) {
+                       @Value("${culqi.subscriptions.get-path:/v2/recurrent/subscriptions/{id}}") String getPath,
+                       @Value("${culqi.subscriptions.cancel-path:/v2/recurrent/subscriptions/{id}}") String cancelPath) {
         this.publicKey = publicKey;
         this.subscriptionCreatePath = createPath;
         this.subscriptionGetPath = getPath;
+        this.subscriptionCancelPath = cancelPath;
         this.api = secretKey.isBlank() ? null : HttpClients.standard().baseUrl(url)
                 .defaultHeaders(h -> h.setBearerAuth(secretKey)).build();
     }
@@ -69,6 +73,26 @@ public class CulqiClient {
 
     public JsonNode createSubscription(String cardId, String planId, Map<String, String> metadata) {
         return post(subscriptionCreatePath, Map.of("card_id", cardId, "plan_id", planId, "tyc", true, "metadata", metadata));
+    }
+
+    /**
+     * Cancela una suscripción en Culqi. Devuelve true si quedó cancelada o Culqi ya no la conoce (404/400),
+     * false si Culqi no respondió o la rechazó por otro motivo. Nunca lanza: lo usa la limpieza de intentos viejos.
+     */
+    public boolean cancelSubscription(String id) {
+        if (api == null || id == null || id.isBlank()) return api == null;
+        try {
+            api.delete().uri(subscriptionCancelPath, id).retrieve().toBodilessEntity();
+            return true;
+        } catch (RestClientResponseException ex) {
+            int code = ex.getStatusCode().value();
+            if (code == 404 || code == 400) return true;
+            log.warn("Culqi no canceló la suscripción {}: HTTP {} {}", id, code, ex.getResponseBodyAsString());
+            return false;
+        } catch (RestClientException ex) {
+            log.warn("Culqi no respondió al cancelar la suscripción {}: {}", id, ex.getMessage());
+            return false;
+        }
     }
 
     public JsonNode subscription(String id) {
