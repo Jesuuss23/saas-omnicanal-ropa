@@ -1,7 +1,15 @@
 "use client";
-import {apiFetch,ownerApi,type Send} from "@/lib/api";
+import {apiFetch,errorMessage,ownerApi,type Send} from "@/lib/api";
 
 import {useEffect,useState,type FormEvent} from "react";
+import {Check, CreditCard} from "lucide-react";
+import {Alert} from "@/components/ui/alert";
+import {Badge} from "@/components/ui/badge";
+import {Button} from "@/components/ui/button";
+import {Input} from "@/components/ui/input";
+import {Field} from "@/components/ui/label";
+import {Skeleton} from "@/components/ui/skeleton";
+import {cn} from "@/lib/utils";
 
 type Entitlement = {key:string;enabled:boolean;limit:number|null};
 type Plan = {code:string;name:string;monthlyPriceCents:number;currency:string;purchasable:boolean;entitlements:Entitlement[]};
@@ -79,11 +87,7 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
         culqi.open();
       });
       const res = await send(path+"/checkout",JSON.stringify({...form,planCode:plan.code,culqiToken:token}));
-      if (!res.ok) {
-        let message = "No se pudo registrar la suscripción.";
-        try { const body = await res.json(); if (body?.message) message = body.message; } catch {}
-        throw new Error(message);
-      }
+      if (!res.ok) throw new Error(await errorMessage(res, "No se pudo registrar la suscripción."));
       setData(await res.json());
       setPlan(null);
       setNotice("Recibimos tu pago. El plan se activa apenas Culqi lo confirme.");
@@ -91,35 +95,50 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
     finally {setBusy(false);}
   }
 
-  return <section className="rounded-xl border bg-card p-5 shadow-card" aria-labelledby="plan-title">
-    <h2 id="plan-title" className="font-semibold">Plan y suscripción</h2>
-    {notice && <p role="status" className="my-3">{notice}</p>}
-    {!data ? <p className="my-3">Cargando…</p> : <>
-      <p className="my-3"><span className="font-medium">{statusLabels[data.status] ?? data.status}</span>
-        {data.planCode && ` · plan ${data.planCode}`}
-        {data.status==="TRIAL" && data.trialEndsAt && ` · vence el ${date(data.trialEndsAt)}`}
-        {data.status==="ACTIVE" && data.currentPeriodEnd && ` · renueva el ${date(data.currentPeriodEnd)}`}
-        {data.status==="GRACE" && data.graceEndsAt && ` · regulariza tu pago antes del ${date(data.graceEndsAt)}`}</p>
-      <ul className="grid gap-1 text-sm md:grid-cols-2">{data.entitlements.map(e=><li key={e.key}>
-        {keyLabels[e.key] ?? e.key}: <span className="font-medium">{describe(e)}</span></li>)}</ul>
+  const current = data?.plans.find(p=>p.code===data.planCode);
+  const pendingPlan = data?.plans.find(p=>p.code===data.pendingPlanCode);
+  const needsPlan = data && ["TRIAL_EXPIRED","CANCELLED","SUSPENDED","NONE"].includes(data.status);
+  const tone = !data ? "neutral" : data.status==="ACTIVE" || data.status==="TRIAL" ? "success"
+    : data.status==="PENDING_PAYMENT" || data.status==="GRACE" ? "warning" : "destructive";
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">{data.plans.map(p=><article key={p.code} className="rounded-lg border p-4">
-        <h3 className="font-semibold">{p.name}</h3>
-        <p className="text-xl">{soles.format(p.monthlyPriceCents/100)} <span className="text-sm">/ mes</span></p>
-        <ul className="my-2 text-sm">{p.entitlements.filter(e=>e.enabled).map(e=><li key={e.key}>{keyLabels[e.key] ?? e.key}{e.limit!==null && `: ${e.limit}`}</li>)}</ul>
-        <button type="button" disabled={busy || !data.checkoutAvailable || !p.purchasable || data.planCode===p.code && data.status==="ACTIVE"}
-          className="rounded-lg bg-primary px-3 py-2 text-white disabled:opacity-50" onClick={()=>setPlan(p)}>
-          {data.planCode===p.code && data.status==="ACTIVE" ? "Plan actual" : "Elegir plan"}</button>
-      </article>)}</div>
-      {!data.checkoutAvailable && <p className="mt-2 text-sm text-muted-foreground">El pago en línea aún no está habilitado. Escríbenos para activar tu plan.</p>}
+  return <section className="grid gap-5 rounded-xl border bg-card p-5 shadow-card" aria-labelledby="plan-title">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h2 id="plan-title" className="font-semibold">Plan y suscripción</h2>
+      {data && <Badge variant={tone}>{statusLabels[data.status] ?? data.status}</Badge>}
+    </div>
+    {notice && <Alert role="status">{notice}</Alert>}
+    {!data ? <Skeleton className="h-40"/> : <>
+      <p className="text-sm">
+        {data.status==="TRIAL" ? <>Estás en la prueba gratuita{data.trialEndsAt && <>, vence el {date(data.trialEndsAt)}</>}.</>
+          : data.status==="ACTIVE" ? <>Plan <strong>{current?.name ?? data.planCode}</strong>{data.currentPeriodEnd && <>, se renueva el {date(data.currentPeriodEnd)}</>}.</>
+          : data.status==="GRACE" ? <>Plan <strong>{current?.name ?? data.planCode}</strong>. Regulariza tu pago{data.graceEndsAt && <> antes del {date(data.graceEndsAt)}</>}.</>
+          : data.status==="PENDING_PAYMENT" ? <>Estamos esperando que Culqi confirme el pago del plan <strong>{pendingPlan?.name ?? data.pendingPlanCode}</strong>.</>
+          : <>Tu tienda no tiene un plan vigente.</>}
+      </p>
+      {data.status==="PENDING_PAYMENT" && <Alert variant="warning">Si el pago no se confirma en unos 15 minutos, vuelve a elegir el plan para intentarlo otra vez. No se te cobrará dos veces: el intento anterior se cancela.</Alert>}
+      {needsPlan && <Alert variant="warning">Elige un plan para seguir usando todas las funciones de tu tienda.</Alert>}
+      <ul className="grid gap-1 text-sm md:grid-cols-2">{data.entitlements.map(e=><li key={e.key} className="flex justify-between gap-3 border-b py-1">
+        <span className="text-muted-foreground">{keyLabels[e.key] ?? e.key}</span><span className="font-medium">{describe(e)}</span></li>)}</ul>
 
-      {plan && <form onSubmit={pay} className="mt-5 grid gap-3 md:grid-cols-2">
-        <p className="md:col-span-2 font-medium">Datos de facturación para el plan {plan.name}</p>
+      <div className="grid gap-3 md:grid-cols-3">{data.plans.map(p=>{
+        const isCurrent = data.planCode===p.code && data.status==="ACTIVE";
+        return <article key={p.code} className={cn("grid content-start gap-2 rounded-lg border p-4", isCurrent && "border-primary bg-primary/5", plan?.code===p.code && "ring-2 ring-primary")}>
+          <h3 className="flex items-center justify-between font-semibold">{p.name}{isCurrent && <Badge variant="success">Plan actual</Badge>}</h3>
+          <p className="text-2xl font-semibold">{soles.format(p.monthlyPriceCents/100)} <span className="text-sm font-normal text-muted-foreground">/ mes</span></p>
+          <ul className="grid gap-1 text-sm">{p.entitlements.filter(e=>e.enabled).map(e=><li key={e.key} className="flex gap-2">
+            <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden/>{keyLabels[e.key] ?? e.key}{e.limit!==null && `: ${e.limit}`}</li>)}</ul>
+          <Button type="button" variant={isCurrent ? "outline" : "default"} className="mt-2" disabled={busy || !data.checkoutAvailable || !p.purchasable || isCurrent}
+            onClick={()=>{setPlan(p); setNotice("");}}>{isCurrent ? "Plan actual" : "Elegir plan"}</Button>
+        </article>;})}</div>
+      {!data.checkoutAvailable && <p className="text-sm text-muted-foreground">El pago en línea aún no está habilitado. Escríbenos para activar tu plan.</p>}
+
+      {plan && <form onSubmit={pay} className="grid gap-4 rounded-lg border p-4 md:grid-cols-2">
+        <p className="font-medium md:col-span-2">Datos de facturación para el plan {plan.name}</p>
         {[["firstName","Nombres"],["lastName","Apellidos"],["email","Correo"],["phone","Celular"],["address","Dirección"],["city","Ciudad"]].map(([n,l])=>
-          <label key={n} className="grid gap-1 text-sm">{l}<input name={n} required type={n==="email"?"email":"text"} className="rounded border px-3 py-2"/></label>)}
-        <div className="flex gap-3 md:col-span-2">
-          <button disabled={busy} className="rounded-lg bg-primary px-4 py-2 text-white">{busy?"Procesando…":"Pagar con tarjeta (Culqi)"}</button>
-          <button type="button" className="underline" onClick={()=>setPlan(null)}>Cancelar</button>
+          <Field key={n} label={l} htmlFor={"bill-"+n}><Input id={"bill-"+n} name={n} required type={n==="email"?"email":n==="phone"?"tel":"text"}/></Field>)}
+        <div className="flex flex-wrap gap-3 md:col-span-2">
+          <Button loading={busy}><CreditCard/>Pagar con tarjeta (Culqi)</Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={()=>setPlan(null)}>Cancelar</Button>
         </div>
       </form>}
     </>}

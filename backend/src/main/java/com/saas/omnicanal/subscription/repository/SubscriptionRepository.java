@@ -127,4 +127,26 @@ public class SubscriptionRepository {
                 """, Long.class));
         return counts;
     }
+
+    /**
+     * Olvida el intento de suscripción en Culqi (pendiente o reemplazado) para poder empezar uno nuevo. Si estaba en
+     * PENDING_PAYMENT vuelve a lo que corresponda por fechas: plan pagado vigente, prueba vigente o prueba vencida.
+     */
+    public void clearCulqiAttempt(UUID tenant) {
+        db.update("""
+                UPDATE tenant_subscription SET culqi_subscription_id=NULL, pending_plan_code=NULL,
+                       status=CASE WHEN status<>'PENDING_PAYMENT' THEN status
+                                   WHEN current_period_end>now() THEN 'ACTIVE'
+                                   WHEN trial_ends_at>now() THEN 'TRIAL'
+                                   ELSE 'TRIAL_EXPIRED' END,
+                       revision=revision+1, updated_at=now() WHERE tenant_id=?
+                """, tenant);
+    }
+
+    /** true si la suscripción lleva más de {@code minutes} minutos sin cambios (p. ej. un pago que nunca se confirmó). */
+    public boolean unchangedFor(UUID tenant, int minutes) {
+        return Boolean.TRUE.equals(db.queryForObject("""
+                SELECT updated_at < now() - make_interval(mins => ?) FROM tenant_subscription WHERE tenant_id=?
+                """, Boolean.class, minutes, tenant));
+    }
 }
