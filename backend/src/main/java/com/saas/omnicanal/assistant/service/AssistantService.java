@@ -92,7 +92,7 @@ public class AssistantService {
         try {
             return responder.answer(tenant, facts, repo.settings(tenant).instructions(), history, null, message);
         } catch (RuntimeException ex) {
-            log.warn("Prueba de IA falló en {}: {}", tenant, ex.getMessage());
+            log.error("Prueba de IA falló en {}: {}", tenant, GeminiResponder.describe(ex));
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "El modelo no respondió. Intenta de nuevo en un momento.");
         }
     }
@@ -140,9 +140,9 @@ public class AssistantService {
             answer = responder.answer(tenant, facts, repo.settings(tenant).instructions(), history(tenant, e.chat()),
                     full.handbackNote(), e.body());
         } catch (RuntimeException ex) {
-            log.warn("IA vendedora: el modelo falló en {}: {}", tenant, ex.getMessage());
+            log.error("IA vendedora: el modelo falló en {}: {}", tenant, GeminiResponder.describe(ex));
             inbox.escalateByAssistant(tenant, e.chat(), "La IA no pudo responder", "Último mensaje: " + e.body());
-            repo.finish(tenant, e.chat(), e.messageId(), "FAILED", null, null, null, elapsed(started), ex.getMessage());
+            repo.finish(tenant, e.chat(), e.messageId(), "FAILED", null, null, null, elapsed(started), GeminiResponder.describe(ex));
             return;
         }
         if (answer.escalate())
