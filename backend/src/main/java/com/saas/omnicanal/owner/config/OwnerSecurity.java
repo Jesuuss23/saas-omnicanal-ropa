@@ -33,7 +33,7 @@ class OwnerSecurity {
                         // Solo el propietario: equipo, plan, cobros y su propia verificación en dos pasos.
                         .requestMatchers("/api/owner/stores/*/team/**", "/api/owner/stores/*/subscription/**",
                                 "/api/owner/stores/*/payments/**", "/api/owner/payments/**", "/api/owner/security/**",
-                                "/api/owner/stores/*/billing/production/**").hasRole("OWNER")
+                                "/api/owner/stores/*/billing/production/**", "/api/owner/stores/*/billing/nubefact/**").hasRole("OWNER")
                         // Propietario o encargado: configuración de la tienda.
                         .requestMatchers("/api/owner/stores/*/appearance/**", "/api/owner/stores/*/billing/issuer/**",
                                 "/api/owner/stores/*/whatsapp/cloud/**", "/api/owner/stores/*/pickup/**",

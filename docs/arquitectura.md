@@ -14,7 +14,7 @@ com.saas.omnicanal
 ├── catalog/           # productos, variantes, recursos, etiquetas
 ├── checkout/          # reservas, pedidos web, seguimiento
 ├── pos/               # punto de venta
-├── fiscal/            # facturación electrónica (SUNAT vía APISPERU)
+├── fiscal/            # facturación electrónica (SUNAT vía Nubefact, cuenta de cada tienda)
 ├── contact/           # contacto unificado y cuenta del comprador (Google)
 ├── crm/
 ├── fulfillment/       # recojo y delivery

@@ -169,9 +169,6 @@ WhatsApp Cloud API no usa variables por tienda: cada tienda carga sus datos en e
 | Variable | Obligatoria | Formato | Local / test | Producción |
 |---|---|---|---|---|
 | `GOOGLE_CLIENT_ID` | Opcional | Client ID web de OAuth (`…apps.googleusercontent.com`) | Vacía (sin botón de Google) o un cliente con origen `http://localhost:3000` | Cliente con el dominio real como origen |
-| `APISPERU_ACCOUNT_TOKEN` | Para facturación | Token de la cuenta APISPERU | Token de la cuenta de pruebas | Token de producción |
-| `APISPERU_EMISSION_KEY` | Para facturación | 32 bytes en Base64, igual que la clave de cifrado | `openssl rand -base64 32` | Una propia, distinta de `SECRETS_ENCRYPTION_KEY` |
-| `APISPERU_BETA_COMPANY_TOKEN_<companyId>` | Opcional | Token de empresa beta fijado por el operador | Solo si APISPERU no devuelve el token | Sin usar |
 | `FLYWAY_BASELINE_ON_MIGRATE` | Opcional (`false`) | `true` / `false` | `false` | `true` solo una vez, para adoptar una base existente sin historial de Flyway |
 
 ## Frontend (Next.js)
