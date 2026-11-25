@@ -15,16 +15,18 @@ import {ApiError, ownerApi} from "@/lib/api";
 import {cn} from "@/lib/utils";
 import {useApiData} from "@/lib/useApiData";
 import {useStore} from "../_panel/StoreContext";
+import CategoryCatalogs from "../CategoryCatalogs";
 
 type Settings = {enabled: boolean; instructions: string; slaMinutes: number; revision: number};
 type Status = {configured: boolean; platformEnabled: boolean; planIncluded: boolean; usedThisMonth: number; monthlyLimit: number | null; debounceMs: number};
-type Answer = {text: string; escalate: boolean; reason: string | null; summary: string | null; toolsUsed: string[]; offTopic: boolean; paused: boolean};
+type Answer = {text: string; escalate: boolean; reason: string | null; summary: string | null; toolsUsed: string[]; offTopic: boolean; paused: boolean;
+  attachments?: {kind: string; description: string}[]};
 type Turn = {author: "CUSTOMER" | "AI" | "SYSTEM"; text: string; note?: string};
 
-const toolLabels: Record<string, string> = {buscarPrendas: "consultó el catálogo", infoTienda: "consultó recojo y delivery", escalar: "pidió pasar a una persona", fueraDeTema: "detectó una pregunta ajena a la tienda"};
+const toolLabels: Record<string, string> = {buscarPrendas: "consultó el catálogo", infoTienda: "consultó recojo y delivery", escalar: "pidió pasar a una persona", fueraDeTema: "detectó una pregunta ajena a la tienda", categorias: "revisó las categorías", enviarCatalogo: "eligió un catálogo para enviar"};
 
 export default function AssistantPage() {
-  const {store} = useStore();
+  const {store, send} = useStore();
   const base = "stores/" + store + "/assistant";
   const settings = useApiData<Settings>(ownerApi.url(base + "/settings"));
   const status = useApiData<Status>(ownerApi.url(base + "/status"), settings.data?.revision);
@@ -36,6 +38,7 @@ export default function AssistantPage() {
       <div className="grid content-start gap-6">
         {status.data && <StatusCard status={status.data} enabled={settings.data?.enabled ?? false}/>}
         {!settings.data ? <Skeleton className="h-80"/> : <SettingsForm key={settings.data.revision} store={store} initial={settings.data} onSaved={settings.mutate}/>}
+        <CategoryCatalogs store={store} send={send} compact/>
       </div>
       <Tester store={store} configured={status.data?.configured ?? true} debounceMs={status.data?.debounceMs ?? 8000}/>
     </div>
@@ -154,6 +157,7 @@ function Tester({store, configured, debounceMs}: {store: string; configured: boo
       const a = await ownerApi.json<Answer>("stores/" + store + "/assistant/test", {message: batch.join("\n"), history, offTopicCount: count});
       if (gen !== generation.current) return;
       const note = [a.toolsUsed.map(t => toolLabels[t] ?? t).join(", "), a.escalate && ("Escalaría: " + (a.reason ?? "")),
+        ...(a.attachments ?? []).map(f => "en WhatsApp enviaría " + f.description),
         batch.length > 1 && ("respondió " + batch.length + " mensajes juntos")].filter(Boolean).join(" · ");
       if (a.text) setTurns(t => [...t, {author: "AI", text: a.text, note}]);
       setOffTopic(a.offTopic ? count + 1 : 0);

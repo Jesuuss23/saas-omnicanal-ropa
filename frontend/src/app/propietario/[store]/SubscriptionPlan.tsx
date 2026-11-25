@@ -27,7 +27,7 @@ const statusLabels:Record<string,string> = {
 const keyLabels:Record<string,string> = {
   "catalog.products":"Productos","team.users":"Usuarios","ai.responses.monthly":"Respuestas IA al mes",
   "fiscal.documents.monthly":"Comprobantes al mes","fiscal.production":"Facturación en producción",
-  "whatsapp.evolution":"WhatsApp por QR","whatsapp.cloud_api":"WhatsApp Cloud API","domain.custom":"Dominio propio",
+  "whatsapp.evolution":"WhatsApp por QR","whatsapp.cloud_api":"WhatsApp Cloud API","whatsapp.media.send":"Imágenes y videos por WhatsApp","domain.custom":"Dominio propio",
   "campaigns.email":"Campañas por email","campaigns.whatsapp":"Campañas por WhatsApp","payments.mercadopago":"Cobros con Mercado Pago",
 };
 const soles = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});

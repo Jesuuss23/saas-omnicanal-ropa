@@ -11,7 +11,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 | # | Módulo | Estado | Incluye | Pendiente |
 |---|--------|--------|---------|-----------|
 | 0.1 | Estructura por módulos | ✅ | Paquetes `modulo/{model,repository,service,controller,config}`; `shared/` para seguridad, cifrado y clientes HTTP | Extraer SQL de los controladores que aún lo tienen (ver [arquitectura.md](arquitectura.md#deuda-conocida)) |
-| 0.2 | Migraciones Flyway | ✅ | V1–V44 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
+| 0.2 | Migraciones Flyway | ✅ | V1–V45 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
 | 0.3 | Cifrado de secretos | ✅ | `SecretCipher` AES-256-GCM con contexto por tienda (`SECRETS_ENCRYPTION_KEY`) | Rotación de clave maestra (re-cifrado por lotes) |
 | 0.4 | CI | ✅ | GitHub Actions: tests del backend con PostgreSQL, lint/tipos/build del frontend y pruebas de humo con Playwright | — |
 | 0.5 | Acceso y 2FA | ✅ | TOTP enrolable con QR para superadmin y propietarios, códigos de recuperación, ingreso de propietarios por correo ([seguridad.md](seguridad.md)) | — |
@@ -45,13 +45,13 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 
 | # | Módulo | Pendiente |
 |---|--------|-----------|
-| 3.1 | IA vendedora | ✅ Gemini (Spring AI) con herramientas sobre catálogo y stock (`buscarPrendas`, `infoTienda`, `escalar`), indicaciones por tienda, interruptores por conversación, tienda y plataforma, cuota `ai.responses.monthly`, idempotencia por mensaje (`ai_reply`), prueba desde el panel, agrupación de mensajes seguidos en una sola respuesta (`assistant.debounce-ms`) y dominio estricto (aviso y pausa sin escalar tras 2 preguntas ajenas a la tienda). Pendiente: memoria de largo plazo y respuestas con imágenes |
+| 3.1 | IA vendedora | ✅ Gemini (Spring AI) con herramientas sobre catálogo y stock (`buscarPrendas`, `infoTienda`, `escalar`), indicaciones por tienda, interruptores por conversación, tienda y plataforma, cuota `ai.responses.monthly`, idempotencia por mensaje (`ai_reply`), prueba desde el panel, agrupación de mensajes seguidos en una sola respuesta (`assistant.debounce-ms`) y dominio estricto (aviso y pausa sin escalar tras 2 preguntas ajenas a la tienda), respuestas guiadas por categorías y subcategorías (`categorias`) y envío del catálogo de la categoría (`enviarCatalogo`: un solo recurso, PDF como archivo, imagen solo con `whatsapp.media.send`). Pendiente: memoria de largo plazo y entender notas de voz e imágenes |
 | 3.2 | Identidad unificada del contacto | ✅ `contact` por tienda (teléfono E.164, correo, `google_sub`), pedidos web enlazados, posibles duplicados, fusión manual reversible (`contact_merge_log`) y vista en Clientes. Pendiente: enlazar ventas POS y comprobantes al contacto |
-| 3.3 | Inbox avanzado y escalamiento | ✅ Bandeja con estados (abierta, para el equipo, cerrada), tomar conversación, SLA por tienda con marca de vencida, alerta por correo al escalar, devolución a la IA con nota y resumen de la IA para el equipo. Pendiente: asignación entre miembros y notificaciones push |
+| 3.3 | Inbox avanzado y escalamiento | ✅ Bandeja con estados (abierta, para el equipo, cerrada), tomar conversación, SLA por tienda con marca de vencida, alerta por correo al escalar, devolución a la IA con nota y resumen de la IA para el equipo, notas de voz, fotos, videos y documentos entrantes (Evolution y Cloud API) guardados en `whatsapp_media`, y envío de PDF (todos los planes) e imágenes y videos (`whatsapp.media.send`, Premium). Pendiente: asignación entre miembros y notificaciones push |
 | 3.4 | Facturación en producción | 🟡 Alta en 4 pasos (emisor, usuario SOL, certificado .pfx validado y cifrado, series), activación explícita con RUC escrito y capacidad `fiscal.production`, conciliación automática de comprobantes en revisión con espera creciente (nunca reenvía). Pendiente: conectar el envío real a producción en APISPERU y validarlo con una cuenta y certificado reales; notas de crédito |
 | 3.5 | Pedidos y logística | Preparación, recojo con código, reparto con estados y línea de tiempo |
 | 3.6 | Marketing | ✅ Consentimiento por contacto (checkout, cuenta del comprador, baja por enlace), segmentos (compradores, recencia, gasto), campañas por correo y plantillas de WhatsApp con cola `FOR UPDATE SKIP LOCKED`, cuota mensual `campaigns.*`, recordatorio único de carrito abandonado. Pendiente: plantillas con varias variables, métricas de apertura y clics |
-| 3.7 | Dominios | Subdominio administrado y dominio propio con verificación DNS/SSL asíncrona |
+| 3.7 | Dominios | Pantalla Dominio en el panel solo visual (sin funciones). Pendiente: subdominio administrado y dominio propio con verificación DNS/SSL asíncrona |
 | 3.8 | Panel comercial del superadmin | ✅ Consola con KPIs (MRR, pruebas por vencer, morosas), tiendas con búsqueda y ficha, suspensión con kill switch (423), ajustes manuales de suscripción, capacidades por tienda, pagos y auditoría (`platform_audit_log`). Pendiente: embudo de conversión y exportación CSV |
 
 ## Siguiente incremento sugerido

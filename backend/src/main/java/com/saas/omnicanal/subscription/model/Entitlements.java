@@ -13,6 +13,8 @@ public final class Entitlements {
     public static final String CAMPAIGNS_EMAIL = "campaigns.email";
     public static final String CAMPAIGNS_WHATSAPP = "campaigns.whatsapp";
     public static final String PAYMENTS_MERCADOPAGO = "payments.mercadopago";
+    /** Enviar imágenes y videos por WhatsApp (bandeja e IA). */
+    public static final String WHATSAPP_MEDIA_SEND = "whatsapp.media.send";
 
     private Entitlements() {}
 }

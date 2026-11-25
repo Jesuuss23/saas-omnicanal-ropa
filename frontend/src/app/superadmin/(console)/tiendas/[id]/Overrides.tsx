@@ -22,6 +22,7 @@ const KNOWN = [
   ["fiscal.production", "Facturación en producción"],
   ["whatsapp.evolution", "WhatsApp por QR"],
   ["whatsapp.cloud_api", "WhatsApp Cloud API"],
+  ["whatsapp.media.send", "Enviar imágenes y videos por WhatsApp"],
   ["payments.mercadopago", "Cobros con Mercado Pago"],
   ["campaigns.email", "Campañas por email"],
   ["campaigns.whatsapp", "Campañas por WhatsApp"],

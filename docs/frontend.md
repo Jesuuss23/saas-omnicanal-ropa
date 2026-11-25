@@ -34,7 +34,7 @@ Culqi), Pagos (webhooks de Culqi y Mercado Pago), Auditoría y Seguridad. Los ti
 `src/app/propietario/[store]/layout.tsx` monta `OwnerGate`: muestra ingreso o activación por invitación hasta que hay
 sesión, y luego `StoreShell` (barra lateral) con `useStore()` disponible para cada página. Secciones: Inicio (métricas,
 ventas por día y pasos de configuración), Pedidos web, Punto de venta, Catálogo (con fotos y etiquetas QR), Clientes,
-WhatsApp, Apariencia (nombre, logo, color, contacto), Asistente IA, Marketing, Cobros, Facturación, Equipo, Plan y Cuenta. Los componentes de cada
+WhatsApp, Apariencia (nombre, logo, color, contacto), Dominio (solo visual, sin funciones), Asistente IA, Marketing, Cobros, Facturación, Equipo, Plan y Cuenta. Los componentes de cada
 módulo (`Catalog`, `WebOrders`, `PointOfSale`…) siguen en la carpeta de la ruta.
 
 Catálogo: el alta (`NewProduct`) arma una variante por cada combinación de tallas y colores elegidos; las tallas y
@@ -42,6 +42,9 @@ categorías salen de selects (`catalogOptions.tsx`, categorías desde `GET catal
 backend lo genera legible (`NOMBRE-COLOR-TALLA`, sin tildes, con `-2`, `-3`… si ya existe). Las etiquetas son **una por
 variante** (talla y color), sin copias: el QR guarda el id de la variante y la etiqueta muestra nombre, talla, color,
 precio y SKU. Se eligen con la casilla de cada fila o con el botón QR de la fila.
+Cada prenda tiene una subcategoría opcional (`SubcategoryInput`, sugerencias desde `GET catalog/subcategories`). La
+pestaña "Catálogos por categoría" (`CategoryCatalogs.tsx`, también en Asistente IA) carga PDF, imagen y enlace por
+categoría, elige cuál se usa (Automático = PDF → imagen → enlace) y descarga o guarda el PDF generado del catálogo.
 
 Punto de venta: buscador de productos (`GET pos/products?query=`) con una tarjeta por variante (talla, color, SKU, precio
 y stock). Al escanear una etiqueta (`GET pos/products/{código}`) la variante entra directo al carrito con todos sus datos.
@@ -59,6 +62,10 @@ bandeja toma la conversación primero, así la IA no contesta encima de una pers
 tienda y permite probarla sin enviar nada: la prueba agrupa los mensajes seguidos con la misma espera que WhatsApp
 (`debounceMs` del estado) y lleva el contador de preguntas fuera de tema; a la segunda muestra la pausa y no vuelve a
 llamar al modelo hasta "Empezar de nuevo". La bandeja marca "IA pausada: fuera de tema" y explica cómo reactivarla.
+La bandeja abre en "Todas" (ordenadas por último mensaje) y `useApiData` conserva los datos mientras recarga, así una
+conversación no desaparece al refrescar ni al tomarla. Muestra fotos, videos, notas de voz y PDF de cada mensaje
+("Descargando…" mientras llega) y permite adjuntar imagen, video o PDF; con un plan sin `whatsapp.media.send` el adjunto
+de imagen o video queda bloqueado con el aviso del plan Premium.
 
 Marketing (`marketing/page.tsx`) crea borradores de campaña con segmento y conteo previo, los lanza o cancela, y configura el
 recordatorio de carrito abandonado. Facturación suma, solo para el propietario, el alta para producción en 4 pasos

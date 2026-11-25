@@ -90,11 +90,13 @@ class CategoryResourceController {
     }
 
     private String writeFile(UUID store,String category,Kind kind,String data) {
-        if (data.length()>2796204) throw new ResponseStatusException(HttpStatus.valueOf(413));
+        // PDF de catálogo hasta 10 MB; imagen hasta 2 MB.
+        int max=kind==Kind.PDF?10*1024*1024:2*1024*1024;
+        if (data.length()>(max+2)/3*4+4) throw new ResponseStatusException(HttpStatus.valueOf(413));
         byte[] bytes;
         try { bytes=java.util.Base64.getDecoder().decode(data); }
         catch (IllegalArgumentException invalid) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST); }
-        if (bytes.length>2097152) throw new ResponseStatusException(HttpStatus.valueOf(413));
+        if (bytes.length>max) throw new ResponseStatusException(HttpStatus.valueOf(413));
         String signature=java.util.HexFormat.of().formatHex(bytes,0,Math.min(bytes.length,8));
         String mime;
         if (kind==Kind.PDF && signature.startsWith("255044462d")) mime="application/pdf";

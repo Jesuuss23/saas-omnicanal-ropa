@@ -9,9 +9,12 @@ import com.saas.omnicanal.assistant.repository.AssistantRepository;
 import com.saas.omnicanal.inbox.model.InboxViews.Message;
 import com.saas.omnicanal.inbox.repository.ConversationRepository;
 import com.saas.omnicanal.inbox.service.InboxService;
+import com.saas.omnicanal.shared.web.PublicLinks;
 import com.saas.omnicanal.subscription.service.EntitlementService;
 import com.saas.omnicanal.whatsapp.model.ChatIds;
 import com.saas.omnicanal.whatsapp.model.InboundMessageEvent;
+import com.saas.omnicanal.whatsapp.model.MediaKind;
+import com.saas.omnicanal.assistant.model.AssistantModels;
 import com.saas.omnicanal.whatsapp.service.WhatsAppReplyService;
 import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
@@ -123,7 +126,9 @@ public class AssistantService {
             log.error("Prueba de IA falló en {}: {}", tenant, GeminiResponder.describe(ex));
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "El modelo no respondió. Intenta de nuevo en un momento.");
         }
-        if (!answer.offTopic()) return answer;
+        if (!answer.offTopic())
+            return new Answer(PublicLinks.stripPrivate(answer.text()), answer.escalate(), answer.reason(), answer.summary(),
+                    answer.toolsUsed(), false, false, answer.attachments());
         boolean pause = offTopicCount + 1 >= OFF_TOPIC_LIMIT;
         return new Answer(pause ? OFF_TOPIC_PAUSE : offTopicWarning(facts.storeName()), false, null, null, answer.toolsUsed(), true, pause);
     }
@@ -232,9 +237,28 @@ public class AssistantService {
             inbox.escalateByAssistant(tenant, e.chat(), answer.reason() == null || answer.reason().isBlank() ? "La IA pidió ayuda" : answer.reason(),
                     answer.summary());
         send(e, answer.text(), answer.escalate() ? "ESCALATED" : "SENT", tools, started);
+        sendAttachments(e, answer.attachments());
     }
 
-    private void send(InboundMessageEvent e, String text, String okStatus, String tools, long started) {
+    /** Catálogo de la categoría (PDF o imagen) después del texto. Si el envío falla, el texto ya salió y se registra. */
+    private void sendAttachments(InboundMessageEvent e, List<AssistantModels.Attachment> attachments) {
+        for (int i = 0; i < attachments.size(); i++) {
+            var a = attachments.get(i);
+            UUID request = UUID.nameUUIDFromBytes(("ai-media/" + e.tenant() + "/" + e.chat() + "/" + e.messageId() + "/" + i)
+                    .getBytes(StandardCharsets.UTF_8));
+            try {
+                replies.replyMediaAsAssistant(e.tenant(), request, e.chat(), new WhatsAppReplyService.Outgoing(
+                        MediaKind.valueOf(a.kind()), a.mimeType(), a.fileName(), a.content(), null));
+            } catch (RuntimeException ex) {
+                log.warn("IA vendedora: no se pudo enviar el catálogo a {} de {}: {}", e.chat(), e.tenant(), ex.getMessage());
+            }
+        }
+    }
+
+    private void send(InboundMessageEvent e, String rawText, String okStatus, String tools, long started) {
+        // Red de seguridad: aunque el modelo invente un enlace de desarrollo, no llega al cliente.
+        String text = PublicLinks.stripPrivate(rawText);
+        if (text.isBlank()) text = "Gracias por escribirnos. ¿Me cuentas qué prenda buscas?";
         UUID request = UUID.nameUUIDFromBytes(("ai/" + e.tenant() + "/" + e.chat() + "/" + e.messageId()).getBytes(StandardCharsets.UTF_8));
         String result;
         try {

@@ -6,6 +6,8 @@ import com.saas.omnicanal.whatsapp.model.CloudApiCredentials;
 import com.saas.omnicanal.whatsapp.model.WhatsAppProvider;
 import com.saas.omnicanal.whatsapp.repository.WhatsAppMessageRepository;
 import com.saas.omnicanal.whatsapp.model.InboundMessageEvent;
+import com.saas.omnicanal.whatsapp.model.InboundMediaEvent;
+import com.saas.omnicanal.whatsapp.model.MediaKind;
 import org.springframework.context.ApplicationEventPublisher;
 import java.util.Map;
 import java.util.UUID;
@@ -80,7 +82,16 @@ public class CloudWebhookService {
         String from = message.path("from").asText("");
         String id = message.path("id").asText("");
         if (!from.matches("[0-9]{5,15}") || id.isBlank() || id.length() > 200) return 0;
-        String body = switch (message.path("type").asText("")) {
+        String type = message.path("type").asText("");
+        MediaKind kind = switch (type) {
+            case "audio" -> MediaKind.AUDIO;
+            case "image" -> MediaKind.IMAGE;
+            case "video" -> MediaKind.VIDEO;
+            case "document" -> MediaKind.DOCUMENT;
+            default -> null;
+        };
+        if (kind != null) return saveMedia(store, from, id, kind, message.path(type));
+        String body = switch (type) {
             case "text" -> message.path("text").path("body").asText("");
             case "button" -> message.path("button").path("text").asText("");
             case "interactive" -> message.path("interactive").path("button_reply").path("title")
@@ -91,6 +102,23 @@ public class CloudWebhookService {
         String chat = ChatIds.fromPhone(from);
         int saved = messages.saveInbound(store, chat, id, body, WhatsAppProvider.CLOUD_API);
         if (saved == 1) events.publishEvent(new InboundMessageEvent(store, chat, id, body));
+        return saved;
+    }
+
+    private int saveMedia(UUID store, String from, String id, MediaKind kind, JsonNode media) {
+        String mediaId = media.path("id").asText("");
+        if (mediaId.isBlank() || mediaId.length() > 200) return 0;
+        String mime = media.path("mime_type").asText("");
+        mime = mime.isBlank() ? null : mime.split(";")[0].strip();
+        String caption = media.path("caption").asText("");
+        String body = caption.isBlank() ? kind.placeholder() : caption;
+        String chat = ChatIds.fromPhone(from);
+        int saved = messages.saveInboundMedia(store, chat, id, body, WhatsAppProvider.CLOUD_API, kind, mime,
+                caption.isBlank() ? null : caption);
+        if (saved == 1) {
+            events.publishEvent(new InboundMediaEvent(store, chat, id, WhatsAppProvider.CLOUD_API, kind, mime, null, mediaId));
+            events.publishEvent(new InboundMessageEvent(store, chat, id, body));
+        }
         return saved;
     }
 

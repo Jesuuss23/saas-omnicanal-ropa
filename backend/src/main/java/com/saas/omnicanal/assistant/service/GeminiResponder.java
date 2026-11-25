@@ -3,7 +3,10 @@ package com.saas.omnicanal.assistant.service;
 import com.saas.omnicanal.assistant.model.AssistantModels.Answer;
 import com.saas.omnicanal.assistant.model.AssistantModels.StoreFacts;
 import com.saas.omnicanal.assistant.model.AssistantModels.Turn;
+import com.saas.omnicanal.catalog.repository.CategoryResourceRepository;
 import com.saas.omnicanal.catalog.repository.PublicCatalogRepository;
+import com.saas.omnicanal.subscription.model.Entitlements;
+import com.saas.omnicanal.subscription.service.EntitlementService;
 import com.google.genai.errors.ApiException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -37,6 +40,22 @@ public class GeminiResponder implements AssistantResponder {
     private final String apiBase;
     private final String fallbackModel;
     private final long retryDelayMs;
+
+    private CategoryResourceRepository resources;
+    private EntitlementService entitlements;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public GeminiResponder(ObjectProvider<ChatClient.Builder> builders, PublicCatalogRepository catalog,
+                           CategoryResourceRepository resources, EntitlementService entitlements,
+                           @Value("${spring.ai.google.genai.api-key:}") String apiKey,
+                           @Value("${spring.ai.google.genai.chat.model:gemini-3.5-flash}") String model,
+                           @Value("${assistant.gemini-api-base:https://generativelanguage.googleapis.com/v1beta}") String apiBase,
+                           @Value("${assistant.gemini-fallback-model:gemini-flash-latest}") String fallbackModel,
+                           @Value("${assistant.gemini-retry-delay-ms:1500}") long retryDelayMs) {
+        this(builders, catalog, apiKey, model, apiBase, fallbackModel, retryDelayMs);
+        this.resources = resources;
+        this.entitlements = entitlements;
+    }
 
     public GeminiResponder(ObjectProvider<ChatClient.Builder> builders, PublicCatalogRepository catalog,
                            @Value("${spring.ai.google.genai.api-key:}") String apiKey,
@@ -133,7 +152,8 @@ public class GeminiResponder implements AssistantResponder {
 
     @Override
     public Answer answer(UUID tenant, StoreFacts facts, String instructions, List<Turn> history, String note, String message) {
-        var tools = new StoreTools(tenant, catalog, facts);
+        var tools = new StoreTools(tenant, catalog, facts, resources,
+                entitlements != null && entitlements.enabled(tenant, Entitlements.WHATSAPP_MEDIA_SEND));
         List<Message> messages = new ArrayList<>();
         for (Turn t : history) messages.add("CUSTOMER".equals(t.author()) ? new UserMessage(t.text()) : new AssistantMessage(t.text()));
         String text = null;
@@ -167,7 +187,7 @@ public class GeminiResponder implements AssistantResponder {
         if (text == null || text.isBlank()) text = escalate ? "Gracias por escribirnos. Una persona del equipo te responderá pronto."
                 : "Gracias por escribirnos. ¿Me cuentas qué prenda buscas y en qué talla?";
         return new Answer(text.strip(), escalate, escalate ? tools.escalationReason : null, escalate ? tools.escalationSummary : null,
-                List.copyOf(tools.used), tools.offTopic, false);
+                List.copyOf(tools.used), tools.offTopic, false, tools.offTopic ? List.of() : tools.attachments);
     }
 
     static String system(StoreFacts facts, String instructions, String note) {
@@ -183,7 +203,16 @@ public class GeminiResponder implements AssistantResponder {
                 .append("- Escribe en español de Perú, cordial y breve: máximo 4 oraciones, sin listas largas.\n")
                 .append("- Nunca inventes precios, tallas, colores ni stock: consulta buscarPrendas antes de mencionarlos.\n")
                 .append("- Los precios están en soles (S/). Si no hay stock de algo, ofrece alternativas reales del catálogo.\n")
-                .append("- Para comprar, comparte el enlace de la prenda o el del catálogo: ").append(facts.catalogUrl()).append("\n")
+                .append(facts.catalogUrl() == null
+                        ? "- No escribas enlaces ni direcciones web: para comprar, el cliente coordina por este chat.\n"
+                        : "- Para comprar, comparte el enlace de la prenda o el del catálogo: " + facts.catalogUrl() + "\n")
+                .append("- Nunca escribas enlaces a localhost, 127.0.0.1 ni direcciones que no te dieron las herramientas.\n")
+                .append("- Si el cliente pregunta por un tipo de prenda en general (por ejemplo \"polos\") y esa categoría tiene ")
+                .append("subcategorías según categorias, cuéntale brevemente qué variedad hay (por ejemplo polos retro, de verano y ")
+                .append("de invierno), pregúntale cuál se adecua mejor a lo que busca y ofrécele más información o enviarle el ")
+                .append("catálogo de esa categoría. Si acepta el catálogo, usa enviarCatalogo.\n")
+                .append("- Si el mensaje del cliente es solo [Nota de voz], [Imagen], [Video] o [Documento], no puedes verlo ni ")
+                .append("escucharlo: pídele con amabilidad que te escriba qué prenda busca.\n")
                 .append("- Para recojo o delivery usa infoTienda.\n")
                 .append("- No pidas datos de tarjetas ni contraseñas. No prometas descuentos, cambios ni devoluciones.\n")
                 .append("- Llama a escalar si el cliente pide hablar con una persona, tiene un reclamo, pide descuento, cambio o ")

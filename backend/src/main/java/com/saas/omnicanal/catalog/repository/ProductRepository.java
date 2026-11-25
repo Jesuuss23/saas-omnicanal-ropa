@@ -25,14 +25,14 @@ public class ProductRepository {
         return db.query("""
                 SELECT v.id, p.name, v.sku, v.size, v.color, v.price,
                        coalesce(v.stock_physical, 0) - coalesce(v.stock_reserved, 0) AS available,
-                       p.category, coalesce(v.stock_physical, 0) AS physical, coalesce(v.stock_reserved, 0) AS reserved,
+                       p.category, p.subcategory, coalesce(v.stock_physical, 0) AS physical, coalesce(v.stock_reserved, 0) AS reserved,
                        p.xmin::text AS product_version, v.xmin::text AS variant_version, p.id AS product_id,
                        (SELECT i.id FROM product_image i WHERE i.tenant_id = p.tenant_id AND i.product_id = p.id
                          ORDER BY i.position LIMIT 1) AS cover_image
                 FROM product_variant v JOIN product p ON (p.tenant_id, p.id) = (v.tenant_id, v.product_id)
                 WHERE v.tenant_id = ?
                   AND (NOT ? OR coalesce(v.stock_physical,0) > coalesce(v.stock_reserved,0))
-                  AND strpos(lower(concat_ws(' ',p.name,p.category,v.sku,v.size,v.color)),lower(?)) > 0
+                  AND strpos(lower(concat_ws(' ',p.name,p.category,p.subcategory,v.sku,v.size,v.color)),lower(?)) > 0
                 ORDER BY p.created_at DESC NULLS LAST, p.id, v.color,
                          array_position(ARRAY['XXS','XS','S','M','L','XL','XXL','XXXL'], upper(trim(v.size))) NULLS LAST,
                          length(v.size), v.size, v.sku, v.id LIMIT ? OFFSET ?
@@ -40,7 +40,7 @@ public class ProductRepository {
                 rs.getString("size"), rs.getString("color"), rs.getBigDecimal("price"), rs.getInt("available"),
                 rs.getString("category"), rs.getInt("physical"), rs.getInt("reserved"),
                 rs.getString("product_version"), rs.getString("variant_version"),
-                rs.getObject("product_id", UUID.class), rs.getObject("cover_image", UUID.class)),
+                rs.getObject("product_id", UUID.class), rs.getObject("cover_image", UUID.class), rs.getString("subcategory")),
                 tenant, availableOnly, query, limit, offset);
     }
 
@@ -54,8 +54,9 @@ public class ProductRepository {
         db.queryForObject("SELECT id FROM tenant WHERE id=? FOR UPDATE", UUID.class, tenant);
     }
 
-    public void insertProduct(UUID tenant, UUID id, String name, String category) {
-        db.update("INSERT INTO product(id, tenant_id, name, category) VALUES (?, ?, ?, ?)", id, tenant, name, category);
+    public void insertProduct(UUID tenant, UUID id, String name, String category, String subcategory) {
+        db.update("INSERT INTO product(id, tenant_id, name, category, subcategory) VALUES (?, ?, ?, ?, ?)",
+                id, tenant, name, category, subcategory);
     }
 
     public void insertVariant(UUID tenant, UUID product, VariantDraft v) {
@@ -65,13 +66,14 @@ public class ProductRepository {
                 """, product, tenant, v.sku(), v.size(), v.color(), v.price(), v.stock());
     }
 
-    public int updateProductOfVariant(UUID tenant, UUID variant, String name, String category, String productVersion) {
+    public int updateProductOfVariant(UUID tenant, UUID variant, String name, String category, String subcategory,
+                                      String productVersion) {
         return db.update("""
-                UPDATE product p SET name = ?, category = ?
+                UPDATE product p SET name = ?, category = ?, subcategory = ?
                 FROM product_variant v
                 WHERE p.tenant_id = ? AND v.tenant_id = p.tenant_id AND v.product_id = p.id
                   AND v.id = ? AND p.xmin::text = ?
-                """, name, category, tenant, variant, productVersion);
+                """, name, category, subcategory, tenant, variant, productVersion);
     }
 
     /** No permite bajar el stock físico por debajo de lo ya reservado. */
@@ -88,6 +90,17 @@ public class ProductRepository {
                 SELECT DISTINCT trim(category) FROM product
                 WHERE tenant_id = ? AND nullif(trim(category), '') IS NOT NULL ORDER BY 1
                 """, String.class, tenant);
+    }
+
+    /** Subcategorías ya usadas, por categoría (para sugerirlas en el formulario). */
+    public java.util.Map<String, List<String>> subcategories(UUID tenant) {
+        var tree = new java.util.TreeMap<String, List<String>>();
+        db.query("""
+                SELECT DISTINCT trim(category), trim(subcategory) FROM product
+                 WHERE tenant_id = ? AND nullif(trim(category), '') IS NOT NULL AND nullif(trim(subcategory), '') IS NOT NULL
+                 ORDER BY 1, 2
+                """, rs -> { tree.computeIfAbsent(rs.getString(1), k -> new java.util.ArrayList<>()).add(rs.getString(2)); }, tenant);
+        return tree;
     }
 
     public boolean skuTaken(UUID tenant, String sku) {

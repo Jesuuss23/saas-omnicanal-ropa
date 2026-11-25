@@ -16,7 +16,13 @@ public final class InboxViews {
                       String lastMessage, String lastAuthor, Instant lastInboundAt, Instant lastOutboundAt,
                       Instant escalatedAt, boolean overdue, String aiPausedReason, int offTopicCount) {}
 
-    public record Message(String author, String body, Instant at, String status) {}
+    /** {@code mediaType}: IMAGE, VIDEO, AUDIO o DOCUMENT; {@code mediaStatus} solo en entrantes (PENDING, STORED, FAILED, TOO_LARGE). */
+    public record Message(String author, String body, Instant at, String status, String mediaType, String mimeType,
+                          String mediaUrl, String mediaStatus, String caption) {
+        public Message(String author, String body, Instant at, String status) {
+            this(author, body, at, status, null, null, null, null, null);
+        }
+    }
 
     public record Conversation(Row row, String escalationReason, String summary, String handbackNote, long revision,
                                List<Message> messages) {}

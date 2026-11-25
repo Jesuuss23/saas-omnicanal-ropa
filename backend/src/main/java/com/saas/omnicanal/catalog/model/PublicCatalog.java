@@ -10,7 +10,7 @@ public record PublicCatalog(String storeName, List<Variant> variants, boolean ha
                             CategoryResource resource, Brand brand) {
 
     public record Variant(UUID id, UUID productId, String name, String category, String size, String color,
-                          BigDecimal price, int available, UUID coverImage) {}
+                          BigDecimal price, int available, UUID coverImage, String subcategory) {}
     public record Pickup(String address, String hours) {}
     public record CategoryResource(String kind, String url) {}
     /** {@code logoVersion} es null cuando la tienda no subió logo. */

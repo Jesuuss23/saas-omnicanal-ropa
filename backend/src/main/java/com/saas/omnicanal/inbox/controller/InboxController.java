@@ -31,7 +31,7 @@ class InboxController {
     record ChangeAi(@NotNull Boolean enabled) {}
 
     @GetMapping
-    List<Row> list(@PathVariable UUID store, Authentication auth, @RequestParam(defaultValue = "OPEN") Status status,
+    List<Row> list(@PathVariable UUID store, Authentication auth, @RequestParam(required = false) Status status,
                    @RequestParam(defaultValue = "") String query) {
         requireOwner(store, auth);
         return inbox.list(store, status, query);

@@ -115,12 +115,13 @@ public class ConversationRepository {
         db.update("UPDATE conversation SET last_outbound_at = now(), updated_at = now() WHERE tenant_id=? AND chat_id=?", tenant, chat);
     }
 
+    /** {@code status} null: todas las conversaciones. Busca por número en el chat o en el teléfono visible (@lid). */
     public List<Row> list(UUID tenant, Status status, String query, int limit) {
         return db.query(ROW_SELECT + """
-                 WHERE c.tenant_id = ? AND c.status = ?
-                   AND (? = '' OR strpos(c.chat_id, ?) > 0)
-                 ORDER BY overdue DESC, c.last_inbound_at DESC NULLS LAST LIMIT ?
-                """, (rs, n) -> row(rs), tenant, status.name(), query, query, limit);
+                 WHERE c.tenant_id = ? AND c.status = coalesce(CAST(? AS varchar), c.status)
+                   AND (? = '' OR strpos(c.chat_id, ?) > 0 OR strpos(coalesce(c.phone, ''), ?) > 0)
+                 ORDER BY overdue DESC, greatest(c.last_inbound_at, c.last_outbound_at) DESC NULLS LAST, c.chat_id LIMIT ?
+                """, (rs, n) -> row(rs), tenant, status == null ? null : status.name(), query, query, query, limit);
     }
 
     public Optional<Full> find(UUID tenant, String chat) {
@@ -136,15 +137,18 @@ public class ConversationRepository {
 
     public List<Message> messages(UUID tenant, String chat, int limit) {
         var newestFirst = db.query("""
-                SELECT author, body, at, status FROM (
-                    SELECT 'CUSTOMER' AS author, m.body, m.received_at AS at, NULL AS status FROM whatsapp_inbound_message m
+                SELECT author, body, at, status, media_type, mime_type, media_url, media_status, caption FROM (
+                    SELECT 'CUSTOMER' AS author, m.body, m.received_at AS at, NULL AS status, m.media_type, m.mime_type,
+                           m.media_url, m.media_status, m.caption FROM whatsapp_inbound_message m
                      WHERE m.tenant_id = ? AND m.chat_id = ?
                     UNION ALL
-                    SELECT r.author, r.body, r.created_at, coalesce(rc.status, r.status) FROM whatsapp_manual_reply r
+                    SELECT r.author, r.body, r.created_at, coalesce(rc.status, r.status), r.media_type, r.mime_type,
+                           r.media_url, CASE WHEN r.media_url IS NOT NULL THEN 'STORED' END, r.caption FROM whatsapp_manual_reply r
                       LEFT JOIN whatsapp_reply_receipt rc ON rc.tenant_id = r.tenant_id AND rc.chat_id = r.chat_id AND rc.provider_id = r.provider_id
                      WHERE r.tenant_id = ? AND r.chat_id = ?
                 ) t ORDER BY at DESC LIMIT ?
-                """, (rs, n) -> new Message(rs.getString(1), rs.getString(2), instant(rs.getTimestamp(3)), rs.getString(4)),
+                """, (rs, n) -> new Message(rs.getString(1), rs.getString(2), instant(rs.getTimestamp(3)), rs.getString(4),
+                        rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8), rs.getString(9)),
                 tenant, chat, tenant, chat, limit);
         var chronological = new java.util.ArrayList<>(newestFirst);
         java.util.Collections.reverse(chronological);

@@ -8,6 +8,7 @@ export const entitlementLabels: {key: string; label: string; unit?: string}[] = 
   {key: "team.users", label: "Usuarios del equipo"},
   {key: "whatsapp.evolution", label: "WhatsApp conectado por QR"},
   {key: "whatsapp.cloud_api", label: "WhatsApp API oficial de Meta"},
+  {key: "whatsapp.media.send", label: "Enviar imágenes y videos por WhatsApp"},
   {key: "ai.responses.monthly", label: "Respuestas con IA", unit: "al mes"},
   {key: "payments.mercadopago", label: "Cobros con Mercado Pago"},
   {key: "fiscal.documents.monthly", label: "Boletas y facturas", unit: "al mes"},

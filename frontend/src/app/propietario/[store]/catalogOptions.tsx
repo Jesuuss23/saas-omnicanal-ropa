@@ -54,3 +54,15 @@ export function CategorySelect({id, value, onChange, categories}:{id:string; val
       value={value} onChange={e=>onChange(e.target.value)} maxLength={50} placeholder="Polos, Jeans, Vestidos…"/>}
   </div>;
 }
+
+/** Subcategoría (estilo dentro de la categoría, por ejemplo "Retro" en Polos). Sugiere las que ya existen en esa categoría. */
+export function SubcategoryInput({id, value, onChange, category, options}:{id:string; value:string; onChange:(v:string)=>void; category:string;
+  options:Record<string,string[]>|null|undefined}) {
+  const key = Object.keys(options ?? {}).find(k=>k.toLowerCase()===category.trim().toLowerCase());
+  const suggestions = key && options ? options[key] : [];
+  return <>
+    <Input id={id} list={id+"-list"} value={value} onChange={e=>onChange(e.target.value)} maxLength={50}
+      disabled={!category.trim()} placeholder={category.trim() ? "Retro, Verano, Invierno…" : "Elige primero una categoría"}/>
+    <datalist id={id+"-list"}>{suggestions.map(s=><option key={s} value={s}/>)}</datalist>
+  </>;
+}

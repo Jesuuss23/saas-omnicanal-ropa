@@ -20,7 +20,7 @@ import {useApiData} from "@/lib/useApiData";
 
 import EditVariant, {type InventoryRow as Row} from "./EditVariant";
 import {ProductPhotos, photoUrl} from "./ProductPhotos";
-import {ALL_SIZES, CategorySelect, COMMON_COLORS, SIZE_GROUPS, SizeSelect, skuBase} from "./catalogOptions";
+import {ALL_SIZES, CategorySelect, COMMON_COLORS, SIZE_GROUPS, SizeSelect, skuBase, SubcategoryInput} from "./catalogOptions";
 
 type Props = {store:string; send:Send};
 type Page = {rows:Row[]; hasNext:boolean};
@@ -139,7 +139,7 @@ export default function Catalog({store, send}:Props) {
                 {row.coverImage ? <img src={photoUrl(store,row.coverImage)} alt="" className="size-full object-cover"/> : <ImageOff className="size-4"/>}
               </button>
               <div className="min-w-0"><p className="truncate font-medium">{row.name}</p>
-                {row.category && <p className="text-xs text-muted-foreground">{row.category}</p>}</div>
+                {row.category && <p className="text-xs text-muted-foreground">{row.category}{row.subcategory ? " · " + row.subcategory : ""}</p>}</div>
             </div> : <span className="sr-only">{row.name}</span>}</TableCell>
             <TableCell className="font-mono text-xs">{row.sku}</TableCell>
             <TableCell><Badge variant="outline">{row.size}</Badge>{row.color ? <span className="ml-2">{row.color}</span> : null}</TableCell>
@@ -168,6 +168,8 @@ function NewProduct({open,onOpenChange,path,send,onCreated}:{open:boolean; onOpe
   const categories = useApiData<string[]>(ownerApi.url(path+"/categories")).data ?? [];
   const [name,setName] = useState("");
   const [category,setCategory] = useState("");
+  const [subcategory,setSubcategory] = useState("");
+  const subcategories = useApiData<Record<string,string[]>>(ownerApi.url(path+"/subcategories")).data;
   const [price,setPrice] = useState("");
   const [stock,setStock] = useState("0");
   const [sizes,setSizes] = useState<string[]>([]);
@@ -209,7 +211,8 @@ function NewProduct({open,onOpenChange,path,send,onCreated}:{open:boolean; onOpe
     }));
     setBusy(true); setMessage("");
     try {
-      const res = await send(path,JSON.stringify({name, category:category.trim() || null, variants}));
+      const res = await send(path,JSON.stringify({name, category:category.trim() || null,
+        subcategory:category.trim() && subcategory.trim() || null, variants}));
       if (!res.ok) {
         setMessage(await errorMessage(res, res.status === 409 ? "Uno de los SKU ya existe en la tienda o se repite en este formulario." :
           res.status === 402 ? "Llegaste al límite de productos de tu plan." : "Revisa los datos de la prenda y sus variantes."));
@@ -231,6 +234,8 @@ function NewProduct({open,onOpenChange,path,send,onCreated}:{open:boolean; onOpe
             <Field label="Nombre" htmlFor="np-name"><Input id="np-name" value={name} onChange={e=>setName(e.target.value)} required maxLength={150} placeholder="Polo básico algodón"/></Field>
             <Field label="Categoría" htmlFor="np-category" hint={categories.length ? "Elige una existente o crea una nueva." : "Opcional. Agrupa tus prendas en la tienda."}>
               <CategorySelect id="np-category" value={category} onChange={setCategory} categories={categories}/></Field>
+            <Field label="Subcategoría" htmlFor="np-subcategory" hint="Opcional. Por ejemplo Retro, Verano o Invierno dentro de Polos. La IA la usa para ofrecer variedad.">
+              <SubcategoryInput id="np-subcategory" value={subcategory} onChange={setSubcategory} category={category} options={subcategories}/></Field>
             <Field label="Precio (S/)" htmlFor="np-price" hint="Se aplica a todas las variantes; puedes cambiarlo en cada una.">
               <Input id="np-price" value={price} onChange={e=>setPrice(e.target.value)} type="number" min="0.01" max="99999999.99" step="0.01" required inputMode="decimal"/></Field>
             <Field label="Stock inicial por variante" htmlFor="np-stock">

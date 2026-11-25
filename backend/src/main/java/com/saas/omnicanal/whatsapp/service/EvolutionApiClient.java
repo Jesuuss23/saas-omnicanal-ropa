@@ -90,6 +90,65 @@ public class EvolutionApiClient {
         }
     }
 
+    public record Downloaded(byte[] content, String mimeType, String fileName) {}
+
+    /**
+     * Archivo de un mensaje recibido. Usa el base64 del propio webhook si viene (webhook con base64 activo); si no,
+     * lo pide a {@code POST /chat/getBase64FromMediaMessage/{instance}} con el mensaje completo (key + message).
+     */
+    public Downloaded media(String name, JsonNode item) {
+        JsonNode message = item.path("message");
+        String inline = message.path("base64").asText("");
+        String mime = mimeOf(message);
+        if (inline.isBlank()) {
+            JsonNode result = api().post().uri("/chat/getBase64FromMediaMessage/{name}", name).contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("message", Map.of("key", item.path("key"), "message", message), "convertToMp4", false))
+                    .retrieve().body(JsonNode.class);
+            inline = result == null ? "" : result.path("base64").asText("");
+            if (result != null && !result.path("mimetype").asText("").isBlank()) mime = result.path("mimetype").asText();
+        }
+        String data = inline.contains(",") && inline.startsWith("data:") ? inline.substring(inline.indexOf(',') + 1) : inline;
+        if (data.isBlank()) throw new IllegalStateException("Evolution no devolvió el archivo");
+        return new Downloaded(java.util.Base64.getMimeDecoder().decode(data), mime, null);
+    }
+
+    /** Mime declarado en imageMessage / videoMessage / audioMessage / documentMessage. */
+    public static String mimeOf(JsonNode message) {
+        for (String field : List.of("imageMessage", "videoMessage", "audioMessage", "documentMessage", "stickerMessage")) {
+            String mime = message.path(field).path("mimetype").asText("");
+            if (!mime.isBlank()) return mime.split(";")[0].strip();
+        }
+        return "application/octet-stream";
+    }
+
+    /**
+     * Envía un archivo con {@code POST /message/sendMedia/{instance}}. {@code mediatype}: image, video o document.
+     * {@code number}: el remoteJid del chat tal cual.
+     */
+    public SendResult sendMedia(String name, String number, String mediatype, String mimeType, String fileName, byte[] content,
+                                String caption) {
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("number", number);
+        body.put("mediatype", mediatype);
+        body.put("mimetype", mimeType);
+        body.put("media", java.util.Base64.getEncoder().encodeToString(content));
+        body.put("fileName", fileName == null ? "archivo" : fileName);
+        if (caption != null && !caption.isBlank()) body.put("caption", caption);
+        try {
+            JsonNode result = api().post().uri("/message/sendMedia/{name}", name).contentType(MediaType.APPLICATION_JSON)
+                    .body(body).retrieve().body(JsonNode.class);
+            String id = result == null ? "" : result.path("key").path("id").asText("");
+            return id.isBlank() ? SendResult.unknown(null) : SendResult.accepted(id);
+        } catch (RestClientResponseException ex) {
+            int code = ex.getStatusCode().value();
+            if (code == 400 || code == 401 || code == 403 || code == 404 || code == 413 || code == 422)
+                return SendResult.rejected("HTTP " + code);
+            return SendResult.unknown("HTTP " + code);
+        } catch (RestClientException uncertain) {
+            return SendResult.unknown(null);
+        }
+    }
+
     static String qrImage(JsonNode qr) {
         if (qr == null) return null;
         String image = qr.path("base64").asText("");
