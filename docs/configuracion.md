@@ -33,7 +33,7 @@ Sin estas tres variables el backend no arranca.
 Es la clave AES-256-GCM que cifra en la base:
 
 - tokens y app secret de WhatsApp Cloud API;
-- tokens de Mercado Pago de cada tienda;
+- llaves secretas de Culqi de cada tienda;
 - datos de facturación;
 - secretos de la verificación en dos pasos.
 
@@ -60,8 +60,8 @@ $b = [byte[]]::new(32); [Security.Cryptography.RandomNumberGenerator]::Fill($b);
 | Variable | Obligatoria | Formato | Local / test | Producción |
 |---|---|---|---|---|
 | `APP_BASE_URL` | Opcional (por defecto `STOREFRONT_BASE_URL` o `http://localhost:3000`) | URL sin `/` final | `http://localhost:3000` | `https://app.tudominio.com` |
-| `STOREFRONT_BASE_URL` | Para Mercado Pago | URL sin `/` final | `http://localhost:3000` | `https://app.tudominio.com` |
-| `PUBLIC_API_BASE_URL` | Para webhooks (Meta, Mercado Pago, Culqi) | URL pública del backend | Vacía, o la de ngrok si pruebas webhooks | `https://api.tudominio.com` |
+| `STOREFRONT_BASE_URL` | Para enlaces del frontend | URL sin `/` final | `http://localhost:3000` | `https://app.tudominio.com` |
+| `PUBLIC_API_BASE_URL` | Para webhooks (Meta, Evolution, Culqi) | URL pública del backend | Vacía, o la de ngrok si pruebas webhooks | `https://api.tudominio.com` |
 | `EVOLUTION_CALLBACK_BASE_URL` | Opcional (por defecto `PUBLIC_API_BASE_URL`) | URL que Evolution puede alcanzar | `http://host.docker.internal:8080` si Evolution corre en Docker | Igual que `PUBLIC_API_BASE_URL` |
 
 ## Superadmin
@@ -145,13 +145,12 @@ La descripción de productos con IA (`POST catalog/description/generate`) usa `G
 
 La URL del webhook en CulqiPanel es `{PUBLIC_API_BASE_URL}/api/webhooks/culqi/{CULQI_WEBHOOK_TOKEN}`.
 
-## Cobros de las tiendas (Mercado Pago)
+## Cobros de las tiendas (Culqi)
 
-| Variable | Obligatoria | Formato | Local / test | Producción |
-|---|---|---|---|---|
-| `MP_CLIENT_ID`, `MP_CLIENT_SECRET` | Para conectar tiendas | Credenciales de la aplicación marketplace del SaaS | Aplicación de prueba | Aplicación de producción |
-| `MP_REDIRECT_URI` | Para conectar tiendas | URL exacta registrada en la aplicación | `http://localhost:3000/api/owner/payments/mercadopago/callback` | `https://app.tudominio.com/api/owner/payments/mercadopago/callback` |
-| `MP_WEBHOOK_SECRET` | Recomendada | Clave secreta de webhooks de Mercado Pago | Vacía (los pagos se vuelven a consultar igual) | La del panel de Mercado Pago |
+No hay variables propias: cada dueño pega las llaves `pk_`/`sk_` de **su** cuenta Culqi en "Activar cobros en línea".
+Se necesitan `SECRETS_ENCRYPTION_KEY` (la llave secreta se guarda cifrada) y `PUBLIC_API_BASE_URL` (para mostrarle la
+URL del webhook de respaldo `{PUBLIC_API_BASE_URL}/api/webhooks/culqi/stores/{storeId}`). Las variables `CULQI_*` de
+arriba son solo de la suscripción del SaaS.
 
 ## WhatsApp
 

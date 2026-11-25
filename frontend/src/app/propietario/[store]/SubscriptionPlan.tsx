@@ -10,15 +10,13 @@ import {Input} from "@/components/ui/input";
 import {Field} from "@/components/ui/label";
 import {Skeleton} from "@/components/ui/skeleton";
 import {cn} from "@/lib/utils";
+import {tokenizeCard} from "@/lib/culqi";
 
 type Entitlement = {key:string;enabled:boolean;limit:number|null};
 type Plan = {code:string;name:string;monthlyPriceCents:number;currency:string;purchasable:boolean;entitlements:Entitlement[]};
 type Overview = {status:string;planCode:string|null;pendingPlanCode:string|null;trialEndsAt:string|null;
   currentPeriodEnd:string|null;graceEndsAt:string|null;entitlements:Entitlement[];plans:Plan[];
   checkoutAvailable:boolean;culqiPublicKey:string|null};
-type CulqiGlobal = {publicKey:string;settings:(s:object)=>void;options?:(o:object)=>void;open:()=>void;close:()=>void;
-  token?:{id:string};error?:{user_message?:string}};
-declare global { interface Window { Culqi?:CulqiGlobal; culqi?:()=>void } }
 
 const statusLabels:Record<string,string> = {
   TRIAL:"Prueba gratuita", TRIAL_EXPIRED:"Prueba vencida", PENDING_PAYMENT:"Pago en confirmación",
@@ -28,22 +26,12 @@ const keyLabels:Record<string,string> = {
   "catalog.products":"Productos","team.users":"Usuarios","ai.responses.monthly":"Respuestas IA al mes",
   "fiscal.documents.monthly":"Comprobantes al mes","fiscal.production":"Facturación en producción",
   "whatsapp.evolution":"WhatsApp por QR","whatsapp.cloud_api":"WhatsApp Cloud API","whatsapp.media.send":"Imágenes y videos por WhatsApp","domain.custom":"Dominio propio",
-  "campaigns.email":"Campañas por email","campaigns.whatsapp":"Campañas por WhatsApp","payments.mercadopago":"Cobros con Mercado Pago",
+  "campaigns.email":"Campañas por email","campaigns.whatsapp":"Campañas por WhatsApp","payments.online":"Cobros en línea con Culqi",
 };
 const soles = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 const date = (v:string|null)=>v ? new Date(v).toLocaleDateString("es-PE",{timeZone:"America/Lima",dateStyle:"long"}) : "";
 const describe = (e:Entitlement)=>!e.enabled ? "No incluido" : e.limit===null ? "Ilimitado / incluido" : String(e.limit);
 
-function loadCulqi():Promise<CulqiGlobal> {
-  if (window.Culqi) return Promise.resolve(window.Culqi);
-  return new Promise((resolve,reject)=>{
-    const script = document.createElement("script");
-    script.src = "https://checkout.culqi.com/js/v4";
-    script.onload = ()=>window.Culqi ? resolve(window.Culqi) : reject(new Error());
-    script.onerror = ()=>reject(new Error());
-    document.head.appendChild(script);
-  });
-}
 
 /** Plan del SaaS: el pago se tokeniza con Culqi Checkout y la activación llega por webhook al backend. */
 export default function SubscriptionPlan({store,send}:{store:string;send:Send}) {
@@ -76,16 +64,7 @@ export default function SubscriptionPlan({store,send}:{store:string;send:Send}) 
     const form = Object.fromEntries(new FormData(e.currentTarget)) as Record<string,string>;
     setBusy(true);setNotice("");
     try {
-      const culqi = await loadCulqi();
-      culqi.publicKey = data.culqiPublicKey;
-      culqi.settings({title:"Suscripción "+plan.name,currency:"PEN",amount:plan.monthlyPriceCents});
-      const token = await new Promise<string>((resolve,reject)=>{
-        window.culqi = ()=>{
-          if (culqi.token?.id) {culqi.close(); resolve(culqi.token.id);}
-          else reject(new Error(culqi.error?.user_message ?? "Culqi no pudo procesar la tarjeta."));
-        };
-        culqi.open();
-      });
+      const token = (await tokenizeCard(data.culqiPublicKey, "Suscripción "+plan.name, plan.monthlyPriceCents)).id;
       const res = await send(path+"/checkout",JSON.stringify({...form,planCode:plan.code,culqiToken:token}));
       if (!res.ok) throw new Error(await errorMessage(res, "No se pudo registrar la suscripción."));
       setData(await res.json());

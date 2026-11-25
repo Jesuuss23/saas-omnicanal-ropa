@@ -12,7 +12,7 @@ public final class Entitlements {
     public static final String DOMAIN_CUSTOM = "domain.custom";
     public static final String CAMPAIGNS_EMAIL = "campaigns.email";
     public static final String CAMPAIGNS_WHATSAPP = "campaigns.whatsapp";
-    public static final String PAYMENTS_MERCADOPAGO = "payments.mercadopago";
+    public static final String PAYMENTS_ONLINE = "payments.online";
     /** Enviar imágenes y videos por WhatsApp (bandeja e IA). */
     public static final String WHATSAPP_MEDIA_SEND = "whatsapp.media.send";
 

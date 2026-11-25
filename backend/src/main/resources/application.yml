@@ -61,10 +61,6 @@ culqi:
     get-path: /v2/recurrent/subscriptions/{id}
     cancel-path: /v2/recurrent/subscriptions/{id}
 
-mercadopago:
-  api-url: https://api.mercadopago.com
-  auth-url: https://auth.mercadopago.com/authorization
-
 subscription:
   trial-days: 14
   grace-days: 5

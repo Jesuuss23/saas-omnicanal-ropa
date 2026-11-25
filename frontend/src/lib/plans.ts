@@ -10,7 +10,7 @@ export const entitlementLabels: {key: string; label: string; unit?: string}[] = 
   {key: "whatsapp.cloud_api", label: "WhatsApp API oficial de Meta"},
   {key: "whatsapp.media.send", label: "Enviar imágenes y videos por WhatsApp"},
   {key: "ai.responses.monthly", label: "Respuestas con IA", unit: "al mes"},
-  {key: "payments.mercadopago", label: "Cobros con Mercado Pago"},
+  {key: "payments.online", label: "Cobros en línea con Culqi"},
   {key: "fiscal.documents.monthly", label: "Boletas y facturas", unit: "al mes"},
   {key: "fiscal.production", label: "Emisión SUNAT en producción"},
   {key: "domain.custom", label: "Dominio propio"},

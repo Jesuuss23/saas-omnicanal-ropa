@@ -26,7 +26,7 @@ Las páginas de servidor usan `backendBase()` para hablar con el backend por la 
 Rutas en `src/app/superadmin/(console)`: el `layout.tsx` del grupo exige sesión completa (contraseña + 2FA) y
 envuelve cada página en `SuperadminShell`. Secciones: Resumen (KPIs, tiendas nuevas por semana, estados),
 Tiendas (búsqueda, filtro y ficha con suspensión, ajustes de suscripción y capacidades), Planes (vínculo con
-Culqi), Pagos (webhooks de Culqi y Mercado Pago), Auditoría y Seguridad. Los tipos de las respuestas están en
+Culqi), Pagos (webhooks de Culqi), Auditoría y Seguridad. Los tipos de las respuestas están en
 `src/lib/superadmin.ts`. En CI el backend arranca con un superadmin de prueba (`admin@e2e.test`).
 
 ## Panel de la tienda

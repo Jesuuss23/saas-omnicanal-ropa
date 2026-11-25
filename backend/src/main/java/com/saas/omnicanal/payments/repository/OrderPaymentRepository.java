@@ -35,30 +35,11 @@ public class OrderPaymentRepository {
                 rs.getString(9)), tenant, order).stream().findFirst();
     }
 
-    public record Intent(String preferenceId, String checkoutUrl, BigDecimal amount) {}
-
-    public Optional<Intent> intent(UUID tenant, UUID order) {
-        return db.query("""
-                SELECT preference_id,checkout_url,amount FROM web_order_payment_intent
-                 WHERE tenant_id=? AND order_id=? AND provider='MERCADOPAGO'
-                """, (rs, n) -> new Intent(rs.getString(1), rs.getString(2), rs.getBigDecimal(3)), tenant, order)
-                .stream().findFirst();
-    }
-
-    public void saveIntent(UUID tenant, UUID order, String preferenceId, String url, BigDecimal amount) {
-        db.update("""
-                INSERT INTO web_order_payment_intent(tenant_id,order_id,provider,preference_id,checkout_url,amount)
-                VALUES (?,?,'MERCADOPAGO',?,?,?)
-                ON CONFLICT (tenant_id,order_id,provider) DO UPDATE SET preference_id=excluded.preference_id,
-                    checkout_url=excluded.checkout_url, amount=excluded.amount, created_at=now()
-                """, tenant, order, preferenceId, url, amount);
-    }
-
     public void upsertPayment(UUID tenant, String paymentId, UUID order, OrderPaymentStatus status, String providerStatus,
                               BigDecimal amount, String currency) {
         db.update("""
                 INSERT INTO web_order_payment(tenant_id,provider,provider_payment_id,order_id,status,provider_status,amount,currency)
-                VALUES (?,'MERCADOPAGO',?,?,?,?,?,?)
+                VALUES (?,'CULQI',?,?,?,?,?,?)
                 ON CONFLICT (tenant_id,provider,provider_payment_id) DO UPDATE SET status=excluded.status,
                     provider_status=excluded.provider_status, amount=excluded.amount, updated_at=now()
                 """, tenant, paymentId, order, status.name(), providerStatus, amount, currency);
@@ -67,7 +48,7 @@ public class OrderPaymentRepository {
     public void flagReview(UUID tenant, String paymentId, String reason) {
         db.update("""
                 UPDATE web_order_payment SET requires_review=true, review_reason=left(?,200), updated_at=now()
-                 WHERE tenant_id=? AND provider='MERCADOPAGO' AND provider_payment_id=?
+                 WHERE tenant_id=? AND provider='CULQI' AND provider_payment_id=?
                 """, reason, tenant, paymentId);
     }
 
@@ -89,6 +70,13 @@ public class OrderPaymentRepository {
                  WHERE l.tenant_id=? AND l.reservation_id=? AND (v.tenant_id,v.id)=(l.tenant_id,l.variant_id)
                 """, tenant, reservation);
         return true;
+    }
+
+    /** Pedido de la tienda al que pertenece un cargo ya registrado (para reembolsos sin metadata). */
+    public Optional<UUID> orderOfCharge(UUID tenant, String chargeId) {
+        return db.queryForList("""
+                SELECT order_id FROM web_order_payment WHERE tenant_id=? AND provider='CULQI' AND provider_payment_id=?
+                """, UUID.class, tenant, chargeId).stream().findFirst();
     }
 
     public record PaymentView(String status, BigDecimal amount, boolean requiresReview, OffsetDateTime updatedAt) {}

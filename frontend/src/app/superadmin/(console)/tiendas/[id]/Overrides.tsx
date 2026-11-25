@@ -23,7 +23,7 @@ const KNOWN = [
   ["whatsapp.evolution", "WhatsApp por QR"],
   ["whatsapp.cloud_api", "WhatsApp Cloud API"],
   ["whatsapp.media.send", "Enviar imágenes y videos por WhatsApp"],
-  ["payments.mercadopago", "Cobros con Mercado Pago"],
+  ["payments.online", "Cobros en línea con Culqi"],
   ["campaigns.email", "Campañas por email"],
   ["campaigns.whatsapp", "Campañas por WhatsApp"],
   ["domain.custom", "Dominio propio"],

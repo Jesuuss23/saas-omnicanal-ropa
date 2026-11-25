@@ -22,7 +22,7 @@ export type TenantDetail = {
     id: string; name: string; domain: string | null; createdAt: string | null; suspendedAt: string | null; suspendedReason: string | null;
     ownerEmail: string | null; ownerName: string | null; ownerPhone: string | null; ownerActive: boolean; ownerMfa: boolean;
     planCode: string | null; planName: string | null; status: string | null; trialEndsAt: string | null; periodEnd: string | null;
-    graceEndsAt: string | null; culqiSubscriptionId: string | null; whatsappProvider: string; mercadoPagoLinked: boolean;
+    graceEndsAt: string | null; culqiSubscriptionId: string | null; whatsappProvider: string; culqiLinked: boolean;
     products: number; variants: number; webOrders30d: number; webRevenue30d: number; posSales30d: number; posRevenue30d: number;
     contacts: number;
   };

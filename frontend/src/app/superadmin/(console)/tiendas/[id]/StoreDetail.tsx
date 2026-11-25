@@ -108,7 +108,7 @@ export function StoreDetail({id}: {id: string}) {
           </CardContent></Card>
           <Card><CardHeader><CardTitle>Integraciones</CardTitle></CardHeader><CardContent>
             <Facts rows={[["WhatsApp", <span key="w" className="inline-flex items-center gap-1"><MessageCircle className="size-4"/>{s.whatsappProvider === "CLOUD_API" ? "Cloud API oficial" : "Evolution (QR)"}</span>],
-              ["Mercado Pago", s.mercadoPagoLinked ? "Vinculado" : "Sin vincular"], ["Dominio", s.domain ?? "Pendiente"],
+              ["Cobros Culqi", s.culqiLinked ? "Conectado" : "Sin conectar"], ["Dominio", s.domain ?? "Pendiente"],
               ["Alta", formatDate(s.createdAt)]]}/>
           </CardContent></Card>
         </div>

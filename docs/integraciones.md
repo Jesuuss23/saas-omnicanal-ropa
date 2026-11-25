@@ -1,7 +1,7 @@
 # Configuración de integraciones
 
 Todas las credenciales globales llegan por variables de entorno. Las credenciales de cada tienda
-(Meta, Mercado Pago) se cargan desde el panel y se guardan cifradas.
+(Meta, llaves de Culqi de cada tienda) se cargan desde el panel y se guardan cifradas.
 
 ## Variables de entorno del backend
 
@@ -13,11 +13,10 @@ Resumen:
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | PostgreSQL |
 | `SECRETS_ENCRYPTION_KEY` | Clave maestra AES-256 (32 bytes en Base64: `openssl rand -base64 32`). Sin ella no se guardan tokens ni se puede activar la verificación en dos pasos; el backend lo avisa en el log al arrancar |
 | `PUBLIC_API_BASE_URL` | URL pública del backend (para URLs de webhook), p. ej. `https://api.tusaas.com` |
-| `STOREFRONT_BASE_URL` | URL pública del frontend (retorno desde Mercado Pago) |
+| `STOREFRONT_BASE_URL` | URL pública del frontend (enlaces de seguimiento) |
 | `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_WEBHOOK_SECRET` | Evolution API (key global solo para administración) |
 | `WHATSAPP_GRAPH_VERSION` | Versión de Graph API (por defecto `v23.0`) |
 | `CULQI_PUBLIC_KEY`, `CULQI_SECRET_KEY`, `CULQI_WEBHOOK_TOKEN` | Cuenta Culqi de la empresa (cobro del SaaS) |
-| `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, `MP_REDIRECT_URI`, `MP_WEBHOOK_SECRET` | Aplicación de Mercado Pago del SaaS (marketplace) |
 | `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD_HASH`, `SUPERADMIN_TOTP_SECRET` | Superadmin |
 | `APISPERU_*` | Facturación electrónica |
 | `GOOGLE_GENAI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | Clave de Gemini (Google AI Studio) para la IA vendedora, modelo (por defecto `gemini-3.5-flash`) y modelo de respaldo ante saturación (por defecto `gemini-flash-latest`). Sin clave la IA no responde y el panel lo indica |
@@ -146,15 +145,31 @@ Endpoints: `GET/PUT/DELETE /api/owner/stores/{id}/whatsapp/cloud`, `POST .../ver
 y nombres exactos de eventos (`CulqiWebhookService.classify`). Sin `type`, un cargo suelto cuenta como
 `charge.creation.succeeded` y una suscripción suelta como `subscription.creation.succeeded`.
 
-## Mercado Pago (cobros de cada tienda)
-1. Crear una aplicación en Mercado Pago Developers (tipo marketplace/OAuth) y configurar `MP_REDIRECT_URI`
-   apuntando al frontend: `https://app.tusaas.com/api/owner/payments/mercadopago/callback`.
-2. Copiar la clave secreta de webhooks en `MP_WEBHOOK_SECRET`.
-3. El dueño pulsa *Vincular Mercado Pago*, autoriza y vuelve al panel. Los tokens se guardan cifrados y se renuevan
-   antes de vencer.
-4. En la página del pedido, el comprador pulsa *Pagar con Mercado Pago* (Checkout Pro). El webhook
-   `/api/webhooks/mercadopago/{tenantId}` re-consulta el pago y, si el monto coincide, marca el pedido `PAID` y
-   descuenta el stock una sola vez. Montos distintos o pagos tardíos quedan con `requires_review`.
+## Culqi (cobros de cada tienda)
+El dinero de cada venta web va directo a la cuenta Culqi del comercio: el SaaS cobra con la llave secreta de la tienda.
+
+1. **Conexión** (`PUT /api/owner/stores/{id}/payments/culqi`, solo el dueño, capacidad `payments.online`): el dueño
+   pega `public_key` (`pk_test_`/`pk_live_`) y `secret_key` (`sk_test_`/`sk_live_`) del mismo modo. El backend las
+   valida con `GET https://api.culqi.com/v2/charges?limit=1` (`Authorization: Bearer sk_…`; 200 = válidas) y guarda
+   en `store_payment_account` `provider='CULQI'`, la pública, la secreta cifrada en `access_token_ciphertext`
+   (`SecretCipher`, contexto `culqi/secret-key/{tienda}`), `live_mode` según `sk_live_` y `status='ACTIVE'`.
+   `GET` muestra solo `sk_…••••1234`; `DELETE` desconecta.
+2. **Configuración pública**: `GET /api/public/stores/{id}/payment-config` → `{enabled, provider, publicKey, liveMode}`.
+3. **Pago** en la página del pedido (`tienda/[store]/pedido/[order]`): Culqi Checkout v4 tokeniza la tarjeta con la llave
+   pública de la tienda (`tkn_…` + email del comprador) y el navegador llama
+   `POST /api/public/stores/{id}/orders/{orderId}/culqi/pay` con `X-Order-Token`. El backend exige `PENDING_PAYMENT`,
+   reserva activa, monto conocido y token del mismo modo que la tienda; cobra con `POST /v2/charges` (`amount` en
+   céntimos, `currency_code: PEN`, `email`, `source_id`, `metadata.tenant_id/order_id`). Con 201 y
+   `outcome.type = venta_exitosa` registra el pago y marca `PAID` (reserva consumida y stock descontado una vez) en la
+   misma transacción. Un pedido ya pagado no se vuelve a cobrar.
+4. **3‑D Secure**: si Culqi responde `action_code: REVIEW`, el endpoint devuelve `REQUIRES_3DS`; el navegador abre
+   Culqi 3DS (`https://3ds.culqi.com`) y reintenta con `authentication3DS` y el mismo token. Rechazos (4xx) devuelven
+   `DECLINED` con el `user_message` de Culqi.
+5. **Webhook de respaldo**: `POST /api/webhooks/culqi/stores/{storeId}` (el dueño lo registra en Culqi para
+   `charge.creation.succeeded` y `refund.creation.succeeded`). Es idempotente (`payment_webhook_event`, id
+   `store:{tienda}:{evt}`) y nunca confía en el cuerpo: vuelve a pedir `GET /v2/charges/{id}` con la llave de la tienda.
+   Un cargo aprobado cierra el pedido si el navegador no alcanzó a hacerlo; un reembolso marca el pago `REFUNDED`
+   con `requires_review`. (`/api/webhooks/culqi/{token}` sigue siendo el de la suscripción del SaaS.)
 
 ## Correos transaccionales (Resend)
 

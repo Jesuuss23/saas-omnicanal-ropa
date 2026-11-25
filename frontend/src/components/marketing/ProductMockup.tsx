@@ -44,7 +44,7 @@ export function ProductMockup() {
     </div>
 
     <div className="absolute -right-3 top-10 grid gap-2 sm:-right-8">
-      <Toast icon={<CreditCard className="size-4"/>} title="Pago aprobado" text="S/ 189.00 · Mercado Pago"/>
+      <Toast icon={<CreditCard className="size-4"/>} title="Pago aprobado" text="S/ 189.00 · Culqi"/>
       <Toast icon={<BadgeCheck className="size-4"/>} title="Boleta B001-245" text="Aceptada por SUNAT"/>
       <Toast icon={<ShoppingBag className="size-4"/>} title="Stock actualizado" text="Casaca denim M · quedan 2"/>
     </div>

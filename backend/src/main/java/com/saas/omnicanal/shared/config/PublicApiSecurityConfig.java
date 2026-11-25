@@ -20,22 +20,23 @@ public class PublicApiSecurityConfig {
     SecurityFilterChain publicStoreApi(HttpSecurity http) throws Exception {
         String guestPath = "/api/public/stores/*/reservation/guest";
         String trackingPath = "/api/public/stores/*/orders/*";
-        String mercadoPago = trackingPath + "/mercadopago";
+        String culqiPay = trackingPath + "/culqi/pay";
+        String paymentConfig = "/api/public/stores/*/payment-config";
         return http.securityMatcher("/api/public/catalog-files/*", "/api/public/stores/*/catalog",
                         "/api/public/stores/*/images/*", "/api/public/stores/*/logo",
                         "/api/public/stores/*/availability", "/api/public/stores/*/products/*",
                         "/api/public/stores/*/reservation", guestPath,
-                        guestPath + "/quote", trackingPath, mercadoPago)
+                        guestPath + "/quote", trackingPath, culqiPay, paymentConfig)
                 .csrf(c -> c.ignoringRequestMatchers("/api/public/stores/*/reservation", guestPath,
-                        guestPath + "/quote", mercadoPago))
+                        guestPath + "/quote", culqiPay))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.GET, "/api/public/catalog-files/*", "/api/public/stores/*/catalog",
                                 "/api/public/stores/*/availability", "/api/public/stores/*/images/*",
                                 "/api/public/stores/*/logo", "/api/public/stores/*/products/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/public/stores/*/reservation", guestPath,
-                                guestPath + "/quote", mercadoPago).permitAll()
+                                guestPath + "/quote", culqiPay).permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/public/stores/*/reservation").permitAll()
-                        .requestMatchers(HttpMethod.GET, guestPath, trackingPath).permitAll()
+                        .requestMatchers(HttpMethod.GET, guestPath, trackingPath, paymentConfig).permitAll()
                         .requestMatchers(HttpMethod.PUT, guestPath).permitAll()
                         .anyRequest().denyAll())
                 .build();
