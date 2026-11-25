@@ -30,6 +30,17 @@ Resumen:
 2. En el panel: *WhatsApp de la tienda → Conexión rápida por QR → Conectar* y escanear el QR.
 3. Activar el inbox (registra el webhook `/api/webhooks/evolution/{tenantId}` con un header HMAC por tienda).
 
+Compatibilidad con Evolution 2.3.x (Baileys 7):
+- **Chats `@lid`:** el chat se identifica por `key.remoteJid` tal cual (`…@lid` o `…@s.whatsapp.net`, sin el sufijo
+  de dispositivo `:NN`). Si es `@lid`, el número visible se toma de `key.remoteJidAlt` (o `key.senderPn`) y queda en
+  `conversation.phone`. Así la bandeja muestra el teléfono y lo asocia al contacto. Grupos (`@g.us`) y estados se ignoran.
+- **Envíos:** las respuestas del panel y de la IA van a `POST /message/sendText/{instance}` con el `remoteJid` completo en
+  `number`, sin limpiarlo. Cloud API solo responde chats de número: un chat `@lid` responde 409 allí.
+- **`fromMe`:** los mensajes que la tienda envía también llegan en `MESSAGES_UPSERT`. Se guardan como autor `PHONE`
+  ("Desde el celular" en la bandeja) y nunca disparan la IA. No se guarda el eco de un envío del panel o de la IA: se
+  reconoce por el mismo `key.id`, o por el mismo texto aún en curso si el webhook llega antes que la respuesta del envío.
+- **Acuses (`MESSAGES_UPDATE`):** se aceptan en chats `@lid` y `@s.whatsapp.net`.
+
 ### WhatsApp Cloud API (oficial de Meta)
 Datos que pide el panel (Meta for Developers → tu app → WhatsApp → Configuración de la API):
 

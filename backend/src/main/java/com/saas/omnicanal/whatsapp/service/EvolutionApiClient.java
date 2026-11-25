@@ -72,10 +72,11 @@ public class EvolutionApiClient {
                 .body(Map.of("webhook", settings)).retrieve().toBodilessEntity();
     }
 
-    public SendResult sendText(String name, String phone, String text) {
+    /** {@code number}: el remoteJid del chat tal cual ({@code …@lid} o {@code …@s.whatsapp.net}). */
+    public SendResult sendText(String name, String number, String text) {
         try {
             JsonNode result = api().post().uri("/message/sendText/{name}", name).contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("number", phone, "text", text)).retrieve().body(JsonNode.class);
+                    .body(Map.of("number", number, "text", text)).retrieve().body(JsonNode.class);
             String id = result == null ? "" : result.path("key").path("id").asText("");
             return id.isBlank() ? SendResult.unknown(null) : SendResult.accepted(id);
         } catch (RestClientResponseException ex) {
