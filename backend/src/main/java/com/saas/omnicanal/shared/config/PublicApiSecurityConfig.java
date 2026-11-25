@@ -23,14 +23,15 @@ public class PublicApiSecurityConfig {
         String mercadoPago = trackingPath + "/mercadopago";
         return http.securityMatcher("/api/public/catalog-files/*", "/api/public/stores/*/catalog",
                         "/api/public/stores/*/images/*", "/api/public/stores/*/logo",
-                        "/api/public/stores/*/availability", "/api/public/stores/*/reservation", guestPath,
+                        "/api/public/stores/*/availability", "/api/public/stores/*/products/*",
+                        "/api/public/stores/*/reservation", guestPath,
                         guestPath + "/quote", trackingPath, mercadoPago)
                 .csrf(c -> c.ignoringRequestMatchers("/api/public/stores/*/reservation", guestPath,
                         guestPath + "/quote", mercadoPago))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.GET, "/api/public/catalog-files/*", "/api/public/stores/*/catalog",
                                 "/api/public/stores/*/availability", "/api/public/stores/*/images/*",
-                                "/api/public/stores/*/logo").permitAll()
+                                "/api/public/stores/*/logo", "/api/public/stores/*/products/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/public/stores/*/reservation", guestPath,
                                 guestPath + "/quote", mercadoPago).permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/public/stores/*/reservation").permitAll()

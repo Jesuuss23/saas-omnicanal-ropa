@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect, useRef, useState, type FormEvent} from "react";
-import {Bot, CircleAlert, Clock, PauseCircle, Send, Sparkles, Wrench} from "lucide-react";
+import {Bot, CircleAlert, FileText, Clock, PauseCircle, Send, Sparkles, Wrench} from "lucide-react";
 import {PageHeader} from "@/components/console/ConsoleShell";
 import {Alert} from "@/components/ui/alert";
 import {Badge} from "@/components/ui/badge";
@@ -16,14 +16,15 @@ import {cn} from "@/lib/utils";
 import {useApiData} from "@/lib/useApiData";
 import {useStore} from "../_panel/StoreContext";
 import CategoryCatalogs from "../CategoryCatalogs";
+import {INSTRUCTION_TEMPLATE} from "./instructionTemplate";
 
-type Settings = {enabled: boolean; instructions: string; slaMinutes: number; revision: number};
+type Settings = {enabled: boolean; instructions: string; slaMinutes: number; revision: number; nsfwPauseAi: boolean};
 type Status = {configured: boolean; platformEnabled: boolean; planIncluded: boolean; usedThisMonth: number; monthlyLimit: number | null; debounceMs: number};
 type Answer = {text: string; escalate: boolean; reason: string | null; summary: string | null; toolsUsed: string[]; offTopic: boolean; paused: boolean;
   attachments?: {kind: string; description: string}[]};
 type Turn = {author: "CUSTOMER" | "AI" | "SYSTEM"; text: string; note?: string};
 
-const toolLabels: Record<string, string> = {buscarPrendas: "consultó el catálogo", infoTienda: "consultó recojo y delivery", escalar: "pidió pasar a una persona", fueraDeTema: "detectó una pregunta ajena a la tienda", categorias: "revisó las categorías", enviarCatalogo: "eligió un catálogo para enviar"};
+const toolLabels: Record<string, string> = {buscarPrendas: "consultó el catálogo", infoTienda: "consultó recojo y delivery", escalar: "pidió pasar a una persona", fueraDeTema: "detectó una pregunta ajena a la tienda", categorias: "revisó las categorías", enviarCatalogo: "eligió un catálogo para enviar", enviarFotoPrenda: "eligió la foto de una prenda"};
 
 export default function AssistantPage() {
   const {store, send} = useStore();
@@ -69,8 +70,18 @@ function StatusCard({status, enabled}: {status: Status; enabled: boolean}) {
 
 function SettingsForm({store, initial, onSaved}: {store: string; initial: Settings; onSaved: (s: Settings) => void}) {
   const [enabled, setEnabled] = useState(initial.enabled);
-  const [instructions, setInstructions] = useState(initial.instructions);
+  // Una tienda nueva arranca con la plantilla recomendada ya escrita: solo completa sus datos y guarda.
+  const [instructions, setInstructions] = useState(initial.instructions || INSTRUCTION_TEMPLATE);
   const [sla, setSla] = useState(String(initial.slaMinutes));
+  const [nsfwPause, setNsfwPause] = useState(initial.nsfwPauseAi ?? true);
+  const usingTemplate = !initial.instructions && instructions === INSTRUCTION_TEMPLATE;
+  const pending = (instructions.match(/\[[^\]]+\]/g) ?? []).length;
+
+  function insertTemplate() {
+    if (instructions.trim() && instructions !== INSTRUCTION_TEMPLATE
+      && !window.confirm("Se reemplazarán tus indicaciones actuales por la plantilla recomendada. ¿Continuar?")) return;
+    setInstructions(INSTRUCTION_TEMPLATE);
+  }
   const [busy, setBusy] = useState(false);
 
   async function save(event: FormEvent) {
@@ -78,7 +89,7 @@ function SettingsForm({store, initial, onSaved}: {store: string; initial: Settin
     setBusy(true);
     try {
       const saved = await ownerApi.json<Settings>("stores/" + store + "/assistant/settings",
-        {enabled, instructions, slaMinutes: Number(sla), revision: initial.revision}, "PUT");
+        {enabled, instructions, slaMinutes: Number(sla), revision: initial.revision, nsfwPauseAi: nsfwPause}, "PUT");
       toast.success(saved.enabled ? "Asistente activado" : "Configuración guardada");
       onSaved(saved);
     } catch (e) { toast.error(e instanceof ApiError ? e.message : "No se pudo guardar."); }
@@ -95,14 +106,30 @@ function SettingsForm({store, initial, onSaved}: {store: string; initial: Settin
         <span className="grid gap-0.5"><span className="font-medium">Responder automáticamente en WhatsApp</span>
           <span className="text-sm text-muted-foreground">Puedes pausarla en una conversación desde la bandeja cuando quieras.</span></span>
       </label>
-      <Field label="Indicaciones para tu tienda" htmlFor="ai-instructions" hint={instructions.length + "/2000. Tono, políticas de envío, horarios de atención, lo que no debe ofrecer."}>
-        <textarea id="ai-instructions" value={instructions} onChange={e => setInstructions(e.target.value)} maxLength={2000} rows={6}
+      <div className="grid gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label htmlFor="ai-instructions" className="text-sm font-medium">Indicaciones para tu tienda</label>
+          <Button type="button" size="sm" variant="outline" onClick={insertTemplate}><FileText/>Insertar plantilla recomendada</Button>
+        </div>
+        {usingTemplate && <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+          Te dejamos una plantilla lista con tono, guía por categorías, tallas y stock, envíos, pagos y cuándo pasar a una persona.
+          Completa lo que está entre [corchetes] y guarda.</p>}
+      </div>
+      <div className="-mt-3 grid gap-1.5">
+        <textarea id="ai-instructions" value={instructions} onChange={e => setInstructions(e.target.value)} maxLength={4000} rows={14}
           placeholder={"Ej.: Tutea al cliente y usa emojis con moderación.\nEnviamos a todo Lima en 24 a 48 horas.\nLos cambios se coordinan con el equipo."}
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm"/>
-      </Field>
+        <p className="text-xs text-muted-foreground">{instructions.length}/4000{pending ? ` · ${pending} datos entre [corchetes] por completar` : ""}. Tono, envíos, pagos, cambios y lo que no debe ofrecer.</p>
+      </div>
       <Field label="Tiempo de respuesta del equipo (minutos)" htmlFor="ai-sla" hint="Si una conversación escalada espera más que esto, la bandeja la marca como sin respuesta.">
         <Input id="ai-sla" type="number" min={1} max={1440} value={sla} onChange={e => setSla(e.target.value)} required className="max-w-32"/>
       </Field>
+      <label className="flex items-start gap-3 rounded-lg border p-4">
+        <input type="checkbox" checked={nsfwPause} onChange={e => setNsfwPause(e.target.checked)} className="mt-1 size-4 accent-[var(--primary)]"/>
+        <span className="grid gap-0.5"><span className="font-medium">Pausar la IA si un cliente envía una imagen explícita</span>
+          <span className="text-sm text-muted-foreground">La imagen siempre se bloquea en la bandeja y el cliente recibe un aviso automático. Con esta opción, además,
+            la IA deja de responder en esa conversación hasta que tu equipo la active.</span></span>
+      </label>
       <div><Button type="submit" loading={busy}>Guardar</Button></div>
     </CardContent>
   </form></Card>;

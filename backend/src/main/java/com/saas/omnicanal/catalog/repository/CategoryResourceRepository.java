@@ -58,7 +58,7 @@ public class CategoryResourceRepository {
                   FROM product p JOIN product_variant v ON (v.tenant_id, v.product_id) = (p.tenant_id, p.id)
                   LEFT JOIN LATERAL (SELECT media_type, content FROM product_image x
                                       WHERE x.tenant_id = p.tenant_id AND x.product_id = p.id ORDER BY x.position LIMIT 1) i ON true
-                 WHERE p.tenant_id = ? AND lower(trim(p.category)) = lower(trim(?))
+                 WHERE p.tenant_id = ? AND p.active AND lower(trim(p.category)) = lower(trim(?))
                  GROUP BY p.id, p.name, p.subcategory, i.media_type, i.content
                 HAVING sum(greatest(0, coalesce(v.stock_physical, 0) - coalesce(v.stock_reserved, 0))) > 0
                  ORDER BY nullif(trim(p.subcategory), '') NULLS LAST, p.name, p.id LIMIT 120

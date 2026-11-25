@@ -2,7 +2,7 @@
 import {errorMessage, ownerApi, type Send} from "@/lib/api";
 
 import {useState, type FormEvent} from "react";
-import {Camera, ImageOff, Package, Pencil, Plus, QrCode, Search, Trash2, X} from "lucide-react";
+import {Camera, Eye, EyeOff, ImageOff, Package, Pencil, Plus, QrCode, Search, Trash2, X} from "lucide-react";
 import {Alert} from "@/components/ui/alert";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
@@ -17,6 +17,8 @@ import {toast} from "@/components/ui/toaster";
 import {Pagination} from "@/components/console/Pagination";
 import {cn, money} from "@/lib/utils";
 import {useApiData} from "@/lib/useApiData";
+import {LOW_STOCK, STATUS_LABEL, type StockStatus} from "@/lib/pricing";
+import {DescriptionField} from "./DescriptionField";
 
 import EditVariant, {type InventoryRow as Row} from "./EditVariant";
 import {ProductPhotos, photoUrl} from "./ProductPhotos";
@@ -24,6 +26,15 @@ import {ALL_SIZES, CategorySelect, COMMON_COLORS, SIZE_GROUPS, SizeSelect, skuBa
 
 type Props = {store:string; send:Send};
 type Page = {rows:Row[]; hasNext:boolean};
+type StatusFilter = "all"|"active"|"inactive"|"soldout"|"low";
+
+const FILTERS:{value:StatusFilter; label:string}[] = [
+  {value:"all", label:"Todos"}, {value:"active", label:"Activos"}, {value:"inactive", label:"Ocultos"},
+  {value:"soldout", label:"Agotados"}, {value:"low", label:"Stock bajo (≤" + LOW_STOCK + ")"},
+];
+const STATUS_BADGE:Record<StockStatus,"neutral"|"destructive"|"warning"|"success"> = {
+  INACTIVE:"neutral", SOLD_OUT:"destructive", LOW_STOCK:"warning", AVAILABLE:"success",
+};
 
 /** Descarga un PDF que llega en base64 desde el backend. */
 function downloadPdf(base64:string, name:string) {
@@ -50,9 +61,27 @@ export default function Catalog({store, send}:Props) {
   const [query,setQuery] = useState("");
   const [draft,setDraft] = useState("");
   const [refresh,setRefresh] = useState(0);
+  const [status,setStatus] = useState<StatusFilter>("all");
+  const [category,setCategory] = useState("");
+  const [toggling,setToggling] = useState<string|null>(null);
   const path = "stores/" + store + "/catalog";
-  const params = new URLSearchParams({page:String(page)});
+  const categories = useApiData<string[]>(ownerApi.url(path+"/categories"), refresh).data ?? [];
+  const params = new URLSearchParams({page:String(page), status});
   if (query) params.set("query", query);
+  if (category) params.set("category", category);
+  const filtered = !!query || status !== "all" || !!category;
+
+  async function toggleActive(row:Row) {
+    const next = !(row.active ?? true);
+    setToggling(row.productId);
+    try {
+      const res = await send(path + "/products/" + row.productId + "/active", JSON.stringify({active:next}), "PUT");
+      if (!res.ok) throw new Error(await errorMessage(res, "Revisa tu sesión."));
+      toast.success(next ? "Prenda visible de nuevo" : "Prenda oculta", {description:next ? "Vuelve a salir en tu tienda y para la IA." : "Ya no sale en tu tienda web ni en las respuestas de WhatsApp."});
+      setRefresh(v=>v+1);
+    } catch (e) {toast.error("No se pudo cambiar la visibilidad", {description:e instanceof Error ? e.message : undefined});}
+    finally {setToggling(null);}
+  }
   const {data,error:listError,loading} = useApiData<Page>(ownerApi.url(path+"?"+params),refresh);
 
   async function downloadLabels(variants:string[]) {
@@ -93,6 +122,17 @@ export default function Catalog({store, send}:Props) {
       <Button onClick={()=>setCreating(true)}><Plus/>Nueva prenda</Button>
     </div>
 
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtros rápidos">
+      {FILTERS.map(f=><button key={f.value} type="button" aria-pressed={status===f.value} onClick={()=>{setStatus(f.value); setPage(0);}}
+        className={cn("h-8 rounded-full border px-3 text-sm transition-colors",
+          status===f.value ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:border-primary hover:text-foreground")}>{f.label}</button>)}
+      {categories.length>0 && <select aria-label="Filtrar por categoría" value={category} onChange={e=>{setCategory(e.target.value); setPage(0);}}
+        className="h-8 rounded-full border border-input bg-card px-3 text-sm">
+        <option value="">Todas las categorías</option>
+        {categories.map(c=><option key={c} value={c}>{c}</option>)}
+      </select>}
+    </div>
+
     {selected.length>0 && <Card className="flex flex-wrap items-center gap-3 p-3 text-sm" role="region" aria-label="Etiquetas seleccionadas">
       <QrCode className="size-4 text-primary"/>
       <span>{selected.length === 1 ? "1 etiqueta QR" : selected.length + " etiquetas QR"} · una por talla y color</span>
@@ -101,20 +141,21 @@ export default function Catalog({store, send}:Props) {
       {tooMany && <span className="text-destructive">Hasta 200 etiquetas por PDF.</span>}
     </Card>}
 
-    {editing && <EditVariant key={editing.id} row={editing} path={path} send={send} close={()=>setEditing(null)}
+    {editing && <EditVariant key={editing.id} row={editing} store={store} path={path} send={send} close={()=>setEditing(null)}
+      siblings={(data?.rows ?? []).filter(r=>r.productId===editing.productId && r.id!==editing.id)}
       reload={()=>{setEditing(null); setRefresh(v=>v+1);}}/>}
     {photos && <ProductPhotos key={photos.productId} store={store} product={photos.productId} name={photos.name} open
       onOpenChange={open=>{ if (!open) setPhotos(null); }} onChanged={()=>setRefresh(v=>v+1)}/>}
-    {creating && <NewProduct open onOpenChange={setCreating} path={path} send={send}
+    {creating && <NewProduct open onOpenChange={setCreating} store={store} path={path} send={send}
       onCreated={()=>{setCreating(false); setQuery(""); setDraft(""); setPage(0); setRefresh(v=>v+1);}}/>}
 
     <Card className="p-0">
       {listError ? <div className="p-4"><Alert variant="destructive" title="No se pudo cargar el inventario">
           <button className="underline" onClick={()=>setRefresh(v=>v+1)}>Volver a cargar</button></Alert></div>
         : !data ? <div className="grid gap-2 p-4" aria-label="Cargando inventario…">{Array.from({length:5},(_,i)=><Skeleton key={i} className="h-14"/>)}</div>
-        : !data.rows.length ? <EmptyState className="m-4" icon={Package} title={query ? "Sin resultados" : "Tu catálogo está vacío"}
-            description={query ? "Prueba con otra palabra." : "Registra tu primera prenda con sus tallas, colores y stock."}
-            action={!query && <Button onClick={()=>setCreating(true)}><Plus/>Nueva prenda</Button>}/>
+        : !data.rows.length ? <EmptyState className="m-4" icon={Package} title={filtered ? "Sin resultados" : "Tu catálogo está vacío"}
+            description={filtered ? "Prueba con otra palabra o cambia los filtros." : "Registra tu primera prenda con sus tallas, colores y stock."}
+            action={!filtered && <Button onClick={()=>setCreating(true)}><Plus/>Nueva prenda</Button>}/>
         : <Table aria-busy={loading}>
           <TableHeader><TableRow>
             <TableHead className="w-10"><input type="checkbox" className="size-4 accent-primary" aria-label="Elegir todas las variantes de esta página para etiquetas"
@@ -138,20 +179,29 @@ export default function Catalog({store, send}:Props) {
                 {/* eslint-disable-next-line @next/next/no-img-element -- imagen servida por el backend */}
                 {row.coverImage ? <img src={photoUrl(store,row.coverImage)} alt="" className="size-full object-cover"/> : <ImageOff className="size-4"/>}
               </button>
-              <div className="min-w-0"><p className="truncate font-medium">{row.name}</p>
-                {row.category && <p className="text-xs text-muted-foreground">{row.category}{row.subcategory ? " · " + row.subcategory : ""}</p>}</div>
+              <div className="min-w-0"><p className="flex items-center gap-2 truncate font-medium">{row.name}
+                  {row.active === false && <Badge variant="neutral"><EyeOff/>Oculto</Badge>}</p>
+                {row.category && <p className="text-xs text-muted-foreground">{row.category}{row.subcategory ? " · " + row.subcategory : ""}{row.material ? " · " + row.material : ""}</p>}</div>
             </div> : <span className="sr-only">{row.name}</span>}</TableCell>
             <TableCell className="font-mono text-xs">{row.sku}</TableCell>
             <TableCell><Badge variant="outline">{row.size}</Badge>{row.color ? <span className="ml-2">{row.color}</span> : null}</TableCell>
-            <TableCell className="text-right tabular-nums">{money.format(row.price)}</TableCell>
+            <TableCell className="text-right tabular-nums">
+              {money.format(row.price)}
+              {row.compareAtPrice != null && row.discountPercent != null && <span className="block text-xs text-muted-foreground">
+                <s>{money.format(row.compareAtPrice)}</s> −{row.discountPercent}%</span>}
+              {row.marginPercent != null && <span className="block text-xs text-muted-foreground">Margen {row.marginPercent}%</span>}
+            </TableCell>
             <TableCell className="text-right">
-              <Badge variant={row.available<=0 ? "destructive" : row.available<=2 ? "warning" : "neutral"} className="tabular-nums">
-                {row.available<=0 ? "Agotado" : row.available}</Badge>
+              <Badge variant={STATUS_BADGE[row.status ?? "AVAILABLE"]} className="tabular-nums"
+                title={STATUS_LABEL[row.status ?? "AVAILABLE"]}>
+                {row.status === "INACTIVE" ? row.available + " · oculto" : row.available<=0 ? "Agotado" : row.available}</Badge>
               {row.reserved>0 && <span className="block text-xs text-muted-foreground">{row.reserved} reservadas</span>}
             </TableCell>
             <TableCell className="text-right whitespace-nowrap">
               <Button variant="ghost" size="sm" disabled={labelBusy} onClick={()=>downloadLabels([row.id])} aria-label={"Imprimir etiqueta de "+row.sku}><QrCode/>QR</Button>
               {first && <Button variant="ghost" size="sm" onClick={()=>setPhotos(row)}><Camera/>Fotos</Button>}
+              {first && <Button variant="ghost" size="sm" loading={toggling===row.productId} onClick={()=>void toggleActive(row)}
+                aria-label={(row.active === false ? "Mostrar " : "Ocultar ")+row.name}>{row.active === false ? <><Eye/>Mostrar</> : <><EyeOff/>Ocultar</>}</Button>}
               <Button variant="ghost" size="sm" disabled={!!editing} onClick={()=>setEditing(row)} aria-label={"Editar "+row.sku}><Pencil/>Editar</Button>
             </TableCell>
           </TableRow>;})}</TableBody>
@@ -164,7 +214,7 @@ export default function Catalog({store, send}:Props) {
 type Override = {sku?:string; price?:string; stock?:string};
 
 /** Alta guiada: se eligen tallas y colores y se arma una variante por combinación, con SKU automático legible. */
-function NewProduct({open,onOpenChange,path,send,onCreated}:{open:boolean; onOpenChange:(o:boolean)=>void; path:string; send:Send; onCreated:()=>void}) {
+function NewProduct({open,onOpenChange,store,path,send,onCreated}:{open:boolean; onOpenChange:(o:boolean)=>void; store:string; path:string; send:Send; onCreated:()=>void}) {
   const categories = useApiData<string[]>(ownerApi.url(path+"/categories")).data ?? [];
   const [name,setName] = useState("");
   const [category,setCategory] = useState("");
@@ -172,6 +222,10 @@ function NewProduct({open,onOpenChange,path,send,onCreated}:{open:boolean; onOpe
   const subcategories = useApiData<Record<string,string[]>>(ownerApi.url(path+"/subcategories")).data;
   const [price,setPrice] = useState("");
   const [stock,setStock] = useState("0");
+  const [compareAt,setCompareAt] = useState("");
+  const [cost,setCost] = useState("");
+  const [material,setMaterial] = useState("");
+  const [description,setDescription] = useState("");
   const [sizes,setSizes] = useState<string[]>([]);
   const [colors,setColors] = useState<string[]>([]);
   const [colorDraft,setColorDraft] = useState("");
@@ -207,12 +261,14 @@ function NewProduct({open,onOpenChange,path,send,onCreated}:{open:boolean; onOpe
     if (combos.length>100) {setMessage("Hasta 100 variantes por prenda."); return;}
     const variants = combos.map(c=>({
       sku:(overrides[c.key]?.sku ?? "").trim(), size:c.size, color:c.color,
-      price:overrides[c.key]?.price || price, stock:Number(overrides[c.key]?.stock ?? stock)
+      price:overrides[c.key]?.price || price, stock:Number(overrides[c.key]?.stock ?? stock),
+      compareAtPrice:compareAt || null, cost:cost || null
     }));
     setBusy(true); setMessage("");
     try {
       const res = await send(path,JSON.stringify({name, category:category.trim() || null,
-        subcategory:category.trim() && subcategory.trim() || null, variants}));
+        subcategory:category.trim() && subcategory.trim() || null, material:material.trim() || null,
+        description:description.trim() || null, active:true, variants}));
       if (!res.ok) {
         setMessage(await errorMessage(res, res.status === 409 ? "Uno de los SKU ya existe en la tienda o se repite en este formulario." :
           res.status === 402 ? "Llegaste al límite de productos de tu plan." : "Revisa los datos de la prenda y sus variantes."));
@@ -240,6 +296,12 @@ function NewProduct({open,onOpenChange,path,send,onCreated}:{open:boolean; onOpe
               <Input id="np-price" value={price} onChange={e=>setPrice(e.target.value)} type="number" min="0.01" max="99999999.99" step="0.01" required inputMode="decimal"/></Field>
             <Field label="Stock inicial por variante" htmlFor="np-stock">
               <Input id="np-stock" value={stock} onChange={e=>setStock(e.target.value)} type="number" min="0" max="2147483647" step="1" required/></Field>
+            <Field label="Precio antes (S/)" htmlFor="np-compare" hint="Opcional. Si es mayor que el precio, tu tienda lo muestra tachado con el % de descuento.">
+              <Input id="np-compare" value={compareAt} onChange={e=>setCompareAt(e.target.value)} type="number" min="0.01" max="99999999.99" step="0.01" inputMode="decimal"/></Field>
+            <Field label="Costo por unidad (S/)" htmlFor="np-cost" hint="Opcional. Solo lo ves tú; sirve para calcular el margen.">
+              <Input id="np-cost" value={cost} onChange={e=>setCost(e.target.value)} type="number" min="0" max="99999999.99" step="0.01" inputMode="decimal"/></Field>
+            <Field label="Material" htmlFor="np-material" hint="Opcional. Por ejemplo Algodón, Denim o Lino.">
+              <Input id="np-material" value={material} onChange={e=>setMaterial(e.target.value)} maxLength={80}/></Field>
           </div>
 
           <div className="grid gap-2">
@@ -271,6 +333,9 @@ function NewProduct({open,onOpenChange,path,send,onCreated}:{open:boolean; onOpe
             <div className="flex flex-wrap gap-1.5">{COMMON_COLORS.filter(c=>!colors.includes(c)).slice(0,8).map(c=>
               <button key={c} type="button" onClick={()=>addColor(c)} className="rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-foreground">+ {c}</button>)}</div>
           </div>
+
+          <DescriptionField id="np-description" store={store} value={description} onChange={setDescription}
+            facts={{name, category, subcategory, material, colors, sizes:orderedSizes}}/>
 
           {combos.length>0 ? <div className="grid gap-2">
             <p className="text-sm font-medium">{combos.length} {combos.length===1 ? "variante" : "variantes"}</p>

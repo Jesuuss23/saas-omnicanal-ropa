@@ -7,7 +7,12 @@ import java.util.List;
 public final class AssistantModels {
     private AssistantModels() {}
 
-    public record Settings(boolean enabled, String instructions, int slaMinutes, long revision) {}
+    /** {@code nsfwPauseAi}: ante una imagen explícita, además del aviso automático, pausa la IA en esa conversación. */
+    public record Settings(boolean enabled, String instructions, int slaMinutes, long revision, boolean nsfwPauseAi) {
+        public Settings(boolean enabled, String instructions, int slaMinutes, long revision) {
+            this(enabled, instructions, slaMinutes, revision, true);
+        }
+    }
 
     /** Estado para el panel: si la IA puede responder y por qué no; {@code debounceMs} es la ventana de agrupación de mensajes. */
     public record Status(boolean configured, boolean platformEnabled, boolean planIncluded, long usedThisMonth, Long monthlyLimit,

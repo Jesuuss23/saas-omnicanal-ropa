@@ -77,7 +77,7 @@ class WhatsAppMediaTests {
                 """.formatted(EvolutionApiClient.instanceName(store), chat);
         assertEquals(1, webhooks.receive(store, webhooks.credential(store), json.readTree(event)).get("inserted"));
         // La IA recibe el marcador, no un mensaje vacío.
-        verify(assistant).onInbound(new InboundMessageEvent(store, chat, "V1", "[Nota de voz]", null));
+        verify(assistant).onInbound(new InboundMessageEvent(store, chat, "V1", "[Nota de voz]", null, InboundMessageEvent.Delivery.INBOX));
 
         String status = waitForMedia(chat, "V1");
         assertEquals("STORED", status);
@@ -99,7 +99,7 @@ class WhatsAppMediaTests {
                  "message":{"imageMessage":{"mimetype":"image/jpeg","caption":"¿Tienen este modelo?"}}}}
                 """.formatted(EvolutionApiClient.instanceName(store), chat);
         webhooks.receive(store, webhooks.credential(store), json.readTree(event));
-        verify(assistant).onInbound(new InboundMessageEvent(store, chat, "I1", "¿Tienen este modelo?", null));
+        verify(assistant).onInbound(new InboundMessageEvent(store, chat, "I1", "¿Tienen este modelo?", null, InboundMessageEvent.Delivery.INBOX));
         assertEquals("FAILED", waitForMedia(chat, "I1"));
         var message = inbox.conversation(store, chat).messages().get(0);
         assertEquals("IMAGE", message.mediaType());

@@ -70,6 +70,25 @@ Compatibilidad con Evolution 2.3.x (Baileys 7):
   "Tu plan no incluye enviar imágenes ni videos por WhatsApp. Está disponible en el plan Premium.". Los PDF se envían con
   cualquier plan. `GET .../whatsapp/media/capabilities` devuelve `{send}` para la bandeja.
 
+### Pipeline multimedia entrante (voz, NSFW y visión)
+
+Las notas de voz y las imágenes se publican primero solo para la bandeja (`InboundMessageEvent.Delivery.INBOX`); la IA
+espera a que `WhatsAppMediaService.process` termine y recibe un evento `ASSISTANT` con el texto en
+`whatsapp_inbound_message.ai_context`. Cada paso guarda su resultado en `whatsapp_media` (columna nula = pendiente) y
+hereda lo ya calculado para el mismo `content_sha256` de la tienda, así que **ninguna API externa se llama dos veces**.
+
+1. **Audio** → Groq Whisper (`TranscriptionClient`). `transcript` se muestra bajo el reproductor y la IA lo recibe como
+   `[Nota de voz transcrita] …`.
+2. **Imagen** → Sightengine (`ModerationClient`, `nudity-2.1`). Si el puntaje supera el umbral: `moderation_status =
+   BLOCKED_NSFW`, `media_status = BLOCKED_NSFW`, la vista previa se oculta (`GET media/{id}` responde 451 salvo
+   `?reveal=true`), se registra `whatsapp_media_incident` (NSFW), se envía el aviso automático por el canal del chat
+   (Evolution o Cloud API) y, si `store_ai_settings.nsfw_pause_ai`, la IA se pausa con motivo `NSFW`.
+3. **Imagen segura** → `VisionCatalogService` (Gemini Flash-Lite con `responseSchema`) devuelve `esConsultaValidaTienda`,
+   `tipoPrenda`, `subcategoria`, `color`, `estilo` y `resumen`, más `coincidencias` de `PublicCatalogRepository.similar`
+   (tipo 3 + subcategoría 2 + color 2, sin tildes ni plural, solo activos con stock). Fuera de contexto aplica la regla
+   de tema ajeno de la tienda (aviso o pausa, incidente `OFF_CONTEXT`). Válida: la IA principal recibe solo el resumen y
+   las coincidencias en texto, nunca la imagen, y puede responder con `enviarFotoPrenda` si el plan permite fotos.
+
 ### WhatsApp Cloud API (oficial de Meta)
 Datos que pide el panel (Meta for Developers → tu app → WhatsApp → Configuración de la API):
 

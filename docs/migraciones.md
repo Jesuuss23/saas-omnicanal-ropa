@@ -30,6 +30,7 @@ Las migraciones viven en `backend/src/main/resources/db/migration` y se aplican 
 | V30 | WhatsApp Cloud API: credenciales cifradas, plantillas, pruebas, proveedor por mensaje |
 | V31 | Planes, entitlements, suscripción SaaS, bandeja idempotente de webhooks de pago |
 | V32 | Cuenta Mercado Pago de la tienda, intención y pagos de pedidos, estado `PAID` |
+| V47 | Pipeline multimedia (transcripción, moderación, visión, incidentes, `ai_context`) y catálogo e-commerce (`active`, `material`, precio antes y costo por variante) |
 
 Nota: V2 repite `CREATE TABLE IF NOT EXISTS` de V1. Es inofensivo y no se toca porque ya está aplicada.
 

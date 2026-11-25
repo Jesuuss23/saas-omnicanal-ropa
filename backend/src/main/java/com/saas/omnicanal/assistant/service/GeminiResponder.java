@@ -4,6 +4,7 @@ import com.saas.omnicanal.assistant.model.AssistantModels.Answer;
 import com.saas.omnicanal.assistant.model.AssistantModels.StoreFacts;
 import com.saas.omnicanal.assistant.model.AssistantModels.Turn;
 import com.saas.omnicanal.catalog.repository.CategoryResourceRepository;
+import com.saas.omnicanal.catalog.repository.ProductImageRepository;
 import com.saas.omnicanal.catalog.repository.PublicCatalogRepository;
 import com.saas.omnicanal.subscription.model.Entitlements;
 import com.saas.omnicanal.subscription.service.EntitlementService;
@@ -43,10 +44,11 @@ public class GeminiResponder implements AssistantResponder {
 
     private CategoryResourceRepository resources;
     private EntitlementService entitlements;
+    private ProductImageRepository images;
 
     @org.springframework.beans.factory.annotation.Autowired
     public GeminiResponder(ObjectProvider<ChatClient.Builder> builders, PublicCatalogRepository catalog,
-                           CategoryResourceRepository resources, EntitlementService entitlements,
+                           CategoryResourceRepository resources, EntitlementService entitlements, ProductImageRepository images,
                            @Value("${spring.ai.google.genai.api-key:}") String apiKey,
                            @Value("${spring.ai.google.genai.chat.model:gemini-3.5-flash}") String model,
                            @Value("${assistant.gemini-api-base:https://generativelanguage.googleapis.com/v1beta}") String apiBase,
@@ -55,6 +57,7 @@ public class GeminiResponder implements AssistantResponder {
         this(builders, catalog, apiKey, model, apiBase, fallbackModel, retryDelayMs);
         this.resources = resources;
         this.entitlements = entitlements;
+        this.images = images;
     }
 
     public GeminiResponder(ObjectProvider<ChatClient.Builder> builders, PublicCatalogRepository catalog,
@@ -153,7 +156,7 @@ public class GeminiResponder implements AssistantResponder {
     @Override
     public Answer answer(UUID tenant, StoreFacts facts, String instructions, List<Turn> history, String note, String message) {
         var tools = new StoreTools(tenant, catalog, facts, resources,
-                entitlements != null && entitlements.enabled(tenant, Entitlements.WHATSAPP_MEDIA_SEND));
+                entitlements != null && entitlements.enabled(tenant, Entitlements.WHATSAPP_MEDIA_SEND), images);
         List<Message> messages = new ArrayList<>();
         for (Turn t : history) messages.add("CUSTOMER".equals(t.author()) ? new UserMessage(t.text()) : new AssistantMessage(t.text()));
         String text = null;
@@ -213,6 +216,9 @@ public class GeminiResponder implements AssistantResponder {
                 .append("catálogo de esa categoría. Si acepta el catálogo, usa enviarCatalogo.\n")
                 .append("- Si el mensaje del cliente es solo [Nota de voz], [Imagen], [Video] o [Documento], no puedes verlo ni ")
                 .append("escucharlo: pídele con amabilidad que te escriba qué prenda busca.\n")
+                .append("- \"[Nota de voz transcrita]\" es lo que el cliente dijo por audio: respóndelo como un mensaje escrito.\n")
+                .append("- \"[El cliente envió una foto]\" trae el análisis de su foto y prendas parecidas del catálogo: ofrécele esas ")
+                .append("opciones reales, pregúntale cuál le gusta y ofrece enviarle la foto con enviarFotoPrenda.\n")
                 .append("- Para recojo o delivery usa infoTienda.\n")
                 .append("- No pidas datos de tarjetas ni contraseñas. No prometas descuentos, cambios ni devoluciones.\n")
                 .append("- Llama a escalar si el cliente pide hablar con una persona, tiene un reclamo, pide descuento, cambio o ")
