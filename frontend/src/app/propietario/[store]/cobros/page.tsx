@@ -7,7 +7,7 @@ import CulqiAccount from "../CulqiAccount";
 export default function Payments() {
   const {store} = useStore();
   return <>
-    <PageHeader title="Activar cobros en línea" description="Recibe los pagos con tarjeta de tus pedidos web directo en tu cuenta Culqi."/>
+    <PageHeader title="Cobros" description="Activa los cobros en línea: recibe los pagos con tarjeta de tus pedidos web directo en tu cuenta Culqi."/>
     <CulqiAccount store={store}/>
   </>;
 }
