@@ -13,7 +13,12 @@ import org.springframework.web.server.ResponseStatusException;
 /** Conexión rápida por QR con Evolution API: vincular instancia y activar el webhook del inbox. */
 @Service
 public class EvolutionConnectionService {
-    public record Connection(String state, String qr) {}
+    /** {@code checkedAt}: cuándo se consultó el estado a Evolution. */
+    public record Connection(String state, String qr, java.time.Instant checkedAt) {
+        public Connection(String state, String qr) {
+            this(state, qr, java.time.Instant.now());
+        }
+    }
 
     private final EvolutionApiClient evolution;
     private final WhatsAppChannelSettingRepository channels;
@@ -34,13 +39,25 @@ public class EvolutionConnectionService {
         return EvolutionApiClient.instanceName(store);
     }
 
+    /**
+     * Consulta en vivo {@code GET /instance/connectionState/{instance}}, guarda el estado en whatsapp_channel_setting y,
+     * si está conectada, asigna la instancia a la tienda (por ejemplo, si se vinculó desde Evolution Manager).
+     */
     public Connection status(UUID store) {
         String name = instance(store);
         try {
-            return new Connection(evolution.state(name), null);
+            String state = evolution.state(name);
+            remember(store, name, state);
+            return new Connection(state, null);
         } catch (RestClientException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
         }
+    }
+
+    /** Guarda el estado y, si la instancia (determinística de esta tienda) está abierta, la deja asignada. */
+    public void remember(UUID store, String name, String state) {
+        channels.saveEvolutionState(store, state);
+        if ("CONNECTED".equals(state)) channels.bindEvolutionInstance(store, name);
     }
 
     public Connection connect(UUID store) {
@@ -48,6 +65,7 @@ public class EvolutionConnectionService {
         if (!channels.bindEvolutionInstance(store, name)) throw new ResponseStatusException(HttpStatus.CONFLICT);
         try {
             String current = evolution.state(name);
+            channels.saveEvolutionState(store, current);
             if ("CONNECTED".equals(current)) return new Connection(current, null);
             if ("UNLINKED".equals(current)) {
                 try {

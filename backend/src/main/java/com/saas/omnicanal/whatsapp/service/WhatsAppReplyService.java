@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 
 /** Respuestas manuales del inbox: se envían por el proveedor activo de la tienda (Evolution o Cloud API). */
@@ -88,7 +89,7 @@ public class WhatsAppReplyService {
                 WhatsAppMediaRepository.url(id), caption.isEmpty() ? null : caption)) {
             media.delete(store, id);
             return messages.existingReplyStatus(store, requestId, chat, body)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, NO_CHAT));
         }
         String type = switch (file.kind()) {
             case IMAGE -> "image";
@@ -112,11 +113,31 @@ public class WhatsAppReplyService {
         if (provider == WhatsAppProvider.CLOUD_API && !ChatIds.isPhoneChat(chat))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Este chat solo se puede responder por la conexión con QR (Evolution).");
         if (provider == WhatsAppProvider.EVOLUTION) {
-            if (!evolution.configured()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
-            if (!channels.evolutionInstanceBound(store, EvolutionApiClient.instanceName(store)))
-                throw new ResponseStatusException(HttpStatus.CONFLICT);
+            if (!evolution.configured()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Falta configurar Evolution API en el servidor.");
+            String name = EvolutionApiClient.instanceName(store);
+            if (!channels.evolutionInstanceBound(store, name)) requireLiveConnection(store, name);
         }
         return provider;
+    }
+
+    static final String NOT_CONNECTED = "Conecta el número de WhatsApp antes de responder.";
+    static final String NO_CHAT = "Este chat todavía no tiene mensajes del cliente; no se puede responder.";
+
+    /**
+     * Antes de rechazar con 409, pregunta en vivo a Evolution ({@code GET /instance/connectionState/{instance}}). Si está
+     * abierta (por ejemplo, se vinculó desde Evolution Manager y no desde el panel), guarda el estado, asigna la instancia
+     * y deja seguir el envío.
+     */
+    private void requireLiveConnection(UUID store, String name) {
+        String state;
+        try {
+            state = evolution.state(name);
+        } catch (RestClientException | ResponseStatusException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "No se pudo consultar Evolution API. Intenta nuevamente.");
+        }
+        channels.saveEvolutionState(store, state);
+        if (!"CONNECTED".equals(state) || !channels.bindEvolutionInstance(store, name))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, NOT_CONNECTED);
     }
 
     private String finish(UUID store, UUID requestId, String chat, SendResult result) {
@@ -132,19 +153,10 @@ public class WhatsAppReplyService {
 
     private String send(UUID store, UUID requestId, String chat, String rawText, String author) {
         String text = rawText.strip();
-        if (!ChatIds.isDirectChat(chat)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        WhatsAppProvider provider = channels.activeProvider(store);
-        // Cloud API solo envía a números; un chat @lid solo existe en Evolution.
-        if (provider == WhatsAppProvider.CLOUD_API && !ChatIds.isPhoneChat(chat))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este chat solo se puede responder por la conexión con QR (Evolution).");
-        if (provider == WhatsAppProvider.EVOLUTION) {
-            if (!evolution.configured()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
-            if (!channels.evolutionInstanceBound(store, EvolutionApiClient.instanceName(store)))
-                throw new ResponseStatusException(HttpStatus.CONFLICT);
-        }
+        WhatsAppProvider provider = provider(store, chat);
         if (!messages.claimReply(store, requestId, chat, text, provider, author)) {
             return messages.existingReplyStatus(store, requestId, chat, text)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, NO_CHAT));
         }
         SendResult result = switch (provider) {
             // Evolution 2.3.x acepta el remoteJid completo (@lid o @s.whatsapp.net) en "number": se envía tal cual.
@@ -153,13 +165,6 @@ public class WhatsAppReplyService {
                     .map(c -> cloudClient.sendText(c, ChatIds.phoneOf(chat), text))
                     .orElse(SendResult.rejected("Cloud API sin configurar"));
         };
-        String status = switch (result.status()) {
-            case "ACCEPTED" -> "ACCEPTED";
-            case "REJECTED" -> "REJECTED";
-            default -> "REVIEW";
-        };
-        messages.finishReply(store, requestId, status, result.providerMessageId());
-        if (!"REJECTED".equals(status)) inbox.outbound(store, chat);
-        return status;
+        return finish(store, requestId, chat, result);
     }
 }

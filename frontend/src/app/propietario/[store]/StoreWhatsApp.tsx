@@ -5,7 +5,8 @@ import WhatsAppInbox from "./WhatsAppInbox";
 import {useEffect,useRef,useState} from "react";
 
 type Props = {store:string; send:Send};
-type Connection = {state:string; qr:string|null};
+type Connection = {state:string; qr:string|null; checkedAt?:string};
+const hour = new Intl.DateTimeFormat("es-PE",{timeZone:"America/Lima",hour:"2-digit",minute:"2-digit",second:"2-digit"});
 
 const labels:Record<string,string> = {
   CONNECTED:"WhatsApp conectado", DISCONNECTED:"WhatsApp desconectado",
@@ -26,6 +27,7 @@ export default function StoreWhatsApp({store,send}:Props) {
   const [error,setError] = useState("");
   const [refresh,setRefresh] = useState(0);
   const [busy,setBusy] = useState(false);
+  const [checking,setChecking] = useState(false);
   const hasQr = Boolean(channel?.qr);
   const generation = useRef(0);
   useEffect(()=>{
@@ -49,6 +51,23 @@ export default function StoreWhatsApp({store,send}:Props) {
     return ()=>{controller.abort();clearTimeout(timer);};
   },[open,busy,path,refresh,hasQr]);
 
+  /** Actualizar estado: el backend consulta en vivo a Evolution (connectionState) y guarda el estado en la BD. */
+  async function refreshState() {
+    const id=++generation.current;
+    setChecking(true);setError("");
+    try {
+      const res=await send(path+"/refresh",undefined,"POST");
+      if (!res.ok) throw new Error(problem(res.status));
+      const result:Connection=await res.json();
+      if (id!==generation.current) return;
+      setChannel(previous=>({...result,qr:result.state==="CONNECTED" || result.state==="UNLINKED" ? null : previous?.qr ?? null}));
+      // Si sigue esperando el QR, el sondeo automático continúa.
+      if (result.state==="PAIRING") setRefresh(v=>v+1);
+    } catch (err) {
+      if (id===generation.current) setError(err instanceof Error ? err.message : "Error de conexión.");
+    } finally {setChecking(false);}
+  }
+
   async function connect() {
     const id=++generation.current;
     setBusy(true);setError("");
@@ -68,7 +87,8 @@ export default function StoreWhatsApp({store,send}:Props) {
   }}>
     <summary className="cursor-pointer font-semibold">Conexión rápida por QR (Evolution API)</summary>
     <p className="mt-2 text-sm text-muted-foreground">Ideal para empezar o para bajo volumen. Al ser una conexión no oficial, WhatsApp puede bloquear el número si se usa para envíos masivos.</p>
-    <p role="status" className="my-3">{error || (channel ? labels[channel.state] : "Consultando conexión…")}</p>
+    <p role="status" className="my-3">{error || (checking ? "Consultando a Evolution API…" : channel ? labels[channel.state] ?? channel.state : "Consultando conexión…")}
+      {!error && !checking && channel?.checkedAt && <span className="ml-2 text-xs text-muted-foreground">Actualizado {hour.format(new Date(channel.checkedAt))}</span>}</p>
     {channel?.qr && <div className="mb-4">
       <p>En el WhatsApp de la tienda, abre Dispositivos vinculados y escanea el código.</p>
       {/* The pairing QR is private and must bypass image optimizers and caches. */}
@@ -79,7 +99,8 @@ export default function StoreWhatsApp({store,send}:Props) {
       {channel && channel.state!=="CONNECTED" && <button type="button" disabled={busy}
         className="rounded-lg bg-primary px-4 py-2 text-white" onClick={connect}>
         {busy?"Conectando…":channel.qr?"Renovar QR":"Conectar WhatsApp"}</button>}
-      <button type="button" disabled={busy} className="text-primary underline" onClick={()=>{setError("");setRefresh(v=>v+1);}}>Actualizar estado</button>
+      <button type="button" disabled={busy || checking} className="text-primary underline disabled:opacity-60" onClick={refreshState}>
+        {checking ? "Actualizando…" : "Actualizar estado"}</button>
     </div>
     {open && <WhatsAppInbox path={path} send={send} connected={channel?.state==="CONNECTED"}/>}
   </details>;

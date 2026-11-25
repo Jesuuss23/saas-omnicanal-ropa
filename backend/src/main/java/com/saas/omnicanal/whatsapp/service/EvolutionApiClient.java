@@ -41,17 +41,24 @@ public class EvolutionApiClient {
     public String state(String name) {
         try {
             JsonNode result = api().get().uri("/instance/connectionState/{name}", name).retrieve().body(JsonNode.class);
-            String state = result == null ? "" : result.path("instance").path("state").asText("");
-            return switch (state) {
-                case "open" -> "CONNECTED";
-                case "connecting" -> "PAIRING";
-                case "close", "closed" -> "DISCONNECTED";
-                default -> throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
-            };
+            String state = result == null ? "" : result.path("instance").path("state").asText(result.path("state").asText(""));
+            String mapped = mapState(state);
+            if (mapped == null) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY);
+            return mapped;
         } catch (RestClientResponseException ex) {
             if (ex.getStatusCode().value() == 404) return "UNLINKED";
             throw ex;
         }
+    }
+
+    /** Estado de Evolution ({@code open}, {@code connecting}, {@code close}) a nuestro estado, o null si es desconocido. */
+    public static String mapState(String state) {
+        return switch (state == null ? "" : state.toLowerCase(java.util.Locale.ROOT)) {
+            case "open" -> "CONNECTED";
+            case "connecting" -> "PAIRING";
+            case "close", "closed", "refused" -> "DISCONNECTED";
+            default -> null;
+        };
     }
 
     public String createInstance(String name) {
@@ -67,7 +74,7 @@ public class EvolutionApiClient {
 
     public void setWebhook(String name, String url, Map<String, String> headers) {
         var settings = Map.of("enabled", true, "url", url, "headers", headers, "byEvents", false, "base64", false,
-                "events", List.of("MESSAGES_UPSERT", "MESSAGES_UPDATE"));
+                "events", List.of("MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"));
         api().post().uri("/webhook/set/{name}", name).contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("webhook", settings)).retrieve().toBodilessEntity();
     }

@@ -39,4 +39,19 @@ public class WhatsAppChannelSettingRepository {
                 AND (whatsapp_instance_id IS NULL OR whatsapp_instance_id=?)
                 """, instance, tenant, instance) == 1;
     }
+
+    /** Guarda el último estado de Evolution (CONNECTED, PAIRING, DISCONNECTED o UNLINKED) sin tocar el proveedor activo. */
+    public void saveEvolutionState(UUID tenant, String state) {
+        db.update("""
+                INSERT INTO whatsapp_channel_setting(tenant_id,evolution_state,evolution_state_at) VALUES (?,?,now())
+                ON CONFLICT (tenant_id) DO UPDATE SET evolution_state=excluded.evolution_state, evolution_state_at=now(), updated_at=now()
+                """, tenant, state);
+    }
+
+    public record EvolutionState(String state, java.time.OffsetDateTime at) {}
+
+    public java.util.Optional<EvolutionState> evolutionState(UUID tenant) {
+        return db.query("SELECT evolution_state, evolution_state_at FROM whatsapp_channel_setting WHERE tenant_id=? AND evolution_state IS NOT NULL",
+                (rs, n) -> new EvolutionState(rs.getString(1), rs.getObject(2, java.time.OffsetDateTime.class)), tenant).stream().findFirst();
+    }
 }

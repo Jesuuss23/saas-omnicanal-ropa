@@ -152,8 +152,9 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
       mutate(await ownerApi.get<Conversation>(base + "/detail" + q));
       onChanged();
     } catch (e) {
-      toast.error(!(e instanceof ApiError) ? "No se pudo enviar." : e.status === 409 && !file ? "Conecta el número de WhatsApp antes de responder."
-        : file ? e.message : "No se pudo enviar.");
+      // El backend ya consultó Evolution en vivo antes de responder 409, así que su mensaje es el motivo real.
+      toast.error(!(e instanceof ApiError) ? "No se pudo enviar."
+        : e.status === 409 && (!e.message || e.message === "Conflict") ? "Conecta el número de WhatsApp antes de responder." : e.message);
     }
     finally { setBusy(false); }
   }

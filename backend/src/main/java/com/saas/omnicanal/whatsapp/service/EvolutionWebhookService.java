@@ -54,9 +54,12 @@ public class EvolutionWebhookService {
     public Map<String, Integer> receive(UUID store, String key, JsonNode event) {
         if (!Hmac.equalsConstantTime(credential(store), key)) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         String instance = EvolutionApiClient.instanceName(store);
-        if (!instance.equals(event.path("instance").asText("")) || !channels.evolutionInstanceBound(store, instance))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        if (!instance.equals(event.path("instance").asText(""))) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         String name = event.path("event").asText("").replace('_', '.');
+        // La firma HMAC ya probó que el evento es de esta tienda y su instancia es la determinística: si se vinculó o
+        // reconectó desde Evolution Manager, el estado se guarda y la instancia queda asignada.
+        if ("connection.update".equalsIgnoreCase(name)) return Map.of("updated", connection(store, instance, event.path("data")));
+        if (!channels.evolutionInstanceBound(store, instance)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         boolean update = "messages.update".equalsIgnoreCase(name);
         if (!update && !"messages.upsert".equalsIgnoreCase(name)) return Map.of("inserted", 0);
         JsonNode data = event.path("data");
@@ -66,6 +69,16 @@ public class EvolutionWebhookService {
             count += update ? receipt(store, item) : save(store, item);
         }
         return Map.of(update ? "updated" : "inserted", count);
+    }
+
+    /** CONNECTION_UPDATE de Evolution 2.3.x: {@code data.state} = open, connecting o close. */
+    private int connection(UUID store, String instance, JsonNode data) {
+        String state = EvolutionApiClient.mapState(data.path("state").asText(data.path("connection").asText("")));
+        if (state == null) return 0;
+        channels.saveEvolutionState(store, state);
+        if ("CONNECTED".equals(state) && !channels.bindEvolutionInstance(store, instance))
+            throw new ResponseStatusException(HttpStatus.CONFLICT);
+        return 1;
     }
 
     private int receipt(UUID store, JsonNode item) {
