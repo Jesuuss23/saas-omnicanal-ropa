@@ -43,11 +43,15 @@ export async function loadCulqi3DS(): Promise<Culqi3DSGlobal> {
 }
 
 /** Abre el formulario de tarjeta de Culqi y resuelve con el token (incluye el email que escribió el comprador). */
-export async function tokenizeCard(publicKey: string, title: string, amountCents: number): Promise<CulqiToken> {
+export async function tokenizeCard(publicKey: string, title: string, amountCents: number, color?: string): Promise<CulqiToken> {
   const culqi = await loadCulqi();
   culqi.publicKey = publicKey;
   culqi.settings({title, currency: "PEN", amount: amountCents});
-  culqi.options?.({lang: "auto", installments: false, paymentMethods: {tarjeta: true, yape: false, bancaMovil: false, agente: false, billetera: false, cuotealo: false}});
+  // Solo tarjeta: el formulario de Culqi queda compacto (sin la lista de otros medios) y con el color de la tienda.
+  culqi.options?.({lang: "auto", installments: false, modal: true,
+    paymentMethods: {tarjeta: true, yape: false, bancaMovil: false, agente: false, billetera: false, cuotealo: false},
+    paymentMethodsSort: ["tarjeta"],
+    ...(color ? {style: {bannerColor: color, buttonBackground: color, menuColor: color, linksColor: color, priceColor: color}} : {})});
   return new Promise<CulqiToken>((resolve, reject) => {
     window.culqi = () => {
       if (culqi.token?.id) { const token = culqi.token; culqi.close(); resolve(token); }

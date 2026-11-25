@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect, useRef, useState, type FormEvent} from "react";
-import {AlarmClock, ArrowLeft, Bot, CheckCheck, FileText, Hand, Lock, MessagesSquare, Mic, Paperclip, RotateCcw, ScanSearch, Send, ShieldAlert, Sparkles, UserRound, X} from "lucide-react";
+import {AlarmClock, ArrowLeft, Bot, CheckCheck, ExternalLink, FileText, Hand, Lock, Maximize2, MessagesSquare, Minimize2, Mic, Paperclip, RotateCcw, ScanSearch, Send, ShieldAlert, Sparkles, UserRound, X} from "lucide-react";
 import {Alert} from "@/components/ui/alert";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
@@ -41,7 +41,7 @@ const when = (iso: string | null) => {
 };
 const name = (r: Row) => r.contactName ?? (r.phone ? "+" + r.phone : r.chat);
 
-export default function Inbox({store, initialChat}: {store: string; initialChat: string | null}) {
+export default function Inbox({store, initialChat, popup = false}: {store: string; initialChat: string | null; popup?: boolean}) {
   const base = "stores/" + store + "/inbox/conversations";
   // "Todas" por defecto: al tomar una conversación o cuando la IA la escala no desaparece de la lista.
   const [status, setStatus] = useState<Status | "ALL">("ALL");
@@ -56,8 +56,30 @@ export default function Inbox({store, initialChat}: {store: string; initialChat:
     return () => clearInterval(timer);
   }, []);
 
-  return <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
-    <Card className={cn("flex min-h-[32rem] min-w-0 flex-col overflow-hidden p-0", selected && "hidden lg:flex")}>
+  const [expanded, setExpanded] = useState(popup);
+  // Pantalla completa: la bandeja tapa el panel y ocupa toda la ventana (también al abrirla en otra ventana).
+  useEffect(() => {
+    if (!expanded) return;
+    const close = (e: KeyboardEvent) => { if (e.key === "Escape" && !popup) setExpanded(false); };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", close);
+    return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", close); };
+  }, [expanded, popup]);
+
+  function openWindow() {
+    const url = "/propietario/" + encodeURIComponent(store) + "/whatsapp?ventana=1" + (selected ? "&chat=" + encodeURIComponent(selected) : "");
+    window.open(url, "bandeja-whatsapp-" + store, "popup,width=1280,height=860");
+  }
+
+  return <div className={cn("flex flex-col gap-3", expanded ? "fixed inset-0 z-50 bg-background p-3 sm:p-4" : "h-[calc(100dvh-13rem)] min-h-[26rem] lg:h-[calc(100dvh-15rem)]")}>
+    <div className="flex items-center justify-end gap-2">
+      {expanded && <p className="mr-auto flex items-center gap-2 font-semibold"><MessagesSquare className="size-4 text-primary"/>Bandeja de WhatsApp</p>}
+      {!popup && <Button size="sm" variant="outline" onClick={openWindow}><ExternalLink/>Abrir en otra ventana</Button>}
+      {!popup && <Button size="sm" variant="outline" onClick={() => setExpanded(v => !v)} aria-pressed={expanded}>
+        {expanded ? <><Minimize2/>Salir de pantalla completa</> : <><Maximize2/>Pantalla completa</>}</Button>}
+    </div>
+    <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
+    <Card className={cn("flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-0", selected && "hidden lg:flex")}>
       <div className="flex gap-1 border-b p-2" role="tablist" aria-label="Estado de las conversaciones">
         {tabs.map(t => <button key={t.status} role="tab" aria-selected={status === t.status} onClick={() => setStatus(t.status)}
           className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-md px-1.5 py-1.5 text-xs font-medium sm:text-sm",
@@ -89,8 +111,9 @@ export default function Inbox({store, initialChat}: {store: string; initialChat:
           </button></li>)}</ul>}
     </Card>
     {selected ? <Thread key={selected} store={store} chat={selected} onBack={() => setSelected(null)} onChanged={() => setVersion(v => v + 1)} version={version}/>
-      : <Card className="hidden min-h-[32rem] place-items-center lg:grid"><EmptyState icon={MessagesSquare} title="Elige una conversación"
+      : <Card className="hidden h-full place-items-center lg:grid"><EmptyState icon={MessagesSquare} title="Elige una conversación"
         description="La IA responde sola las consultas de catálogo, precios y stock. Tú tomas las que necesitan a una persona."/></Card>}
+    </div>
   </div>;
 }
 
@@ -106,9 +129,10 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
   const caps = useApiData<{send: boolean}>(ownerApi.url("stores/" + store + "/whatsapp/media/capabilities"));
   const canSendMedia = caps.data?.send ?? false;
   const fileLocked = !!file && !file.type.includes("pdf") && !canSendMedia;
-  const bottom = useRef<HTMLDivElement>(null);
   const count = data?.messages.length ?? 0;
-  useEffect(() => { bottom.current?.scrollIntoView({block: "end"}); }, [count]);
+  const messages = useRef<HTMLOListElement>(null);
+  // Baja al último mensaje dentro de la lista, sin mover la página.
+  useEffect(() => { const el = messages.current; if (el) el.scrollTop = el.scrollHeight; }, [count]);
 
   async function act(path: string, body?: unknown, method: "POST" | "PUT" = "POST", done?: string) {
     setBusy(true);
@@ -163,9 +187,9 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
   }
 
   if (error) return <Alert variant="destructive">{error.message}</Alert>;
-  if (!data) return <Card className="grid gap-3 p-4">{Array.from({length: 4}, (_, i) => <Skeleton key={i} className="h-12"/>)}</Card>;
+  if (!data) return <Card className="grid h-full content-start gap-3 p-4">{Array.from({length: 4}, (_, i) => <Skeleton key={i} className="h-12"/>)}</Card>;
   const r = data.row;
-  return <Card className="flex min-h-[32rem] flex-col p-0">
+  return <Card className="flex h-full min-h-0 flex-col overflow-hidden p-0">
     <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
       <Button variant="ghost" size="sm" className="lg:hidden" onClick={onBack} aria-label="Volver a la lista"><ArrowLeft/></Button>
       <div className="min-w-0 flex-1"><h2 className="truncate font-semibold">{name(r)}</h2>
@@ -190,7 +214,7 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
       <p className="font-medium">{data.escalationReason}</p>{data.summary && <p className="mt-0.5 text-muted-foreground">{data.summary}</p>}
       {r.overdue && <p className="mt-1 flex items-center gap-1 font-medium text-destructive"><AlarmClock className="size-4"/>Pasó el tiempo de respuesta acordado.</p>}
     </div>}
-    <ol className="flex-1 space-y-2 overflow-y-auto bg-muted/30 px-4 py-4" aria-label="Mensajes">
+    <ol ref={messages} className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-muted/30 px-4 py-4" aria-label="Mensajes">
       {data.messages.map((m, i) => <li key={i} className={cn("flex", m.author !== "CUSTOMER" && "justify-end")}>
         <div className={cn("max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm", m.author === "CUSTOMER" ? "rounded-bl-sm bg-card" :
           m.author === "AI" ? "rounded-br-sm bg-accent text-accent-foreground" : "rounded-br-sm bg-primary text-primary-foreground")}>
@@ -201,7 +225,6 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
             {m.status === "READ" && " · Leído"}{m.status === "REJECTED" && " · No enviado"}</p>
         </div>
       </li>)}
-      <div ref={bottom}/>
     </ol>
     <form onSubmit={reply} className="grid gap-2 border-t p-3">
       {file && <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm", fileLocked ? "border-warning/40 bg-warning/10" : "bg-muted/40")}>

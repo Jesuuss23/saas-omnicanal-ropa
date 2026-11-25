@@ -23,15 +23,20 @@ import org.springframework.web.server.ResponseStatusException;
 class OrderTrackingController {
     private final JdbcTemplate db;
     private final WebOrderItemRepository items;
+    private final com.saas.omnicanal.tenant.repository.AppearanceRepository appearance;
 
-    OrderTrackingController(JdbcTemplate db, WebOrderItemRepository items) {
+    OrderTrackingController(JdbcTemplate db, WebOrderItemRepository items, com.saas.omnicanal.tenant.repository.AppearanceRepository appearance) {
         this.db = db;
         this.items = items;
+        this.appearance = appearance;
     }
+
+    /** Marca de la tienda para que el enlace del pedido se vea como la tienda (nombre, color, logo y WhatsApp). */
+    record Store(String name, String primaryColor, Integer logoVersion, String whatsappPhone) {}
 
     record Pickup(String address, String hours) {}
     record Header(UUID reservation, String status, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee, Pickup pickup, String method, Instant reservationExpiresAt) {}
-    record Detail(String status, BigDecimal total, List<WebOrderItemRepository.Item> items, boolean freeDelivery, BigDecimal deliveryFee, Pickup pickup, String method, Instant reservationExpiresAt) {}
+    record Detail(String status, BigDecimal total, List<WebOrderItemRepository.Item> items, boolean freeDelivery, BigDecimal deliveryFee, Pickup pickup, String method, Instant reservationExpiresAt, Store store) {}
 
     @GetMapping("/api/public/stores/{store}/orders/{order}")
     ResponseEntity<Detail> read(@PathVariable UUID store, @PathVariable UUID order,
@@ -55,6 +60,12 @@ class OrderTrackingController {
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),supplied.getBytes(StandardCharsets.US_ASCII)))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(new Detail(header.status(),header.total(),items.list(store,order),header.freeDelivery(),header.deliveryFee(),header.pickup(),header.method(),header.reservationExpiresAt()));
+                .body(new Detail(header.status(),header.total(),items.list(store,order),header.freeDelivery(),header.deliveryFee(),header.pickup(),header.method(),header.reservationExpiresAt(),storeOf(store)));
+    }
+
+    private Store storeOf(UUID store) {
+        String name=db.query("SELECT name FROM tenant WHERE id=?",(rs,n)->rs.getString(1),store).stream().findFirst().orElse("");
+        return appearance.find(store).map(a->new Store(name,a.primaryColor(),a.hasLogo() ? a.logoVersion() : null,a.whatsappPhone()))
+                .orElse(new Store(name,null,null,null));
     }
 }

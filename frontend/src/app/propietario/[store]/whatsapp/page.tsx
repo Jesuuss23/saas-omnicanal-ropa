@@ -14,7 +14,10 @@ export default function WhatsApp() {
 
 function WhatsAppContent() {
   const {store, send, profile} = useStore();
-  const chat = useSearchParams().get("chat");
+  const params = useSearchParams();
+  const chat = params.get("chat");
+  // "Abrir en otra ventana": la bandeja sola, a pantalla completa.
+  if (params.get("ventana") === "1") return <Inbox store={store} initialChat={chat} popup/>;
   return <>
     <PageHeader title="WhatsApp" description="Responde a tus clientes con ayuda de la IA y toma la conversación cuando haga falta."/>
     <Tabs defaultValue="bandeja">
