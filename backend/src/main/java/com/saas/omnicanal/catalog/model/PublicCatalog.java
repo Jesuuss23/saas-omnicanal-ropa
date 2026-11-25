@@ -10,7 +10,23 @@ public record PublicCatalog(String storeName, List<Variant> variants, boolean ha
                             CategoryResource resource, Brand brand) {
 
     public record Variant(UUID id, UUID productId, String name, String category, String size, String color,
-                          BigDecimal price, int available, UUID coverImage, String subcategory) {}
+                          BigDecimal price, int available, UUID coverImage, String subcategory,
+                          BigDecimal compareAtPrice, UUID backImage) {
+        public Variant(UUID id, UUID productId, String name, String category, String size, String color,
+                       BigDecimal price, int available, UUID coverImage, String subcategory) {
+            this(id, productId, name, category, size, color, price, available, coverImage, subcategory, null, null);
+        }
+    }
+
+    /**
+     * Ficha pública de un producto activo: todas sus fotos (la primera es la delantera y la segunda la trasera) y todas
+     * sus variantes, incluso las agotadas, para que el cliente vea qué tallas y colores existen.
+     */
+    public record ProductDetail(UUID id, String name, String category, String subcategory, String description,
+                                String material, List<UUID> images, List<Option> variants) {
+        public record Option(UUID id, String size, String color, BigDecimal price, BigDecimal compareAtPrice,
+                             Integer discountPercent, int available) {}
+    }
     public record Pickup(String address, String hours) {}
     public record CategoryResource(String kind, String url) {}
     /** {@code logoVersion} es null cuando la tienda no subió logo. */

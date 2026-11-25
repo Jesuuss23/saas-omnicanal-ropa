@@ -176,7 +176,7 @@ export default async function StoreCatalog(props:Props) {
         <Link href={path} className="font-medium text-[var(--store)] underline">Ver catálogo completo</Link>
       </p>}
 
-      <CatalogCart key={store} store={store} variants={catalog.variants} query={query} pager={
+      <CatalogCart key={store} store={store} variants={catalog.variants} query={query} theme={brandStyle(brand) as CSSProperties} pager={
         (page>0 || catalog.hasNext) ? <nav aria-label="Páginas del catálogo" className="mt-8 flex justify-center gap-3">
           {page>0 && <Link href={link({page:page-1})} className={chip+" border-border bg-card hover:bg-muted"}>Anterior</Link>}
           {catalog.hasNext && <Link href={link({page:page+1})} className={chip+" border-border bg-card hover:bg-muted"}>Siguiente</Link>}

@@ -130,8 +130,12 @@ class OwnerWhatsAppController {
 
     /** Archivo de un mensaje (entrante o enviado). Solo para el equipo de la tienda. */
     @GetMapping("/media/{id}")
-    ResponseEntity<byte[]> media(@PathVariable UUID store, @PathVariable UUID id, Principal owner) {
+    ResponseEntity<byte[]> media(@PathVariable UUID store, @PathVariable UUID id, Principal owner,
+                                 @RequestParam(defaultValue = "false") boolean reveal) {
         requireOwner(store, owner);
+        // Imagen bloqueada por contenido explícito: solo se entrega si el equipo pide verla a propósito.
+        if (!reveal && media.blocked(store, id))
+            throw new ResponseStatusException(HttpStatus.UNAVAILABLE_FOR_LEGAL_REASONS, "Imagen bloqueada por contenido explícito.");
         var file = media.read(store, id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         MediaType type;
         try {

@@ -85,6 +85,32 @@ assistant:
   # Ventana de agrupación: mensajes seguidos del mismo chat dentro de este tiempo reciben una sola respuesta.
   debounce-ms: ${AI_DEBOUNCE_MS:8000}
 
+# Análisis de archivos entrantes de WhatsApp: tres clientes independientes, cada uno con su clave, modelo y timeout.
+# Apagados por defecto; los resultados se guardan en whatsapp_media y nunca se vuelven a pedir.
+media:
+  moderation:
+    # Cliente 1: Sightengine (contenido explícito). Una imagen con puntaje >= threshold queda BLOCKED_NSFW.
+    enabled: ${SIGHTENGINE_ENABLED:false}
+    api-user: ${SIGHTENGINE_API_USER:}
+    api-secret: ${SIGHTENGINE_API_SECRET:}
+    threshold: ${SIGHTENGINE_NSFW_THRESHOLD:0.7}
+    timeout-ms: ${SIGHTENGINE_TIMEOUT_MS:10000}
+  transcription:
+    # Cliente 2: Groq Whisper (notas de voz).
+    enabled: ${GROQ_TRANSCRIPTION_ENABLED:false}
+    api-key: ${GROQ_API_KEY:}
+    model: ${GROQ_WHISPER_MODEL:whisper-large-v3-turbo}
+    language: ${GROQ_WHISPER_LANGUAGE:es}
+    timeout-ms: ${GROQ_TIMEOUT_MS:30000}
+  vision:
+    # Cliente 3: modelo de visión propio (Gemini Flash-Lite), separado de la IA conversacional.
+    enabled: ${VISION_ENABLED:false}
+    api-key: ${VISION_GEMINI_API_KEY:${GOOGLE_GENAI_API_KEY:}}
+    model: ${VISION_MODEL:gemini-flash-lite-latest}
+    timeout-ms: ${VISION_TIMEOUT_MS:20000}
+    # Sin moderación confirmada (SAFE) no se analiza la foto.
+    require-moderation: ${VISION_REQUIRE_MODERATION:true}
+
 app:
   # URL pública del frontend, usada en los enlaces de los correos.
   base-url: ${APP_BASE_URL:${STOREFRONT_BASE_URL:http://localhost:3000}}

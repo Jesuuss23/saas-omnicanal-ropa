@@ -3,10 +3,13 @@ import {apiFetch} from "@/lib/api";
 
 import ShareCatalog from "./ShareCatalog";
 import GuestContact from "./GuestContact";
-import {useEffect,useMemo,useRef,useState,type ReactNode} from "react";
-import {ImageOff, Minus, Plus, ShoppingBag, Trash2} from "lucide-react";
+import {useEffect,useMemo,useRef,useState,type CSSProperties,type ReactNode} from "react";
+import {Eye, ImageOff, Minus, Plus, ShoppingBag, Trash2} from "lucide-react";
+import {discountPercent, LOW_STOCK} from "@/lib/pricing";
+import ProductDetail from "./ProductDetail";
 
-export type Variant = {id:string; productId:string; name:string; category:string|null; size:string; color:string|null; price:number; available:number; coverImage:string|null};
+export type Variant = {id:string; productId:string; name:string; category:string|null; size:string; color:string|null; price:number; available:number; coverImage:string|null;
+  subcategory?:string|null; compareAtPrice?:number|null; backImage?:string|null};
 type Availability = {id:string; price:number; available:number};
 type StockIssue = {message:string; available:number};
 type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number; available?:number};
@@ -21,7 +24,7 @@ function isLine(value:unknown):value is Line {
     Number.isSafeInteger(row.quantity) && row.quantity>0;
 }
 
-export default function CatalogCart({store,variants,query,pager}:{store:string;variants:Variant[];query:string;pager?:ReactNode}) {
+export default function CatalogCart({store,variants,query,pager,theme}:{store:string;variants:Variant[];query:string;pager?:ReactNode;theme?:CSSProperties}) {
   const storageKey="store-cart:v1:"+store.toLowerCase();
   const [lines,setLines]=useState<Line[]>([]);
   const [ready,setReady]=useState(false);
@@ -37,6 +40,7 @@ export default function CatalogCart({store,variants,query,pager}:{store:string;v
   const current=useRef<Line[]>([]);
   const products=useMemo(()=>groupByProduct(variants),[variants]);
   const [picked,setPicked]=useState<Record<string,string>>({});
+  const [detail,setDetail]=useState<{product:Product; variant:string}|null>(null);
 
   useEffect(()=>{
     try {
@@ -220,21 +224,40 @@ export default function CatalogCart({store,variants,query,pager}:{store:string;v
           const stock=stockOf(item);
           const prices=product.variants.map(priceOf);
           const varies=Math.min(...prices)!==Math.max(...prices);
+          const discount=discountPercent(priceOf(item),item.compareAtPrice);
+          const best=Math.max(0,...product.variants.map(v=>discountPercent(priceOf(v),v.compareAtPrice) ?? 0));
+          const open=()=>setDetail({product,variant:item.id});
+          const photo=(id:string)=>"/api/public/stores/"+store+"/images/"+id;
           return <li key={product.id} className="group flex flex-col">
-            <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-muted">
-              {item.coverImage
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={"/api/public/stores/"+store+"/images/"+item.coverImage} alt={product.name} loading="lazy"
-                    className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/>
-                : <div className="grid size-full place-items-center text-muted-foreground"><ImageOff aria-hidden className="size-8"/></div>}
-              {stock<=3 && <span className="absolute top-2 left-2 rounded-full bg-card/90 px-2.5 py-1 text-xs font-medium shadow-sm">
-                {stock===1 ? "Última unidad" : "Quedan "+stock}</span>}
+            <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-muted shadow-[var(--shadow-card)]">
+              <button type="button" onClick={open} aria-label={"Ver detalle de "+product.name} className="block size-full">
+                {item.coverImage
+                  ? <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo(item.coverImage)} alt={product.name} loading="lazy"
+                      className={"size-full object-cover transition duration-500 group-hover:scale-[1.04]"+(item.backImage ? " group-hover:opacity-0" : "")}/>
+                    {item.backImage && <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photo(item.backImage)} alt="" loading="lazy" aria-hidden
+                        className="absolute inset-0 size-full object-cover opacity-0 transition duration-500 group-hover:scale-[1.04] group-hover:opacity-100"/></>}
+                  </>
+                  : <span className="grid size-full place-items-center text-muted-foreground"><ImageOff aria-hidden className="size-8"/></span>}
+                <span className="pointer-events-none absolute inset-x-3 bottom-3 inline-flex translate-y-2 items-center justify-center gap-1.5 rounded-full bg-card/95 py-2 text-xs font-medium opacity-0 shadow-sm transition group-hover:translate-y-0 group-hover:opacity-100">
+                  <Eye aria-hidden className="size-3.5"/>Ver detalle</span>
+              </button>
+              <div className="pointer-events-none absolute top-2 left-2 flex flex-col items-start gap-1">
+                {best>0 && <span className="rounded-full bg-destructive px-2.5 py-1 text-xs font-semibold text-white shadow-sm">−{best}%</span>}
+                {stock>0 && stock<=LOW_STOCK && <span className="rounded-full bg-card/90 px-2.5 py-1 text-xs font-medium shadow-sm">
+                  {stock===1 ? "Última unidad" : "Quedan "+stock}</span>}
+              </div>
             </div>
             <div className="mt-3 flex flex-1 flex-col gap-2">
               <div>
-                {product.category && <p className="text-xs tracking-wide text-muted-foreground uppercase">{product.category}</p>}
-                <h2 className="font-semibold leading-snug">{product.name}</h2>
-                <p className="font-semibold text-[var(--store)]">{currency.format(priceOf(item))}{varies && <span className="ml-1 text-xs font-normal text-muted-foreground">según talla</span>}</p>
+                {product.category && <p className="text-xs tracking-wide text-muted-foreground uppercase">{product.category}{item.subcategory ? " · "+item.subcategory : ""}</p>}
+                <h2 className="leading-snug font-semibold"><button type="button" onClick={open} className="text-left hover:underline underline-offset-4">{product.name}</button></h2>
+                <p className="flex flex-wrap items-baseline gap-x-2 font-semibold text-[var(--store)]">{currency.format(priceOf(item))}
+                  {discount!=null && item.compareAtPrice!=null && <s className="text-sm font-normal text-muted-foreground">{currency.format(item.compareAtPrice)}</s>}
+                  {varies && <span className="text-xs font-normal text-muted-foreground">según talla</span>}</p>
               </div>
               <fieldset>
                 <legend className="sr-only">Talla de {product.name}</legend>
@@ -262,6 +285,9 @@ export default function CatalogCart({store,variants,query,pager}:{store:string;v
         {query?"No hay prendas disponibles para esta búsqueda.":"No hay prendas disponibles en esta página."}</div>}
       {pager}
     </section>
+
+    {detail && <ProductDetail key={detail.product.id} store={store} product={detail.product} initialVariant={detail.variant} theme={theme} open
+      onOpenChange={o=>{ if (!o) setDetail(null); }} disabled={!ready || locked} onAdd={item=>add(item)}/>}
 
     <aside className="lg:sticky lg:top-20 lg:self-start">
       <section className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)]" aria-label="Carrito">

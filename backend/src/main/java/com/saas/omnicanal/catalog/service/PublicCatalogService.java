@@ -40,6 +40,11 @@ public class PublicCatalogService {
     }
 
     @Transactional(readOnly = true)
+    public PublicCatalog.ProductDetail product(UUID tenant, UUID product) {
+        return catalog.product(tenant, product).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public List<Availability> availability(UUID tenant, List<UUID> ids) {
         if (ids.isEmpty() || ids.size() > PAGE_SIZE) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         return catalog.availability(tenant, ids);

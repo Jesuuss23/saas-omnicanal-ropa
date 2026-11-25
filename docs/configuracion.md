@@ -103,6 +103,30 @@ $env:SUPERADMIN_PASSWORD_HASH = '$2a$10$...'
 > No definas `GOOGLE_GENAI_API_KEY` vacía, porque Spring AI falla al arrancar. Déjala sin definir y la IA queda
 > apagada, con aviso en el panel.
 
+## Multimedia entrante (moderación, voz y visión)
+
+Tres clientes independientes. Cada resultado se guarda en `whatsapp_media` y nunca se vuelve a pedir: un reintento,
+un reinicio o la misma foto reenviada (mismo SHA-256 en la tienda) usan lo guardado.
+
+| Variable | Obligatoria | Formato | Local / test | Producción |
+|---|---|---|---|---|
+| `SIGHTENGINE_ENABLED` | Opcional (`false`) | `true`/`false` | `false` | `true` |
+| `SIGHTENGINE_API_USER` / `SIGHTENGINE_API_SECRET` | Si está activo | Credenciales de sightengine.com | — | Las de la cuenta |
+| `SIGHTENGINE_NSFW_THRESHOLD` | Opcional (`0.7`) | 0 a 1 (máximo de `sexual_activity`, `sexual_display`, `erotica`) | `0.7` | `0.6`–`0.8` |
+| `SIGHTENGINE_TIMEOUT_MS` | Opcional (`8000`) | Milisegundos | Por defecto | Por defecto |
+| `GROQ_TRANSCRIPTION_ENABLED` | Opcional (`false`) | `true`/`false` | `false` | `true` |
+| `GROQ_API_KEY` | Si está activo | Clave `gsk_…` | — | Clave de producción |
+| `GROQ_WHISPER_MODEL` / `GROQ_WHISPER_LANGUAGE` | Opcionales | `whisper-large-v3-turbo` / `es` | Por defecto | Por defecto |
+| `GROQ_TIMEOUT_MS` | Opcional (`20000`) | Milisegundos | Por defecto | Por defecto |
+| `VISION_ENABLED` | Opcional (`false`) | `true`/`false` | `false` | `true` |
+| `VISION_GEMINI_API_KEY` | Opcional | Clave de AI Studio; vacía usa `GOOGLE_GENAI_API_KEY` | — | Puede ser otra clave |
+| `VISION_MODEL` | Opcional (`gemini-flash-lite-latest`) | Id de modelo con visión | Por defecto | Por defecto |
+| `VISION_TIMEOUT_MS` | Opcional (`15000`) | Milisegundos | Por defecto | Por defecto |
+| `VISION_REQUIRE_MODERATION` | Opcional (`true`) | `true`: sin "seguro" de Sightengine la foto no se analiza | `true` | `true` |
+
+La descripción de productos con IA (`POST catalog/description/generate`) usa `GOOGLE_GENAI_API_KEY` y `GEMINI_MODEL`
+(o `CATALOG_DESCRIPTION_MODEL` en `catalog.description-model`); sin clave devuelve un borrador con los datos de la ficha.
+
 ## Correo (Resend)
 
 | Variable | Obligatoria | Formato | Local / test | Producción |

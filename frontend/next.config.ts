@@ -11,6 +11,7 @@ const proxied = [
   "/owner/:path*",
   "/superadmin/:path*",
   "/public/stores/:store/availability",
+  "/public/stores/:store/products/:product",
   "/public/stores/:store/images/:image",
   "/public/stores/:store/logo",
   "/public/stores/:store/account",

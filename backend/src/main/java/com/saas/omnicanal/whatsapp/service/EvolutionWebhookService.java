@@ -130,7 +130,9 @@ public class EvolutionWebhookService {
         if (saved == 1) {
             if (media != null) events.publishEvent(new InboundMediaEvent(store, chat, id, WhatsAppProvider.EVOLUTION,
                     media.kind(), media.mime(), item, null));
-            events.publishEvent(new InboundMessageEvent(store, chat, id, body, phone));
+            events.publishEvent(new InboundMessageEvent(store, chat, id, body, phone,
+                    WhatsAppMediaService.waitsForAnalysis(media == null ? null : media.kind())
+                            ? InboundMessageEvent.Delivery.INBOX : InboundMessageEvent.Delivery.ALL));
         }
         return saved;
     }

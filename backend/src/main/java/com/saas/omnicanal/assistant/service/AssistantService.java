@@ -97,7 +97,11 @@ public class AssistantService {
     }
 
     public Settings save(UUID tenant, long revision, boolean enabled, String instructions, int sla) {
-        if (!repo.saveSettings(tenant, revision, enabled, instructions.strip(), sla))
+        return save(tenant, revision, enabled, instructions, sla, true);
+    }
+
+    public Settings save(UUID tenant, long revision, boolean enabled, String instructions, int sla, boolean nsfwPauseAi) {
+        if (!repo.saveSettings(tenant, revision, enabled, instructions.strip(), sla, nsfwPauseAi))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Otra persona cambió la configuración. Recarga la página.");
         return repo.settings(tenant);
     }
@@ -141,6 +145,7 @@ public class AssistantService {
      */
     @TransactionalEventListener(fallbackExecution = true)
     public void onInbound(InboundMessageEvent event) {
+        if (!event.forAssistant()) return;
         try {
             if (receive(event)) schedule(event.tenant(), event.chat());
         } catch (RuntimeException ex) {
@@ -177,6 +182,51 @@ public class AssistantService {
         int seconds = (int) (batches.delayMs() / 1000) + 30;
         for (var key : repo.stalePending(seconds))
             if (!batches.waiting(key.tenant() + "|" + key.chat())) schedule(key.tenant(), key.chat());
+    }
+
+    static final String NSFW_WARNING = "Recibimos una imagen que no podemos mostrar ni revisar porque parece contenido explícito. "
+            + "Por favor envía solo fotos de las prendas que te interesan o escríbenos qué buscas.";
+
+    /**
+     * Imagen bloqueada por contenido explícito: se avisa al cliente por el canal activo (sin llamar al modelo ni contar
+     * para el plan) y, si la tienda lo tiene configurado, se pausa la IA en la conversación. Una sola vez por mensaje.
+     */
+    public void blockedImage(UUID tenant, String chat, String messageId) {
+        if (!repo.claim(tenant, chat, messageId)) return;
+        boolean pause = repo.settings(tenant).nsfwPauseAi();
+        if (pause) conversations.pauseForNsfw(tenant, chat);
+        UUID request = UUID.nameUUIDFromBytes(("nsfw/" + tenant + "/" + chat + "/" + messageId).getBytes(StandardCharsets.UTF_8));
+        String result;
+        try {
+            result = replies.replyAsAssistant(tenant, request, chat, NSFW_WARNING);
+        } catch (RuntimeException ex) {
+            log.warn("IA vendedora: no se pudo enviar el aviso de contenido explícito a {} de {}: {}", chat, tenant, ex.getMessage());
+            result = "REJECTED";
+        }
+        repo.finish(tenant, chat, messageId, "SKIPPED", "nsfw_blocked", NSFW_WARNING, "", null,
+                "REJECTED".equals(result) ? "No se pudo enviar el aviso" : null);
+    }
+
+    /**
+     * Foto ajena a la tienda (según el análisis visual): aplica la misma regla que una pregunta fuera de tema
+     * (aviso y, a la segunda seguida, pausa sin derivar a una persona), sin llamar al modelo conversacional.
+     */
+    public void offContextImage(UUID tenant, String chat, String messageId) {
+        if (!repo.claim(tenant, chat, messageId)) return;
+        String skip = skipReason(tenant, chat);
+        if (skip != null) {
+            repo.finish(tenant, chat, messageId, "SKIPPED", skip, null, null, null, null);
+            return;
+        }
+        long started = System.nanoTime();
+        var e = new InboundMessageEvent(tenant, chat, messageId, "[Imagen]");
+        var facts = repo.facts(tenant, baseUrl).orElseThrow();
+        if (conversations.offTopic(tenant, chat) >= OFF_TOPIC_LIMIT) {
+            conversations.pauseForOffTopic(tenant, chat);
+            send(e, OFF_TOPIC_PAUSE, "SENT", "vision", started);
+        } else {
+            send(e, offTopicWarning(facts.storeName()), "SENT", "vision", started);
+        }
     }
 
     /** Recibe y responde en el acto, sin esperar la ventana de agrupación. */
@@ -279,7 +329,8 @@ public class AssistantService {
         var conversation = conversations.find(tenant, chat);
         if (conversation.isEmpty()) return "no_conversation";
         if (!conversation.get().row().aiEnabled())
-            return "OFF_TOPIC".equals(conversation.get().row().aiPausedReason()) ? "off_topic_paused" : "conversation_off";
+            return "OFF_TOPIC".equals(conversation.get().row().aiPausedReason()) ? "off_topic_paused"
+                    : "NSFW".equals(conversation.get().row().aiPausedReason()) ? "nsfw_paused" : "conversation_off";
         if (conversation.get().row().status() != com.saas.omnicanal.inbox.model.InboxViews.Status.OPEN) return "escalated";
         var quota = entitlements.get(tenant, QUOTA);
         if (!quota.enabled()) return "plan";
@@ -293,7 +344,7 @@ public class AssistantService {
         for (int dropped = 0; dropped < batchSize && !all.isEmpty() && "CUSTOMER".equals(all.get(all.size() - 1).author()); dropped++)
             all.remove(all.size() - 1);
         if (all.size() > 12) all = all.subList(all.size() - 12, all.size());
-        return all.stream().map(m -> new Turn(m.author(), m.body())).toList();
+        return all.stream().map(m -> new Turn(m.author(), m.aiContext() != null ? m.aiContext() : m.body())).toList();
     }
 
     private static Integer elapsed(long started) {

@@ -137,22 +137,45 @@ public class ConversationRepository {
 
     public List<Message> messages(UUID tenant, String chat, int limit) {
         var newestFirst = db.query("""
-                SELECT author, body, at, status, media_type, mime_type, media_url, media_status, caption FROM (
+                SELECT t.author, t.body, t.at, t.status, t.media_type, t.mime_type, t.media_url, t.media_status, t.caption,
+                       f.transcript, f.moderation_status, f.vision_analysis_json::text, t.ai_context FROM (
                     SELECT 'CUSTOMER' AS author, m.body, m.received_at AS at, NULL AS status, m.media_type, m.mime_type,
-                           m.media_url, m.media_status, m.caption FROM whatsapp_inbound_message m
+                           m.media_url, m.media_status, m.caption, m.ai_context FROM whatsapp_inbound_message m
                      WHERE m.tenant_id = ? AND m.chat_id = ?
                     UNION ALL
                     SELECT r.author, r.body, r.created_at, coalesce(rc.status, r.status), r.media_type, r.mime_type,
-                           r.media_url, CASE WHEN r.media_url IS NOT NULL THEN 'STORED' END, r.caption FROM whatsapp_manual_reply r
+                           r.media_url, CASE WHEN r.media_url IS NOT NULL THEN 'STORED' END, r.caption, NULL FROM whatsapp_manual_reply r
                       LEFT JOIN whatsapp_reply_receipt rc ON rc.tenant_id = r.tenant_id AND rc.chat_id = r.chat_id AND rc.provider_id = r.provider_id
                      WHERE r.tenant_id = ? AND r.chat_id = ?
-                ) t ORDER BY at DESC LIMIT ?
+                ) t
+                  LEFT JOIN whatsapp_media f ON f.tenant_id = ? AND t.media_url = '/media/' || f.id::text
+                 ORDER BY t.at DESC LIMIT ?
                 """, (rs, n) -> new Message(rs.getString(1), rs.getString(2), instant(rs.getTimestamp(3)), rs.getString(4),
-                        rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8), rs.getString(9)),
-                tenant, chat, tenant, chat, limit);
+                        rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8), rs.getString(9),
+                        rs.getString(10), rs.getString(11), json(rs.getString(12)), rs.getString(13)),
+                tenant, chat, tenant, chat, tenant, limit);
         var chronological = new java.util.ArrayList<>(newestFirst);
         java.util.Collections.reverse(chronological);
         return chronological;
+    }
+
+    private static final tools.jackson.databind.ObjectMapper JSON = new tools.jackson.databind.ObjectMapper();
+
+    private static tools.jackson.databind.JsonNode json(String text) {
+        if (text == null) return null;
+        try {
+            return JSON.readTree(text);
+        } catch (RuntimeException invalid) {
+            return null;
+        }
+    }
+
+    /** Contenido explícito: pausa la IA en la conversación (sigue abierta para el equipo). */
+    public void pauseForNsfw(UUID tenant, String chat) {
+        db.update("""
+                UPDATE conversation SET ai_enabled = false, ai_paused_reason = 'NSFW', revision = revision + 1, updated_at = now()
+                 WHERE tenant_id = ? AND chat_id = ?
+                """, tenant, chat);
     }
 
     public void escalate(UUID tenant, String chat, String reason, String summary, String assignee, boolean disableAi) {

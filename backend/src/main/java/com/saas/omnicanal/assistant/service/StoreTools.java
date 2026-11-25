@@ -5,6 +5,7 @@ import com.saas.omnicanal.assistant.model.AssistantModels.Category;
 import com.saas.omnicanal.assistant.model.AssistantModels.Item;
 import com.saas.omnicanal.assistant.model.AssistantModels.Subcategory;
 import com.saas.omnicanal.catalog.repository.CategoryResourceRepository;
+import com.saas.omnicanal.catalog.repository.ProductImageRepository;
 import com.saas.omnicanal.shared.web.PublicLinks;
 import com.saas.omnicanal.assistant.model.AssistantModels.StoreFacts;
 import com.saas.omnicanal.catalog.model.PublicCatalog.Filters;
@@ -30,6 +31,7 @@ public class StoreTools {
     final List<Attachment> attachments = new ArrayList<>();
     private final CategoryResourceRepository resources;
     private final boolean imagesAllowed;
+    private final ProductImageRepository images;
 
     StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts) {
         this(tenant, catalog, facts, null, false);
@@ -38,6 +40,12 @@ public class StoreTools {
     /** {@code imagesAllowed}: el plan permite enviar imágenes por WhatsApp (whatsapp.media.send). */
     StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts, CategoryResourceRepository resources,
                boolean imagesAllowed) {
+        this(tenant, catalog, facts, resources, imagesAllowed, null);
+    }
+
+    StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts, CategoryResourceRepository resources,
+               boolean imagesAllowed, ProductImageRepository images) {
+        this.images = images;
         this.tenant = tenant;
         this.catalog = catalog;
         this.facts = facts;
@@ -81,7 +89,8 @@ public class StoreTools {
         if (resources == null) return "Esta tienda no tiene catálogos por categoría. Ofrece buscar prendas con buscarPrendas.";
         var name = resources.category(tenant, clean(categoria, 50));
         if (name.isEmpty()) return "No existe esa categoría. Usa categorias para ver las que hay.";
-        if (!attachments.isEmpty()) return "Ya se adjuntó un catálogo en esta respuesta.";
+        if (attachments.stream().anyMatch(a -> a.description().startsWith("Catálogo") || a.description().startsWith("Imagen del catálogo")))
+            return "Ya se adjuntó un catálogo en esta respuesta.";
         var option = usable(resources.options(tenant, name.get()));
         if (option == null) return "La categoría " + name.get() + " no tiene catálogo para enviar. Ofrece buscar prendas con buscarPrendas.";
         if (option.file() == null) return "Comparte este enlace del catálogo de " + name.get() + ": " + option.url();
@@ -91,6 +100,27 @@ public class StoreTools {
                 (pdf ? "Catálogo PDF de " : "Imagen del catálogo de ") + name.get()));
         return "Listo: el " + (pdf ? "PDF" : "imagen") + " del catálogo de " + name.get()
                 + " se enviará después de tu mensaje. Avísale al cliente que se lo envías; no escribas ningún enlace.";
+    }
+
+    @Tool(description = "Envía al cliente la foto principal de una prenda del catálogo (después de tu mensaje). Úsala cuando el "
+            + "cliente quiera ver una prenda, por ejemplo una de las parecidas a la foto que envió. Si el plan no permite fotos, "
+            + "comparte el enlace de la prenda.")
+    public String enviarFotoPrenda(@ToolParam(description = "Nombre de la prenda como aparece en el catálogo.") String prenda) {
+        used.add("enviarFotoPrenda");
+        var found = catalog.variants(tenant, new Filters(clean(prenda, 100), "", "", "", null), 1, 0);
+        if (found.isEmpty()) return "No encontré esa prenda con stock. Usa buscarPrendas para ver opciones.";
+        var v = found.get(0);
+        String link = facts.catalogUrl() == null ? null : facts.catalogUrl() + "?variant=" + v.id();
+        if (!imagesAllowed || images == null)
+            return link == null ? "Tu plan no permite enviar fotos por WhatsApp. Describe la prenda con sus datos."
+                    : "Tu plan no permite enviar fotos por WhatsApp. Comparte este enlace de la prenda: " + link;
+        if (v.coverImage() == null) return "Esa prenda todavía no tiene foto. Describe la prenda con sus datos.";
+        if (attachments.size() >= 3) return "Ya se adjuntaron suficientes archivos en esta respuesta.";
+        var image = images.read(tenant, v.coverImage());
+        if (image.isEmpty()) return "Esa prenda todavía no tiene foto. Describe la prenda con sus datos.";
+        String ext = image.get().mediaType().contains("png") ? ".png" : image.get().mediaType().contains("webp") ? ".webp" : ".jpg";
+        attachments.add(new Attachment("IMAGE", image.get().mediaType(), v.name() + ext, image.get().content(), "Foto de " + v.name()));
+        return "Listo: la foto de " + v.name() + " se enviará después de tu mensaje. Avísale al cliente.";
     }
 
     /** Primer recurso que se puede enviar: archivo (las imágenes solo con el plan) o enlace público. Solo uno. */

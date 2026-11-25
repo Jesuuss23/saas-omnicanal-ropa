@@ -23,6 +23,12 @@ class PublicStoreCatalogController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(catalog.availability(store, ids));
     }
 
+    /** Detalle para el modal de la tienda: sin caché porque el stock cambia con cada venta. */
+    @GetMapping("/api/public/stores/{store}/products/{productId}")
+    ResponseEntity<PublicCatalog.ProductDetail> product(@PathVariable UUID store, @PathVariable UUID productId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(catalog.product(store, productId));
+    }
+
     @GetMapping("/api/public/stores/{store}/catalog")
     PublicCatalog catalog(@PathVariable UUID store, @RequestParam(defaultValue = "") String query,
                           @RequestParam(defaultValue = "0") int page,

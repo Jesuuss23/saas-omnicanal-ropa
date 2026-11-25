@@ -29,8 +29,8 @@ class AssistantController {
         this.assistant = assistant;
     }
 
-    record Save(@NotNull Boolean enabled, @NotNull @Size(max = 2000) String instructions,
-                @Min(1) @Max(1440) int slaMinutes, @Min(0) long revision) {}
+    record Save(@NotNull Boolean enabled, @NotNull @Size(max = 4000) String instructions,
+                @Min(1) @Max(1440) int slaMinutes, @Min(0) long revision, Boolean nsfwPauseAi) {}
     record TestTurn(@NotNull @Pattern(regexp = "CUSTOMER|AI") String author, @NotBlank @Size(max = 1000) String text) {}
     /** {@code message} puede traer varias líneas: los mensajes que el cliente escribió seguidos dentro de la ventana de agrupación. */
     record Test(@NotBlank @Size(max = 3000) String message, @Size(max = 12) List<@Valid TestTurn> history,
@@ -45,7 +45,8 @@ class AssistantController {
     @PutMapping("/settings")
     Settings save(@PathVariable UUID store, Principal principal, @Valid @RequestBody Save in) {
         requireOwner(store, principal);
-        return assistant.save(store, in.revision(), in.enabled(), in.instructions(), in.slaMinutes());
+        return assistant.save(store, in.revision(), in.enabled(), in.instructions(), in.slaMinutes(),
+                in.nsfwPauseAi() == null || in.nsfwPauseAi());
     }
 
     @GetMapping("/status")

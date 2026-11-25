@@ -2,6 +2,7 @@ package com.saas.omnicanal.catalog.service;
 
 import com.saas.omnicanal.catalog.model.CatalogRow;
 import com.saas.omnicanal.catalog.model.ProductCard;
+import com.saas.omnicanal.catalog.model.ProductDetails;
 import com.saas.omnicanal.catalog.model.VariantDraft;
 import com.saas.omnicanal.catalog.model.VariantLabel;
 import com.saas.omnicanal.catalog.repository.ProductRepository;
@@ -32,16 +33,45 @@ public class ProductCatalogService {
 
     public record Page(List<CatalogRow> rows, boolean hasNext) {}
 
+    public static final java.util.Set<String> STATUSES = java.util.Set.of("all", "active", "inactive", "available", "soldout", "low");
+
     public Page page(UUID store, int page, String query, boolean availableOnly) {
-        if (page < 0 || query.length() > 150) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        var rows = products.page(store, query.strip(), availableOnly, PAGE_SIZE + 1, (long) PAGE_SIZE * page);
+        return page(store, page, query, availableOnly ? "available" : "all", "");
+    }
+
+    /** Filtros rápidos: {@code status} es uno de {@link #STATUSES}; {@code category} vacía muestra todas. */
+    public Page page(UUID store, int page, String query, String status, String category) {
+        if (page < 0 || query.length() > 150 || category.length() > 50 || !STATUSES.contains(status))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        var rows = products.page(store, query.strip(), status, category.strip(), PAGE_SIZE + 1, (long) PAGE_SIZE * page);
         return new Page(rows.stream().limit(PAGE_SIZE).toList(), rows.size() > PAGE_SIZE);
     }
 
     public static VariantDraft normalize(String sku, String size, String color, java.math.BigDecimal price, int stock) {
+        return normalize(sku, size, color, price, stock, null, null);
+    }
+
+    /** El precio antes (tachado) debe ser mayor que el precio actual; el costo es opcional y nunca negativo. */
+    public static VariantDraft normalize(String sku, String size, String color, java.math.BigDecimal price, int stock,
+                                         java.math.BigDecimal compareAtPrice, java.math.BigDecimal cost) {
         String normalized = sku == null ? "" : sku.strip().toUpperCase(Locale.ROOT);
         if (normalized.length() > 50) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        return new VariantDraft(normalized, size.strip(), color.strip(), price, stock);
+        if (compareAtPrice != null && compareAtPrice.compareTo(price) <= 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El precio antes debe ser mayor que el precio actual");
+        if (cost != null && cost.signum() < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El costo no puede ser negativo");
+        return new VariantDraft(normalized, size.strip(), color.strip(), price, stock, compareAtPrice, cost);
+    }
+
+    public static ProductDetails details(String description, String material, Boolean active) {
+        String d = blank(description), m = blank(material);
+        if (d != null && d.length() > 2000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La descripción admite hasta 2000 caracteres");
+        if (m != null && m.length() > 80) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        return new ProductDetails(d, m, active == null || active);
+    }
+
+    /** Oculta o vuelve a mostrar un producto en la tienda pública, el PDF y el asistente. */
+    public void setActive(UUID store, UUID product, boolean active) {
+        if (products.setActive(store, product, active) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     }
 
     /** Alta de producto con sus variantes, respetando la cuota de productos del plan. */
@@ -53,10 +83,16 @@ public class ProductCatalogService {
     /** {@code subcategory} solo tiene sentido con categoría (por ejemplo Polos → Retro). */
     @Transactional
     public UUID create(UUID store, String name, String category, String subcategory, List<VariantDraft> variants) {
+        return create(store, name, category, subcategory, ProductDetails.EMPTY, variants);
+    }
+
+    @Transactional
+    public UUID create(UUID store, String name, String category, String subcategory, ProductDetails details,
+                       List<VariantDraft> variants) {
         products.lockTenantCatalog(store);
         entitlements.requireQuota(store, Entitlements.CATALOG_PRODUCTS, products.countProducts(store), 1);
         UUID id = UUID.randomUUID();
-        products.insertProduct(store, id, name.strip(), blank(category), blank(category) == null ? null : blank(subcategory));
+        products.insertProduct(store, id, name.strip(), blank(category), blank(category) == null ? null : blank(subcategory), details);
         var used = new HashSet<String>();
         try {
             for (VariantDraft v : variants) {
@@ -73,9 +109,19 @@ public class ProductCatalogService {
     @Transactional
     public void edit(UUID store, UUID variant, String name, String category, String subcategory, VariantDraft draft,
                      String productVersion, String variantVersion) {
+        edit(store, variant, name, category, subcategory, null, draft, productVersion, variantVersion);
+    }
+
+    /** {@code details} nulo conserva descripción, material y estado actuales. */
+    @Transactional
+    public void edit(UUID store, UUID variant, String name, String category, String subcategory, ProductDetails details,
+                     VariantDraft draft, String productVersion, String variantVersion) {
         if (draft.sku().isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe el SKU");
-        if (products.updateProductOfVariant(store, variant, name.strip(), blank(category),
-                blank(category) == null ? null : blank(subcategory), productVersion) == 0) throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
+        String cat = blank(category), sub = cat == null ? null : blank(subcategory);
+        int updated = details == null
+                ? products.updateProductOfVariant(store, variant, name.strip(), cat, sub, productVersion)
+                : products.updateProductOfVariant(store, variant, name.strip(), cat, sub, details, productVersion);
+        if (updated == 0) throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
         try {
             if (products.updateVariant(store, variant, draft, variantVersion) == 0)
                 throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);

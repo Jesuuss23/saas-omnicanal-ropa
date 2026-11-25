@@ -19,23 +19,27 @@ public class AssistantRepository {
     }
 
     public Settings settings(UUID tenant) {
-        return db.query("SELECT enabled, instructions, sla_minutes, revision FROM store_ai_settings WHERE tenant_id=?",
-                (rs, n) -> new Settings(rs.getBoolean(1), rs.getString(2), rs.getInt(3), rs.getLong(4)), tenant)
-                .stream().findFirst().orElse(new Settings(false, "", 15, 0));
+        return db.query("SELECT enabled, instructions, sla_minutes, revision, nsfw_pause_ai FROM store_ai_settings WHERE tenant_id=?",
+                (rs, n) -> new Settings(rs.getBoolean(1), rs.getString(2), rs.getInt(3), rs.getLong(4), rs.getBoolean(5)), tenant)
+                .stream().findFirst().orElse(new Settings(false, "", 15, 0, true));
+    }
+
+    public boolean saveSettings(UUID tenant, long revision, boolean enabled, String instructions, int sla) {
+        return saveSettings(tenant, revision, enabled, instructions, sla, true);
     }
 
     /** Guarda si la revisión coincide (0 = todavía no existe la fila). */
-    public boolean saveSettings(UUID tenant, long revision, boolean enabled, String instructions, int sla) {
+    public boolean saveSettings(UUID tenant, long revision, boolean enabled, String instructions, int sla, boolean nsfwPauseAi) {
         if (revision == 0) {
             return db.update("""
-                    INSERT INTO store_ai_settings(tenant_id, enabled, instructions, sla_minutes) VALUES (?,?,?,?)
+                    INSERT INTO store_ai_settings(tenant_id, enabled, instructions, sla_minutes, nsfw_pause_ai) VALUES (?,?,?,?,?)
                     ON CONFLICT DO NOTHING
-                    """, tenant, enabled, instructions, sla) == 1;
+                    """, tenant, enabled, instructions, sla, nsfwPauseAi) == 1;
         }
         return db.update("""
-                UPDATE store_ai_settings SET enabled=?, instructions=?, sla_minutes=?, revision=revision+1, updated_at=now()
+                UPDATE store_ai_settings SET enabled=?, instructions=?, sla_minutes=?, nsfw_pause_ai=?, revision=revision+1, updated_at=now()
                  WHERE tenant_id=? AND revision=?
-                """, enabled, instructions, sla, tenant, revision) == 1;
+                """, enabled, instructions, sla, nsfwPauseAi, tenant, revision) == 1;
     }
 
     public boolean platformEnabled() {
@@ -76,7 +80,7 @@ public class AssistantRepository {
                     UPDATE ai_reply SET status = 'WORKING'
                      WHERE tenant_id = ? AND chat_id = ? AND status = 'PENDING'
                     RETURNING message_id, created_at)
-                SELECT t.message_id, coalesce(m.body, '') FROM taken t
+                SELECT t.message_id, coalesce(m.ai_context, m.body, '') FROM taken t
                   LEFT JOIN whatsapp_inbound_message m ON m.tenant_id = ? AND m.chat_id = ? AND m.message_id = t.message_id
                  ORDER BY coalesce(m.received_at, t.created_at), t.created_at, t.message_id
                 """, (rs, n) -> new Pending(rs.getString(1), rs.getString(2)), tenant, chat, tenant, chat);

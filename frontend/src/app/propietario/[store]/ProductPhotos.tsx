@@ -66,14 +66,14 @@ export function ProductPhotos({store, product, name, open, onOpenChange, onChang
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-3xl">
       <DialogHeader><DialogTitle>Fotos de {name}</DialogTitle>
-        <DialogDescription>Hasta {MAX} fotos en JPG, PNG o WebP de máximo 2 MB. La primera es la portada en tu tienda.</DialogDescription></DialogHeader>
+        <DialogDescription>Hasta {MAX} fotos en JPG, PNG o WebP de máximo 2 MB. La primera es la vista delantera (portada) y la segunda la trasera: en tu tienda se cambia de una a otra al pasar el cursor. Ordénalas con las flechas.</DialogDescription></DialogHeader>
       {error && <Alert variant="destructive">{error.message}</Alert>}
       {!data && !error && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Array.from({length: 4}, (_, i) => <Skeleton key={i} className="aspect-[3/4]"/>)}</div>}
       {data && <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {data.map((p, i) => <li key={p.id} className="group relative overflow-hidden rounded-lg border bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element -- imágenes servidas por el backend */}
           <img src={photoUrl(store, p.id)} alt={"Foto " + (i + 1) + " de " + name} className="aspect-[3/4] w-full object-cover"/>
-          {i === 0 && <Badge className="absolute left-2 top-2 shadow-card"><Star/>Portada</Badge>}
+          {i < 2 && <Badge className="absolute left-2 top-2 shadow-card">{i === 0 ? <><Star/>Delantera · portada</> : "Trasera"}</Badge>}
           <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 bg-gradient-to-t from-black/60 to-transparent p-2">
             <span className="flex gap-1">
               <Button size="icon" variant="secondary" className="size-8" disabled={busy || i === 0} aria-label="Mover a la izquierda" onClick={() => move(i, -1)}><ArrowLeft/></Button>

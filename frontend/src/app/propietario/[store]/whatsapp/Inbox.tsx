@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect, useRef, useState, type FormEvent} from "react";
-import {AlarmClock, ArrowLeft, Bot, CheckCheck, FileText, Hand, Lock, MessagesSquare, Mic, Paperclip, RotateCcw, Send, Sparkles, UserRound, X} from "lucide-react";
+import {AlarmClock, ArrowLeft, Bot, CheckCheck, FileText, Hand, Lock, MessagesSquare, Mic, Paperclip, RotateCcw, ScanSearch, Send, ShieldAlert, Sparkles, UserRound, X} from "lucide-react";
 import {Alert} from "@/components/ui/alert";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
@@ -17,11 +17,14 @@ import {useApiData} from "@/lib/useApiData";
 type Status = "OPEN" | "ESCALATED" | "CLOSED";
 type Row = {chat: string; phone: string | null; contactName: string | null; status: Status; aiEnabled: boolean; assignee: string | null;
   lastMessage: string | null; lastAuthor: string | null; lastInboundAt: string | null; lastOutboundAt: string | null;
-  escalatedAt: string | null; overdue: boolean; aiPausedReason: "OFF_TOPIC" | null; offTopicCount: number};
+  escalatedAt: string | null; overdue: boolean; aiPausedReason: "OFF_TOPIC" | "NSFW" | null; offTopicCount: number};
 type MediaType = "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT";
 type Message = {author: "CUSTOMER" | "AI" | "HUMAN" | "PHONE"; body: string; at: string; status: string | null;
-  mediaType?: MediaType | null; mimeType?: string | null; mediaUrl?: string | null; mediaStatus?: "PENDING" | "STORED" | "FAILED" | "TOO_LARGE" | null;
-  caption?: string | null};
+  mediaType?: MediaType | null; mimeType?: string | null; mediaUrl?: string | null; mediaStatus?: "PENDING" | "STORED" | "FAILED" | "TOO_LARGE" | "BLOCKED_NSFW" | null;
+  caption?: string | null; transcript?: string | null; moderation?: "SAFE" | "BLOCKED_NSFW" | "FAILED" | "DISABLED" | null;
+  vision?: Vision | null};
+type Vision = {esConsultaValidaTienda: boolean; tipoPrenda: string; subcategoria: string; color: string; estilo: string; resumen: string;
+  coincidencias: {productId: string; nombre: string; categoria: string; subcategoria: string | null; colores: string; tallas: string; precioDesde: number; stock: number}[]};
 const placeholders = new Set(["[Imagen]", "[Video]", "[Nota de voz]", "[Documento]"]);
 const ACCEPT = "image/jpeg,image/png,image/webp,video/mp4,application/pdf";
 const MAX_FILE = 16 * 1024 * 1024;
@@ -81,7 +84,7 @@ export default function Inbox({store, initialChat}: {store: string; initialChat:
             <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
               {r.lastAuthor === "AI" && <Bot className="size-3.5 shrink-0"/>}{(r.lastAuthor === "HUMAN" || r.lastAuthor === "PHONE") && <UserRound className="size-3.5 shrink-0"/>}
               <span className="truncate">{r.lastMessage ?? ""}</span>
-              {!r.aiEnabled && <span className="ml-auto shrink-0 text-xs">{r.aiPausedReason === "OFF_TOPIC" ? "IA pausada: fuera de tema" : "IA pausada"}</span>}
+              {!r.aiEnabled && <span className="ml-auto shrink-0 text-xs">{r.aiPausedReason === "OFF_TOPIC" ? "IA pausada: fuera de tema" : r.aiPausedReason === "NSFW" ? "IA pausada: imagen explícita" : "IA pausada"}</span>}
             </span>
           </button></li>)}</ul>}
     </Card>
@@ -176,6 +179,10 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
       {r.status === "CLOSED" ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => act("status", {status: "OPEN"}, "PUT")}><RotateCcw/>Reabrir</Button>
         : <Button size="sm" variant="ghost" disabled={busy} onClick={() => act("status", {status: "CLOSED"}, "PUT", "Conversación cerrada")}><CheckCheck/>Cerrar</Button>}
     </header>
+    {r.aiPausedReason === "NSFW" && !r.aiEnabled && <div className="border-b bg-destructive/10 px-4 py-3 text-sm">
+      <p className="flex items-center gap-1.5 font-medium text-destructive"><ShieldAlert className="size-4"/>El cliente envió una imagen explícita</p>
+      <p className="mt-0.5 text-muted-foreground">Se le envió un aviso automático y la IA quedó pausada en esta conversación. Revisa el caso y
+        actívala de nuevo si corresponde.</p></div>}
     {r.aiPausedReason === "OFF_TOPIC" && !r.aiEnabled && <div className="border-b bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
       La IA se pausó sola en esta conversación porque el cliente hizo dos preguntas seguidas ajenas a la tienda. No responde ni gasta respuestas del plan
       hasta que la actives, tomes la conversación o la cierres y el cliente vuelva a escribir.</div>}
@@ -226,26 +233,56 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
 
 /** Archivo de un mensaje: foto, video, nota de voz o documento, servido por el backend solo al equipo de la tienda. */
 function MediaView({store, m}: {store: string; m: Message}) {
+  const [reveal, setReveal] = useState(false);
   if (m.mediaStatus === "PENDING" || (!m.mediaUrl && !m.mediaStatus))
     return <p className="flex items-center gap-1.5 text-xs opacity-80"><Paperclip className="size-3.5"/>Descargando {label(m.mediaType)}…</p>;
   if (!m.mediaUrl)
     return <p className="flex items-center gap-1.5 text-xs opacity-80"><Paperclip className="size-3.5"/>
       {m.mediaStatus === "TOO_LARGE" ? "El archivo supera 16 MB y no se guardó." : "No se pudo descargar " + label(m.mediaType) + "."}</p>;
   const src = ownerApi.url("stores/" + store + "/whatsapp" + m.mediaUrl);
+  const blocked = m.mediaStatus === "BLOCKED_NSFW" || m.moderation === "BLOCKED_NSFW";
   switch (m.mediaType) {
     case "IMAGE":
-      return <a href={src} target="_blank" rel="noreferrer" className="mb-1 block">
-        {/* eslint-disable-next-line @next/next/no-img-element -- archivo privado del panel, no pasa por next/image */}
-        <img src={src} alt={m.caption ?? "Imagen del chat"} loading="lazy" className="max-h-72 w-full rounded-lg object-cover"/></a>;
+      if (blocked && !reveal)
+        return <div className="mb-1 grid w-64 max-w-full place-items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-5 text-center text-xs">
+          <ShieldAlert className="size-6 text-destructive"/>
+          <p className="font-medium text-destructive">Imagen bloqueada por contenido explícito</p>
+          <p className="text-muted-foreground">No se analizó ni se envió a la IA. El cliente recibió un aviso.</p>
+          <button type="button" onClick={() => setReveal(true)} className="text-muted-foreground underline">Ver de todos modos</button>
+        </div>;
+      return <div className="mb-1 grid gap-1.5">
+        <a href={blocked ? src + "?reveal=true" : src} target="_blank" rel="noreferrer" className="block">
+          {/* eslint-disable-next-line @next/next/no-img-element -- archivo privado del panel, no pasa por next/image */}
+          <img src={blocked ? src + "?reveal=true" : src} alt={m.caption ?? "Imagen del chat"} loading="lazy" className="max-h-72 w-full rounded-lg object-cover"/></a>
+        {m.vision && <VisionSummary v={m.vision}/>}
+      </div>;
     case "VIDEO":
       return <video src={src} controls preload="metadata" className="mb-1 max-h-72 w-full rounded-lg bg-black"/>;
     case "AUDIO":
-      return <div className="mb-1 flex items-center gap-2"><Mic className="size-4 shrink-0 opacity-70"/>
-        <audio src={src} controls preload="metadata" className="h-9 w-56 max-w-full"/></div>;
+      return <div className="mb-1 grid gap-1">
+        <div className="flex items-center gap-2"><Mic className="size-4 shrink-0 opacity-70"/>
+          <audio src={src} controls preload="metadata" className="h-9 w-56 max-w-full"/></div>
+        {m.transcript && <p className="rounded-md bg-background/30 px-2 py-1 text-xs italic">“{m.transcript}”</p>}
+      </div>;
     default:
       return <a href={src} target="_blank" rel="noreferrer" className="mb-1 flex items-center gap-2 rounded-lg bg-background/20 px-2 py-1.5 underline-offset-2 hover:underline">
         <FileText className="size-4 shrink-0"/>{m.mimeType?.includes("pdf") ? "Ver PDF" : "Ver documento"}</a>;
   }
+}
+
+/** Lo que vio el análisis visual en la foto y las prendas parecidas que se le pasaron a la IA. */
+function VisionSummary({v}: {v: Vision}) {
+  if (!v.esConsultaValidaTienda)
+    return <p className="flex items-start gap-1.5 rounded-md bg-warning/15 px-2 py-1 text-xs"><ScanSearch className="mt-0.5 size-3.5 shrink-0"/>
+      Foto ajena a la tienda: {v.resumen || "sin prendas"}. Se aplicó la regla de fuera de tema.</p>;
+  const tags = [v.tipoPrenda, v.subcategoria, v.color, v.estilo].filter(Boolean);
+  return <div className="grid gap-1 rounded-md bg-background/30 px-2 py-1.5 text-xs">
+    <p className="flex items-center gap-1.5 font-medium"><ScanSearch className="size-3.5"/>Detectado</p>
+    <div className="flex flex-wrap gap-1">{tags.map(t => <span key={t} className="rounded-full bg-background/60 px-2 py-0.5">{t}</span>)}</div>
+    {v.coincidencias.length > 0
+      ? <p className="opacity-80">Parecidas: {v.coincidencias.map(c => c.nombre).join(", ")}</p>
+      : <p className="opacity-80">Sin prendas parecidas con stock.</p>}
+  </div>;
 }
 
 const label = (t: MediaType | null | undefined) => t === "IMAGE" ? "la imagen" : t === "VIDEO" ? "el video" : t === "AUDIO" ? "la nota de voz" : "el archivo";

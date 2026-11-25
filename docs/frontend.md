@@ -42,6 +42,14 @@ categorías salen de selects (`catalogOptions.tsx`, categorías desde `GET catal
 backend lo genera legible (`NOMBRE-COLOR-TALLA`, sin tildes, con `-2`, `-3`… si ya existe). Las etiquetas son **una por
 variante** (talla y color), sin copias: el QR guarda el id de la variante y la etiqueta muestra nombre, talla, color,
 precio y SKU. Se eligen con la casilla de cada fila o con el botón QR de la fila.
+Buenas prácticas del catálogo: cada variante es un SKU con su propio stock (físico, reservado y disponible), precio,
+**precio antes** opcional (tachado, con % de descuento) y **costo** opcional (margen solo para el dueño). Las fórmulas
+están en `src/lib/pricing.ts` y `PricingRules.java`: disponible = físico − reservado; margen = (precio − costo) / precio;
+descuento = (antes − precio) / antes, redondeado hacia abajo; estado Oculto / Agotado / Últimas unidades (≤ 3) /
+Disponible. Filtros rápidos del listado: Todos, Activos, Ocultos, Agotados, Stock bajo y categoría
+(`GET catalog?status=&category=`). Ocultar una prenda (`PUT catalog/products/{id}/active`) la saca de la tienda, el PDF
+y la IA, pero no de caja. La primera foto es la **delantera** (portada) y la segunda la **trasera**. La descripción
+(`DescriptionField.tsx`) se puede armar con los datos de la ficha o con "Generar descripción con IA".
 Cada prenda tiene una subcategoría opcional (`SubcategoryInput`, sugerencias desde `GET catalog/subcategories`). La
 pestaña "Catálogos por categoría" (`CategoryCatalogs.tsx`, también en Asistente IA) carga PDF, imagen y enlace por
 categoría, elige cuál se usa (Automático = PDF → imagen → enlace) y descarga o guarda el PDF generado del catálogo.
@@ -76,6 +84,10 @@ recordatorio de carrito abandonado. Facturación suma, solo para el propietario,
 `src/app/tienda/[store]` se renderiza en el servidor. La cabecera usa la apariencia de la tienda: el color del dueño
 llega como `--store` y el texto encima (`--store-fg`) se calcula por luminancia en `brand.ts`. `CatalogCart` agrupa las
 variantes por producto, deja elegir talla y color, y mantiene la reserva de 15 minutos y el contacto del invitado.
+Las tarjetas muestran insignias (−% de descuento, últimas unidades), precio tachado y cambian a la foto trasera al pasar
+el cursor. Al abrir una prenda, `ProductDetail.tsx` pide `GET /api/public/stores/{id}/products/{productId}` y muestra
+galería, descripción, categoría · subcategoría, material, color y talla (las agotadas tachadas), precio y stock;
+`ZoomImage` amplía la foto siguiendo el cursor y, en móvil, con un toque y arrastrando.
 `tienda/[store]/cuenta` es la cuenta del comprador: botón de Google Identity Services (si el backend devuelve
 `googleClientId`) y "Mis pedidos" con su enlace de seguimiento, más sus preferencias de novedades. El checkout pide aceptación expresa de novedades por WhatsApp. `/baja/[token]` es la baja desde el enlace de cada correo (pide confirmar). La pestaña Contactos de Clientes muestra el contacto
 unificado, los posibles duplicados y el historial de fusiones con opción de deshacer.

@@ -117,7 +117,8 @@ public class CloudWebhookService {
                 caption.isBlank() ? null : caption);
         if (saved == 1) {
             events.publishEvent(new InboundMediaEvent(store, chat, id, WhatsAppProvider.CLOUD_API, kind, mime, null, mediaId));
-            events.publishEvent(new InboundMessageEvent(store, chat, id, body));
+            events.publishEvent(new InboundMessageEvent(store, chat, id, body, null,
+                    WhatsAppMediaService.waitsForAnalysis(kind) ? InboundMessageEvent.Delivery.INBOX : InboundMessageEvent.Delivery.ALL));
         }
         return saved;
     }

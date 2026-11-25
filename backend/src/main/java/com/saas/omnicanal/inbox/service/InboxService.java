@@ -43,7 +43,7 @@ public class InboxService {
     /** Corre en la misma transacción que guarda el mensaje del webhook. */
     @EventListener
     public void onInbound(InboundMessageEvent event) {
-        conversations.inbound(event.tenant(), event.chat(), event.phone());
+        if (event.forInbox()) conversations.inbound(event.tenant(), event.chat(), event.phone());
     }
 
     /** Mensaje enviado desde el celular de la tienda: crea la conversación si hace falta y marca la última salida. */

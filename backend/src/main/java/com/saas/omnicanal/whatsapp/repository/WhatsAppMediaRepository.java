@@ -24,8 +24,98 @@ public class WhatsAppMediaRepository {
 
     public UUID store(UUID tenant, MediaKind kind, String mimeType, String fileName, byte[] content) {
         return db.queryForObject("""
-                INSERT INTO whatsapp_media(tenant_id, kind, mime_type, file_name, content) VALUES (?,?,left(?,100),left(?,200),?) RETURNING id
-                """, UUID.class, tenant, kind.name(), mimeType, fileName, content);
+                INSERT INTO whatsapp_media(tenant_id, kind, mime_type, file_name, content, content_sha256)
+                VALUES (?,?,left(?,100),left(?,200),?,?) RETURNING id
+                """, UUID.class, tenant, kind.name(), mimeType, fileName, content, sha256(content));
+    }
+
+    public static String sha256(byte[] content) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(content));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Resultados ya calculados de un archivo. Si el mismo contenido llegó antes a la tienda (un reenvío), hereda sus
+     * resultados: así nunca se vuelve a llamar a Groq, Sightengine ni al modelo de visión por el mismo archivo.
+     */
+    public record Analysis(String transcript, String transcriptStatus, String moderationStatus, java.math.BigDecimal moderationScore,
+                           String visionStatus, String visionJson) {
+        public static final Analysis NONE = new Analysis(null, null, null, null, null, null);
+    }
+
+    public Analysis analysis(UUID tenant, UUID id) {
+        return db.query("""
+                SELECT m.transcript, m.transcript_status, m.moderation_status, m.moderation_score, m.vision_status, m.vision_analysis_json::text
+                  FROM whatsapp_media m WHERE m.tenant_id = ? AND m.id = ?
+                """, (rs, n) -> new Analysis(rs.getString(1), rs.getString(2), rs.getString(3), rs.getBigDecimal(4),
+                        rs.getString(5), rs.getString(6)), tenant, id).stream().findFirst().orElse(Analysis.NONE);
+    }
+
+    /** Copia al archivo {@code id} los resultados de otro archivo idéntico de la tienda que ya terminó (DONE/SAFE/BLOCKED). */
+    public void inheritFromSameContent(UUID tenant, UUID id) {
+        db.update("""
+                UPDATE whatsapp_media t SET
+                       transcript = coalesce(t.transcript, s.transcript),
+                       transcript_status = coalesce(t.transcript_status, CASE WHEN s.transcript_status IN ('DONE','EMPTY') THEN s.transcript_status END),
+                       moderation_status = coalesce(t.moderation_status, CASE WHEN s.moderation_status IN ('SAFE','BLOCKED_NSFW') THEN s.moderation_status END),
+                       moderation_score = coalesce(t.moderation_score, CASE WHEN s.moderation_status IN ('SAFE','BLOCKED_NSFW') THEN s.moderation_score END),
+                       vision_status = coalesce(t.vision_status, CASE WHEN s.vision_status = 'DONE' THEN 'DONE' END),
+                       vision_analysis_json = coalesce(t.vision_analysis_json, CASE WHEN s.vision_status = 'DONE' THEN s.vision_analysis_json END)
+                  FROM (SELECT * FROM whatsapp_media WHERE tenant_id = ? AND id <> ?
+                          AND content_sha256 = (SELECT content_sha256 FROM whatsapp_media WHERE tenant_id = ? AND id = ?)
+                          AND (transcript_status IN ('DONE','EMPTY') OR moderation_status IN ('SAFE','BLOCKED_NSFW') OR vision_status = 'DONE')
+                         ORDER BY processed_at DESC NULLS LAST LIMIT 1) s
+                 WHERE t.tenant_id = ? AND t.id = ?
+                """, tenant, id, tenant, id, tenant, id);
+    }
+
+    public void saveTranscript(UUID tenant, UUID id, String status, String transcript) {
+        db.update("UPDATE whatsapp_media SET transcript_status=?, transcript=left(?,8000), processed_at=now() WHERE tenant_id=? AND id=? AND transcript_status IS NULL",
+                status, transcript, tenant, id);
+    }
+
+    public void saveModeration(UUID tenant, UUID id, String status, Double score) {
+        db.update("UPDATE whatsapp_media SET moderation_status=?, moderation_score=?, processed_at=now() WHERE tenant_id=? AND id=? AND moderation_status IS NULL",
+                status, score, tenant, id);
+    }
+
+    public void saveVision(UUID tenant, UUID id, String status, String json) {
+        db.update("UPDATE whatsapp_media SET vision_status=?, vision_analysis_json=CAST(? AS jsonb), processed_at=now() WHERE tenant_id=? AND id=? AND vision_status IS NULL",
+                status, json, tenant, id);
+    }
+
+    /** Texto que la IA lee en lugar del cuerpo del mensaje (transcripción o contexto visual). */
+    public void setAiContext(UUID tenant, String chat, String messageId, String context) {
+        db.update("UPDATE whatsapp_inbound_message SET ai_context=left(?,4000) WHERE tenant_id=? AND chat_id=? AND message_id=?",
+                context, tenant, chat, messageId);
+    }
+
+    public void markBlocked(UUID tenant, String chat, String messageId) {
+        db.update("UPDATE whatsapp_inbound_message SET media_status='BLOCKED_NSFW' WHERE tenant_id=? AND chat_id=? AND message_id=?",
+                tenant, chat, messageId);
+    }
+
+    /** Registra una incidencia una sola vez por mensaje; true si es nueva. */
+    public boolean incident(UUID tenant, String chat, String messageId, UUID mediaId, String kind, Double score) {
+        return db.update("""
+                INSERT INTO whatsapp_media_incident(tenant_id, chat_id, message_id, media_id, kind, score) VALUES (?,?,?,?,?,?)
+                ON CONFLICT (tenant_id, chat_id, message_id, kind) DO NOTHING
+                """, tenant, chat, messageId, mediaId, kind, score) == 1;
+    }
+
+    public record Inbound(String body, String caption) {}
+
+    public Optional<Inbound> inbound(UUID tenant, String chat, String messageId) {
+        return db.query("SELECT body, caption FROM whatsapp_inbound_message WHERE tenant_id=? AND chat_id=? AND message_id=?",
+                (rs, n) -> new Inbound(rs.getString(1), rs.getString(2)), tenant, chat, messageId).stream().findFirst();
+    }
+
+    public boolean blocked(UUID tenant, UUID id) {
+        return Boolean.TRUE.equals(db.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM whatsapp_media WHERE tenant_id=? AND id=? AND moderation_status='BLOCKED_NSFW')", Boolean.class, tenant, id));
     }
 
     public Optional<Media> read(UUID tenant, UUID id) {
