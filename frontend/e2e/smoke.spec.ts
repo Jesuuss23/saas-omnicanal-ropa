@@ -111,7 +111,8 @@ test("apariencia y fotos de producto", async ({page}, info) => {
   await page.getByRole("button", {name: "Fotos de Polo E2E"}).click();
   await page.getByLabel("Elegir fotos").setInputFiles([{name: "a.png", mimeType: "image/png", buffer: PNG}, {name: "b.png", mimeType: "image/png", buffer: PNG}]);
   await expect(page.getByAltText("Foto 2 de Polo E2E")).toBeVisible();
-  await expect(page.getByText("Portada", {exact: true})).toBeVisible();
+  await expect(page.getByText("Delantera · portada", {exact: true})).toBeVisible();
+  await expect(page.getByText("Trasera", {exact: true})).toBeVisible();
   await page.getByRole("button", {name: "Quitar foto 2"}).click();
   await expect(page.getByAltText("Foto 2 de Polo E2E")).toHaveCount(0);
   await page.keyboard.press("Escape");
