@@ -32,6 +32,7 @@ Las migraciones viven en `backend/src/main/resources/db/migration` y se aplican 
 | V32 | Cuenta Mercado Pago de la tienda, intención y pagos de pedidos, estado `PAID` |
 | V47 | Pipeline multimedia (transcripción, moderación, visión, incidentes, `ai_context`) y catálogo e-commerce (`active`, `material`, precio antes y costo por variante) |
 | V48 | Cobros de tiendas con Culqi: limpia Mercado Pago (`store_payment_account` solo `CULQI`, sin tablas OAuth ni preferencias) y renombra la capacidad a `payments.online` |
+| V49 | Facturación con Nubefact: `store_billing_account` por tienda (RUTA, TOKEN cifrado, ambiente y series), elimina `beta_company_registration` y libera las series del contador |
 
 Nota: V2 repite `CREATE TABLE IF NOT EXISTS` de V1. Es inofensivo y no se toca porque ya está aplicada.
 

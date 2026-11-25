@@ -5,7 +5,6 @@ import java.security.Principal;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.List;
-import java.nio.charset.StandardCharsets;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import java.util.UUID;
@@ -26,7 +25,7 @@ class BetaPosDocumentsController {
 
     record Document(UUID sale, OffsetDateTime created, String kind, BigDecimal total,
                     String customer, String status, String series, Integer number, boolean hasXml, boolean hasCdr,
-                    Submission submission) {}
+                    String pdfUrl, Submission submission) {}
     record Submission(OffsetDateTime attemptedAt, String cdrCode, String description, List<String> notes,
                       String errorCode, String errorMessage, Integer httpStatus) {}
     record Page(List<Document> documents, boolean more) {}
@@ -39,25 +38,30 @@ class BetaPosDocumentsController {
         if (page < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         var rows = db.query("""
                 SELECT f.sale_id, f.created_at, f.kind, s.total, f.customer_name, f.status, n.series, n.number,
-                       NULLIF(btrim(n.provider_response->>\'xml\'),\'\') IS NOT NULL,
-                       NULLIF(btrim(n.provider_response#>>\'{sunatResponse,cdrZip}\'),\'\') IS NOT NULL,
-                       n.submitted_at, n.provider_response#>>'{sunatResponse,cdrResponse,code}' AS cdr_code,
-                       n.provider_response#>>'{sunatResponse,cdrResponse,description}' AS description,
-                       ARRAY(SELECT note #>> '{}' FROM jsonb_array_elements(
-                           CASE WHEN jsonb_typeof(n.provider_response#>'{sunatResponse,cdrResponse,notes}')='array'
-                                THEN n.provider_response#>'{sunatResponse,cdrResponse,notes}' ELSE '[]'::jsonb END
-                       ) AS notes(note) WHERE jsonb_typeof(note)='string') AS notes,
-                       n.provider_response#>>'{sunatResponse,error,code}' AS error_code,
-                       n.provider_response#>>'{sunatResponse,error,message}' AS error_message,
-                       n.provider_response->>'transportHttpStatus' AS transport_status
+                       NULLIF(btrim(n.provider_response->>'xml_zip_base64'),'') IS NOT NULL,
+                       NULLIF(btrim(n.provider_response->>'cdr_zip_base64'),'') IS NOT NULL,
+                       n.submitted_at, NULLIF(n.provider_response->>'sunat_responsecode','') AS cdr_code,
+                       NULLIF(n.provider_response->>'sunat_description','') AS description,
+                       ARRAY_REMOVE(ARRAY[NULLIF(n.provider_response->>'sunat_note',''),
+                                          NULLIF(n.provider_response->>'sunat_soap_error','')], NULL) AS notes,
+                       n.provider_response#>>'{error,codigo}' AS error_code,
+                       n.provider_response#>>'{error,errors}' AS error_message,
+                       n.provider_response->>'transportHttpStatus' AS transport_status,
+                       NULLIF(n.provider_response->>'enlace_del_pdf','') AS pdf_url
                   FROM pos_fiscal_request f JOIN pos_sale s ON (s.tenant_id,s.id)=(f.tenant_id,f.sale_id)
                   LEFT JOIN beta_pos_document_number n ON (n.tenant_id,n.sale_id)=(f.tenant_id,f.sale_id)
                  WHERE f.tenant_id=? ORDER BY f.created_at DESC, f.sale_id DESC LIMIT 21 OFFSET ?
                 """,
                 (rs,row) -> new Document(rs.getObject(1,UUID.class),rs.getObject(2,OffsetDateTime.class),
                         rs.getString(3),rs.getBigDecimal(4),rs.getString(5),rs.getString(6),
-                        rs.getString(7),rs.getObject(8,Integer.class),rs.getBoolean(9),rs.getBoolean(10),submission(rs)), store, page * 20L);
+                        rs.getString(7),rs.getObject(8,Integer.class),rs.getBoolean(9),rs.getBoolean(10),
+                        pdfUrl(rs.getString("pdf_url")),submission(rs)), store, page * 20L);
         return new Page(rows.subList(0, Math.min(rows.size(),20)), rows.size()>20);
+    }
+
+    /** Solo enlaces https de Nubefact (los guarda el proveedor, pero se muestran como enlace en el panel). */
+    private static String pdfUrl(String url) {
+        return url != null && url.matches("^https://([a-z0-9-]+\\.)*nubefact\\.com/[^\\s\"'<>]*$") ? url : null;
     }
 
     private static Submission submission(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -79,8 +83,8 @@ class BetaPosDocumentsController {
         if (!xml && !"cdr".equals(kind)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         Download file = db.query("""
                 SELECT n.issuer_ruc, f.kind, n.series, n.number,
-                       CASE WHEN ? THEN n.provider_response->>'xml'
-                            ELSE n.provider_response#>>'{sunatResponse,cdrZip}' END AS content
+                       CASE WHEN ? THEN n.provider_response->>'xml_zip_base64'
+                            ELSE n.provider_response->>'cdr_zip_base64' END AS content
                   FROM beta_pos_document_number n JOIN pos_fiscal_request f USING (tenant_id,sale_id)
                  WHERE n.tenant_id=? AND n.sale_id=?
                 """, (rs,row) -> {
@@ -96,18 +100,24 @@ class BetaPosDocumentsController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(file);
     }
 
+    /** Nubefact entrega XML y CDR en zip Base64. El XML se descomprime para descargarlo e imprimirlo. */
     private static byte[] fileBytes(String stored, boolean xml) {
-        String start = stored.stripLeading();
-        if (xml && (start.startsWith("<") || start.startsWith("\uFEFF<"))) {
-            return stored.getBytes(StandardCharsets.UTF_8);
-        }
         try {
             byte[] bytes = Base64.getDecoder().decode(stored.replaceAll("\\s+", ""));
-            if (bytes.length == 0 || (!xml && (bytes.length < 4 || bytes[0] != 'P' || bytes[1] != 'K')))
-                throw new IllegalArgumentException();
-            return bytes;
-        } catch (IllegalArgumentException malformed) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY);
+            if (bytes.length < 4 || bytes[0] != 'P' || bytes[1] != 'K') throw new IllegalArgumentException();
+            if (!xml) return bytes;
+            try (var zip = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(bytes))) {
+                for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                    if (!entry.isDirectory() && entry.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".xml")) {
+                        byte[] content = zip.readNBytes(5 * 1024 * 1024 + 1);
+                        if (content.length == 0 || content.length > 5 * 1024 * 1024) throw new IllegalArgumentException();
+                        return content;
+                    }
+                }
+            }
+            throw new IllegalArgumentException();
+        } catch (IllegalArgumentException | java.io.IOException malformed) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "El archivo guardado de Nubefact tiene un formato inválido.");
         }
     }
 
@@ -122,20 +132,23 @@ class BetaPosDocumentsController {
                 (rs,row) -> new Numbered(rs.getString(1),rs.getInt(2)),store,sale);
         if (!previous.isEmpty()) return previous.get(0);
 
-        String ruc = db.query("""
-                SELECT i.ruc FROM tenant_fiscal_issuer i JOIN beta_company_registration b USING (tenant_id)
-                 WHERE i.tenant_id=? AND i.ruc=b.registered_ruc AND b.company_id IS NOT NULL
-                   AND b.emission_token_ciphertext IS NOT NULL FOR SHARE OF i,b
-                """, (rs,row) -> rs.getString(1),store).stream().findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT));
-        String series = kind.equals("FACTURA") ? "FT01" : "BT01";
+        record Issuer(String ruc, String invoiceSeries, String receiptSeries) {}
+        Issuer issuer = db.query("""
+                SELECT i.ruc, a.invoice_series, a.receipt_series
+                  FROM tenant_fiscal_issuer i JOIN store_billing_account a USING (tenant_id)
+                 WHERE i.tenant_id=? FOR SHARE OF i,a
+                """, (rs,row) -> new Issuer(rs.getString(1),rs.getString(2),rs.getString(3)),store).stream().findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Guarda los datos del emisor y conecta tu cuenta de Nubefact en Facturación."));
+        String ruc = issuer.ruc();
+        String series = kind.equals("FACTURA") ? issuer.invoiceSeries() : issuer.receiptSeries();
         int number = db.query("""
                 INSERT INTO beta_document_counter(issuer_ruc,series,last_number) VALUES (?,?,1)
                 ON CONFLICT (issuer_ruc,series) DO UPDATE
                    SET last_number=beta_document_counter.last_number+1
                  WHERE beta_document_counter.last_number<99999999 RETURNING last_number
                 """, (rs,row) -> rs.getInt(1),ruc,series).stream().findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "La serie " + series + " agotó sus correlativos."));
         db.update("INSERT INTO beta_pos_document_number(tenant_id,sale_id,issuer_ruc,series,number) VALUES (?,?,?,?,?)",
                 store,sale,ruc,series,number);
         return new Numbered(series,number);

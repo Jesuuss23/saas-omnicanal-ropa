@@ -18,7 +18,7 @@ Resumen:
 | `WHATSAPP_GRAPH_VERSION` | Versión de Graph API (por defecto `v23.0`) |
 | `CULQI_PUBLIC_KEY`, `CULQI_SECRET_KEY`, `CULQI_WEBHOOK_TOKEN` | Cuenta Culqi de la empresa (cobro del SaaS) |
 | `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD_HASH`, `SUPERADMIN_TOTP_SECRET` | Superadmin |
-| `APISPERU_*` | Facturación electrónica |
+| `SECRETS_ENCRYPTION_KEY` | Cifra el TOKEN de Nubefact de cada tienda |
 | `GOOGLE_GENAI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | Clave de Gemini (Google AI Studio) para la IA vendedora, modelo (por defecto `gemini-3.5-flash`) y modelo de respaldo ante saturación (por defecto `gemini-flash-latest`). Sin clave la IA no responde y el panel lo indica |
 | `GOOGLE_CLIENT_ID` | Client ID web de Google (OAuth) para "Continuar con Google" en la tienda pública. Sin él, el botón no aparece |
 
@@ -272,5 +272,17 @@ El dinero de cada venta web va directo a la cuenta Culqi del comercio: el SaaS c
 - La activación exige los 4 pasos, la capacidad `fiscal.production` y que el propietario escriba su RUC.
 - `FiscalReconciler` consulta cada minuto los comprobantes en `BETA_REVIEW` con espera creciente (2, 4, 8… min, tope 6 h,
   máximo 10 intentos). Solo consulta el estado: nunca reenvía.
-- **Pendiente:** el envío real a producción en APISPERU no está conectado. La activación deja todo listo, pero hay que
-  validarlo con una cuenta de APISPERU de producción y un certificado real antes de emitir comprobantes con validez.
+- **Pendiente:** validar la emisión con una cuenta de Nubefact de producción antes de emitir comprobantes con validez.
+
+## Nubefact (facturación electrónica de cada tienda)
+
+- El propietario pega en **Facturación → Conexión con Nubefact** la RUTA y el TOKEN de su cuenta (API - Integración),
+  el ambiente (beta = cuenta DEMO, o producción, que exige `fiscal.production`) y sus series F### y B###.
+- El backend prueba la conexión (`consultar_comprobante` de un número inexistente: la respuesta «no existe» confirma
+  RUTA y TOKEN) y guarda el TOKEN cifrado con `SecretCipher` en `store_billing_account`. Solo se aceptan RUTAs `https://…nubefact.com/…`.
+- Abstracción: `InvoiceProvider` (`test`, `send`, `status`) con la implementación `NubefactInvoiceProvider`
+  (`POST` a la RUTA con `Authorization: Token token="…"`, operaciones `generar_comprobante` y `consultar_comprobante`).
+- POS: asignar número (serie de la cuenta), enviar y consultar estado. El envío se marca antes de llamar a Nubefact; si
+  Nubefact responde que no lo generó (datos o credenciales inválidos) vuelve a pendiente con el mensaje legible y puede
+  reenviarse; si no hay respuesta queda en revisión y solo se consulta. La respuesta se guarda en
+  `beta_pos_document_number.provider_response` (XML y CDR en zip, enlace al PDF).
