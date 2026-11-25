@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+/** Cuenta Culqi de cada tienda; la llave secreta se guarda cifrada en access_token_ciphertext. */
 @Repository
 public class PaymentAccountRepository {
     private final JdbcTemplate db;
@@ -14,31 +15,27 @@ public class PaymentAccountRepository {
         this.db = db;
     }
 
-    public record Row(UUID tenantId, long providerUserId, String publicKey, byte[] accessToken, byte[] refreshToken,
-                      OffsetDateTime tokenExpiresAt, boolean liveMode, String status, String lastError,
-                      OffsetDateTime linkedAt) {}
+    public record Row(UUID tenantId, String publicKey, byte[] secretKey, boolean liveMode, String status, String lastError,
+                      OffsetDateTime linkedAt) {
+        @Override public String toString() { return "Row[tenant=" + tenantId + ", liveMode=" + liveMode + "]"; }
+    }
 
     public Optional<Row> find(UUID tenant) {
         return db.query("""
-                SELECT tenant_id,provider_user_id,public_key,access_token_ciphertext,refresh_token_ciphertext,
-                       token_expires_at,live_mode,status,last_error,linked_at
-                  FROM store_payment_account WHERE tenant_id=? AND provider='MERCADOPAGO'
-                """, (rs, n) -> new Row(rs.getObject(1, UUID.class), rs.getLong(2), rs.getString(3), rs.getBytes(4),
-                rs.getBytes(5), rs.getObject(6, OffsetDateTime.class), rs.getBoolean(7), rs.getString(8),
-                rs.getString(9), rs.getObject(10, OffsetDateTime.class)), tenant).stream().findFirst();
+                SELECT tenant_id,public_key,access_token_ciphertext,live_mode,status,last_error,linked_at
+                  FROM store_payment_account WHERE tenant_id=? AND provider='CULQI'
+                """, (rs, n) -> new Row(rs.getObject(1, UUID.class), rs.getString(2), rs.getBytes(3), rs.getBoolean(4),
+                rs.getString(5), rs.getString(6), rs.getObject(7, OffsetDateTime.class)), tenant).stream().findFirst();
     }
 
-    public void upsert(UUID tenant, long userId, String publicKey, byte[] accessToken, byte[] refreshToken,
-                       OffsetDateTime expiresAt, boolean liveMode) {
+    public void upsert(UUID tenant, String publicKey, byte[] secretKey, boolean liveMode) {
         db.update("""
-                INSERT INTO store_payment_account(tenant_id,provider_user_id,public_key,access_token_ciphertext,
-                    refresh_token_ciphertext,token_expires_at,live_mode)
-                VALUES (?,?,?,?,?,?,?)
-                ON CONFLICT (tenant_id) DO UPDATE SET provider_user_id=excluded.provider_user_id,
-                    public_key=excluded.public_key, access_token_ciphertext=excluded.access_token_ciphertext,
-                    refresh_token_ciphertext=excluded.refresh_token_ciphertext, token_expires_at=excluded.token_expires_at,
-                    live_mode=excluded.live_mode, status='ACTIVE', last_error=NULL, updated_at=now()
-                """, tenant, userId, publicKey, accessToken, refreshToken, expiresAt, liveMode);
+                INSERT INTO store_payment_account(tenant_id,provider,public_key,access_token_ciphertext,live_mode,status)
+                VALUES (?,'CULQI',?,?,?,'ACTIVE')
+                ON CONFLICT (tenant_id) DO UPDATE SET provider='CULQI', public_key=excluded.public_key,
+                    access_token_ciphertext=excluded.access_token_ciphertext, live_mode=excluded.live_mode,
+                    status='ACTIVE', last_error=NULL, linked_at=now(), updated_at=now()
+                """, tenant, publicKey, secretKey, liveMode);
     }
 
     public void markError(UUID tenant, String error) {

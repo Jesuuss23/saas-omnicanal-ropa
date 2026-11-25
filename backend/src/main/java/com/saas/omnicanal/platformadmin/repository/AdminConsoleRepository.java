@@ -35,7 +35,7 @@ public class AdminConsoleRepository {
     public record TenantDetail(UUID id, String name, String domain, Instant createdAt, Instant suspendedAt, String suspendedReason,
                                String ownerEmail, String ownerName, String ownerPhone, boolean ownerActive, boolean ownerMfa,
                                String planCode, String planName, String status, Instant trialEndsAt, Instant periodEnd,
-                               Instant graceEndsAt, String culqiSubscriptionId, String whatsappProvider, boolean mercadoPagoLinked,
+                               Instant graceEndsAt, String culqiSubscriptionId, String whatsappProvider, boolean culqiLinked,
                                long products, long variants, long webOrders30d, BigDecimal webRevenue30d, long posSales30d,
                                BigDecimal posRevenue30d, long contacts) {}
 

@@ -23,7 +23,7 @@ const statuses: Record<string, {label: string; variant: "success" | "warning" | 
   IGNORED: {label: "Ignorado", variant: "neutral"},
   FAILED: {label: "Falló", variant: "destructive"},
 };
-const providers: Record<string, string> = {CULQI: "Culqi (suscripciones)", MERCADOPAGO: "Mercado Pago (tiendas)"};
+const providers: Record<string, string> = {CULQI: "Culqi (suscripciones y tiendas)", MERCADOPAGO: "Mercado Pago (histórico)"};
 
 export default function Payments() {
   const [provider, setProvider] = useState("");
@@ -34,7 +34,7 @@ export default function Payments() {
   if (status) params.set("status", status);
   const {data, error} = useApiData<Page<PaymentEvent>>(superadminApi.url("payments?" + params));
   return <>
-    <PageHeader title="Pagos" description="Notificaciones de Culqi y Mercado Pago. Cada una se valida y se vuelve a consultar al proveedor antes de cambiar un estado."/>
+    <PageHeader title="Pagos" description="Notificaciones de Culqi: suscripciones del SaaS y cobros de cada tienda. Cada una se valida y se vuelve a consultar al proveedor antes de cambiar un estado."/>
     <Card className="grid gap-4 p-4">
       <div className="flex flex-wrap gap-3">
         <NativeSelect aria-label="Proveedor" className="w-auto" value={provider} onChange={e => { setProvider(e.target.value); setPage(0); }}>
@@ -48,7 +48,7 @@ export default function Payments() {
       </div>
       {error && <Alert variant="destructive">{error.message}</Alert>}
       {!data && !error && <div className="grid gap-2">{Array.from({length: 5}, (_, i) => <Skeleton key={i} className="h-12"/>)}</div>}
-      {data && (data.items.length === 0 ? <EmptyState icon={CreditCard} title="Sin notificaciones" description="Aparecerán cuando Culqi o Mercado Pago avisen un cobro."/>
+      {data && (data.items.length === 0 ? <EmptyState icon={CreditCard} title="Sin notificaciones" description="Aparecerán cuando Culqi avise un cobro."/>
         : <Table><TableHeader><TableRow><TableHead>Recibido</TableHead><TableHead>Proveedor</TableHead><TableHead>Tienda</TableHead><TableHead>Evento</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader>
           <TableBody>{data.items.map(e => <TableRow key={e.provider + e.eventId}>
             <TableCell className="whitespace-nowrap text-muted-foreground">{limaDateTime.format(new Date(e.receivedAt))}</TableCell>

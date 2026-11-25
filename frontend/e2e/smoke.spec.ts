@@ -78,7 +78,7 @@ test("panel del propietario carga todas sus secciones", async ({page}, info) => 
     if (link === "Asistente IA") await expect(page.getByRole("heading", {name: "Pruébala"})).toBeVisible();
     if (link === "Marketing") await expect(page.getByText("Nueva campaña")).toBeVisible();
     if (link === "Facturación") await expect(page.getByText("Emisión en producción")).toBeVisible();
-    if (link === "Cobros") await expect(page.getByRole("heading", {name: "Cobros en línea con Mercado Pago"})).toBeVisible();
+    if (link === "Cobros") await expect(page.getByRole("heading", {name: "Cobros en línea con Culqi"})).toBeVisible();
     if (link === "Catálogo") await expect(page.getByRole("checkbox", {name: "Etiqueta QR de E2E-POLO-M"})).toBeVisible();
     if (link === "Punto de venta") {
       // El buscador muestra la prenda con su SKU; Enter con el SKU exacto la agrega al carrito.

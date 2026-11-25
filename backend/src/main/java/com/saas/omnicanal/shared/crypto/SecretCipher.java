@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Cifrado AES-256-GCM para secretos de integraciones (tokens de Meta, Mercado Pago, Culqi...).
+ * Cifrado AES-256-GCM para secretos de integraciones (tokens de Meta, llaves de Culqi...).
  * La clave se lee de {@code SECRETS_ENCRYPTION_KEY} (32 bytes en Base64) y nunca se guarda en la base.
  * El contexto (AAD) ata cada ciphertext a su tienda y propósito: no se puede copiar entre filas.
  */
@@ -31,7 +31,7 @@ public class SecretCipher {
         if (key != null) log.info("Cifrado: SECRETS_ENCRYPTION_KEY cargada");
         else if (encoded == null || encoded.isBlank())
             log.warn("Cifrado: falta SECRETS_ENCRYPTION_KEY. No funcionarán la verificación en dos pasos, WhatsApp Cloud API, "
-                    + "Mercado Pago ni la facturación. Genera una con: openssl rand -base64 32");
+                    + "los cobros con Culqi ni la facturación. Genera una con: openssl rand -base64 32");
         else
             log.error("Cifrado: SECRETS_ENCRYPTION_KEY no es válida (debe ser Base64 de 32 bytes). Genera una con: openssl rand -base64 32");
     }

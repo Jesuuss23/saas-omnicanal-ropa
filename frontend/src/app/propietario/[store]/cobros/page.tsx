@@ -2,12 +2,12 @@
 
 import {PageHeader} from "@/components/console/ConsoleShell";
 import {useStore} from "../_panel/StoreContext";
-import MercadoPagoAccount from "../MercadoPagoAccount";
+import CulqiAccount from "../CulqiAccount";
 
 export default function Payments() {
-  const {store, send} = useStore();
+  const {store} = useStore();
   return <>
-    <PageHeader title="Cobros" description="Recibe pagos de tus pedidos web directo en tu cuenta de Mercado Pago."/>
-    <MercadoPagoAccount store={store} send={send}/>
+    <PageHeader title="Cobros" description="Activa los cobros en línea: recibe los pagos con tarjeta de tus pedidos web directo en tu cuenta Culqi."/>
+    <CulqiAccount store={store}/>
   </>;
 }

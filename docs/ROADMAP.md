@@ -11,7 +11,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 | # | Módulo | Estado | Incluye | Pendiente |
 |---|--------|--------|---------|-----------|
 | 0.1 | Estructura por módulos | ✅ | Paquetes `modulo/{model,repository,service,controller,config}`; `shared/` para seguridad, cifrado y clientes HTTP | Extraer SQL de los controladores que aún lo tienen (ver [arquitectura.md](arquitectura.md#deuda-conocida)) |
-| 0.2 | Migraciones Flyway | ✅ | V1–V47 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
+| 0.2 | Migraciones Flyway | ✅ | V1–V48 versionadas, validación estricta, guía en [migraciones.md](migraciones.md); CI las aplica sobre PostgreSQL limpio | — |
 | 0.3 | Cifrado de secretos | ✅ | `SecretCipher` AES-256-GCM con contexto por tienda (`SECRETS_ENCRYPTION_KEY`) | Rotación de clave maestra (re-cifrado por lotes) |
 | 0.4 | CI | ✅ | GitHub Actions: tests del backend con PostgreSQL, lint/tipos/build del frontend y pruebas de humo con Playwright | — |
 | 0.5 | Acceso y 2FA | ✅ | TOTP enrolable con QR para superadmin y propietarios, códigos de recuperación, ingreso de propietarios por correo ([seguridad.md](seguridad.md)) | — |
@@ -37,7 +37,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 |---|--------|--------|---------|-----------|
 | 2.1 | Planes y entitlements | ✅ | `saas_plan`, `saas_plan_entitlement`, overrides por tienda, `EntitlementService` (cuota de productos ya aplicada) | Aplicar cuotas de usuarios, respuestas IA y comprobantes; medidor de consumo mensual |
 | 2.2 | Suscripción SaaS con Culqi | 🟡 | Checkout con Culqi.js → cliente, tarjeta y suscripción; webhook idempotente que re-consulta a Culqi y activa el plan; gracia y suspensión automáticas | Validar nombres de eventos y rutas recurrentes en sandbox de Culqi; cambio/cancelación de plan; comprobante de la suscripción |
-| 2.3 | Cobros de la tienda con Mercado Pago | 🟡 | OAuth para vincular la cuenta del dueño (tokens cifrados y renovación), Checkout Pro por pedido, webhook con `x-signature` + re-consulta del pago, cierre único (pedido PAID, stock descontado una vez), marcas de revisión | Reembolsos y posventa, conciliación diaria, comisión del marketplace (`marketplace_fee`) |
+| 2.3 | Cobros de la tienda con Culqi | 🟡 | Llaves propias de cada comercio validadas con Culqi y cifradas, Culqi.js + cargo con la llave de la tienda (dinero directo al comercio), 3‑D Secure, pedido PAID en la misma transacción, webhook de respaldo con re-consulta del cargo, cierre único y marcas de revisión (Mercado Pago retirado en V48) | Reembolsos y posventa, conciliación diaria, comisión del marketplace (`marketplace_fee`) |
 | 2.4 | Correos transaccionales | ⬜ | — | Bienvenida, fin de trial (día 10 y 13), pago exitoso/fallido, suspensión |
 | 2.5 | Trial self-service con magic link | ⬜ | — | Alta pública → tenant TRIAL + subdominio + entitlements de prueba en una transacción |
 
@@ -57,7 +57,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente
 ## Siguiente incremento sugerido
 
 1. CI con PostgreSQL (0.4) para que cada PR corra migraciones y pruebas.
-2. Validar Culqi y Mercado Pago en sandbox con cuentas reales de prueba y ajustar el mapeo de eventos (2.2, 2.3).
+2. Validar Culqi (suscripción y cobros de tiendas, con 3DS) en sandbox con cuentas reales de prueba y ajustar el mapeo de eventos (2.2, 2.3).
 3. Correos transaccionales + trial con magic link (2.4, 2.5): cierran el escenario B de aceptación.
 4. Aplicar el resto de cuotas de entitlements (2.1).
 5. Configurar `GOOGLE_GENAI_API_KEY` y probar la IA vendedora con conversaciones reales antes de activarla en pilotos.

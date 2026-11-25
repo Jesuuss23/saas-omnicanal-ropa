@@ -4,7 +4,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** Bandeja idempotente de webhooks de pago (compartida por Culqi y Mercado Pago). */
+/** Bandeja idempotente de webhooks de pago de Culqi (suscripción del SaaS y cobros de cada tienda). */
 @Repository
 public class PaymentWebhookEventRepository {
     private final JdbcTemplate db;

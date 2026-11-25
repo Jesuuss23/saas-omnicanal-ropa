@@ -22,7 +22,7 @@ const features = [
   {icon: Bot, title: "Asistente con IA", text: "Responde precios, tallas y disponibilidad con tu inventario real, y te pasa la conversación cuando hace falta."},
   {icon: Store, title: "Punto de venta con QR", text: "Cobra en tienda escaneando la etiqueta de la prenda con la cámara del celular o un lector."},
   {icon: ReceiptText, title: "Boletas y facturas SUNAT", text: "Emite comprobantes electrónicos desde la venta, sin pasar datos a otro sistema.", span: "lg:col-span-2"},
-  {icon: CreditCard, title: "Cobros con Mercado Pago", text: "Vincula tu cuenta: el dinero de tus ventas web llega directo a ti."},
+  {icon: CreditCard, title: "Cobros con Culqi", text: "Conecta tu cuenta Culqi: el dinero de tus ventas web llega directo a ti."},
   {icon: Users, title: "CRM de clientes", text: "Etapas de venta, seguimientos y el historial de cada conversación en un solo lugar.", span: "lg:col-span-2"},
   {icon: ShieldCheck, title: "Seguridad de verdad", text: "Verificación en dos pasos, secretos cifrados y cada tienda aislada de las demás.", span: "lg:col-span-2"},
 ];
@@ -30,13 +30,13 @@ const features = [
 const steps = [
   ["Crea tu tienda", "Regístrate con tu correo y empieza tu prueba de 14 días. No necesitas tarjeta."],
   ["Sube tus prendas", "Carga productos con tallas, colores y stock. Imprime etiquetas QR para tu local."],
-  ["Conecta tus canales", "Vincula WhatsApp y Mercado Pago y comparte tu catálogo. Desde ese momento, todo se sincroniza."],
+  ["Conecta tus canales", "Vincula WhatsApp y Culqi y comparte tu catálogo. Desde ese momento, todo se sincroniza."],
 ];
 
 const faqs: [string, React.ReactNode][] = [
   ["¿Necesito tarjeta para la prueba gratis?", "No. Creas tu tienda con tu correo y usas la plataforma 14 días. Al final eliges un plan y pagas con tarjeta de forma segura con Culqi."],
   ["¿Puedo usar mi número de WhatsApp actual?", "Sí. Puedes conectarlo escaneando un QR (rápido, ideal para empezar) o migrar a la API oficial de Meta cuando necesites plantillas y mayor volumen, sin perder tu historial."],
-  ["¿Cómo recibo el dinero de mis ventas?", "Vinculas tu propia cuenta de Mercado Pago. Los pagos de tu catálogo web van directo a tu cuenta; nosotros no tocamos tu dinero."],
+  ["¿Cómo recibo el dinero de mis ventas?", "Conectas tu propia cuenta Culqi. Los pagos con tarjeta de tu catálogo web van directo a tu cuenta; nosotros no tocamos tu dinero."],
   ["¿Emiten boletas y facturas electrónicas?", "Sí. Configuras tu RUC y certificado, pruebas en el entorno Beta de SUNAT y luego pasas a producción en los planes que lo incluyen."],
   ["¿Puedo cambiar de plan?", "Cuando quieras, desde tu panel. Si llegas a un límite de tu plan, el panel te lo indica y puedes subir de plan al instante."],
   ["¿Mis datos y los de mis clientes están seguros?", "Cada tienda está aislada, las credenciales se guardan cifradas y el acceso se protege con verificación en dos pasos."],
@@ -56,7 +56,7 @@ export default async function Home() {
             Vende ropa por WhatsApp, web y tienda <span className="bg-gradient-to-r from-brand-700 to-brand-500 bg-clip-text text-transparent">sin descuadrar tu stock</span>
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Un solo inventario para todos tus canales, un asistente que responde a tus clientes, cobros con Mercado Pago y boletas SUNAT en el mismo lugar.
+            Un solo inventario para todos tus canales, un asistente que responde a tus clientes, cobros con Culqi y boletas SUNAT en el mismo lugar.
           </p>
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg"><Link href="/prueba-gratis">Prueba gratis 14 días <ArrowRight/></Link></Button>
@@ -74,7 +74,7 @@ export default async function Home() {
     <section className="border-y bg-card">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-4 px-4 py-6 text-sm text-muted-foreground sm:px-6">
         <span className="font-medium text-foreground">Un inventario, todos tus canales:</span>
-        {[[Globe, "Catálogo web"], [MessageCircle, "WhatsApp"], [Store, "Tienda física"], [QrCode, "Etiquetas QR"], [FileCheck2, "SUNAT"], [CreditCard, "Mercado Pago"]].map(([Icon, label]) => {
+        {[[Globe, "Catálogo web"], [MessageCircle, "WhatsApp"], [Store, "Tienda física"], [QrCode, "Etiquetas QR"], [FileCheck2, "SUNAT"], [CreditCard, "Culqi"]].map(([Icon, label]) => {
           const I = Icon as typeof Globe;
           return <span key={label as string} className="flex items-center gap-2"><I className="size-4 text-primary"/>{label as string}</span>;
         })}

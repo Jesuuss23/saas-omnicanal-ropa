@@ -22,7 +22,7 @@ com.saas.omnicanal
 ├── inbox/             # estado de las conversaciones (abierta, para el equipo, cerrada) y SLA
 ├── assistant/         # IA vendedora (Gemini con herramientas sobre el catálogo)
 ├── subscription/      # planes, entitlements y suscripción SaaS (Culqi)
-└── payments/          # cobros de la tienda con Mercado Pago
+└── payments/          # cobros de la tienda con Culqi (llaves del comercio)
 ```
 
 Cada módulo se divide en:
@@ -39,7 +39,7 @@ Cada módulo se divide en:
 
 | Ruta | Cadena | Autenticación |
 |------|--------|---------------|
-| `/api/webhooks/**` | `PublicApiSecurityConfig.webhooks` | Sin sesión; cada servicio valida firma/credencial (Evolution: HMAC por tienda; Meta: `X-Hub-Signature-256`; Culqi: token en URL + re-consulta; Mercado Pago: `x-signature` + re-consulta) |
+| `/api/webhooks/**` | `PublicApiSecurityConfig.webhooks` | Sin sesión; cada servicio valida firma/credencial (Evolution: HMAC por tienda; Meta: `X-Hub-Signature-256`; Culqi suscripción: token en URL + re-consulta; Culqi tiendas: `/culqi/stores/{id}` + re-consulta del cargo con la llave de la tienda) |
 | `/api/public/stores/*/account/**` | `CustomerAccountSecurity` | Cookie `omni_customer` del comprador (sesión propia, sin sesión de Spring) |
 | `/api/public/**` | `PublicApiSecurityConfig.publicStoreApi` | Pública, con tokens de reserva o de seguimiento |
 | `/api/superadmin/**` | `AdminSecurity` | Contraseña + TOTP |
@@ -56,7 +56,7 @@ La sesión del panel guarda el id de la tienda como principal y el rol como auto
 
 | Rol | Puede |
 |-----|-------|
-| Propietario | Todo, incluido equipo, plan, cobros con Mercado Pago y su 2FA |
+| Propietario | Todo, incluido equipo, plan, cobros con Culqi y su 2FA |
 | Encargado | Vender y además configurar apariencia, recojo, facturación y WhatsApp Cloud API |
 | Vendedor | POS, pedidos, catálogo, clientes y WhatsApp |
 
@@ -82,7 +82,7 @@ falla, la conversación se escala para que el equipo responda.
 
 ## Secretos
 
-Tokens de Meta, Mercado Pago y similares se guardan con `SecretCipher` (AES-256-GCM). El contexto AAD
+Tokens de Meta, llaves secretas de Culqi y similares se guardan con `SecretCipher` (AES-256-GCM). El contexto AAD
 incluye propósito y tenant (`whatsapp-cloud/access-token/{tenant}`), así un ciphertext copiado a otra fila
 no descifra. Las APIs nunca devuelven secretos: solo `accessTokenConfigured: true`.
 

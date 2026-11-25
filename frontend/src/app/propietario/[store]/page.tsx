@@ -54,7 +54,7 @@ function HomeContent() {
     {done: data.setup.appearance, label: "Personaliza tu tienda", hint: "Logo, color y frase de tu marca.", href: base + "/apariencia"},
     {done: data.setup.fulfillment, label: "Configura recojo o delivery", hint: "Dirección, horario y tarifa por distancia.", href: base + "/pedidos"},
     {done: data.setup.whatsapp, label: "Conecta WhatsApp", hint: "Responde a tus clientes desde el panel.", href: base + "/whatsapp"},
-    {done: data.setup.payments, label: "Activa los cobros en línea", hint: "Vincula tu cuenta de Mercado Pago.", href: base + "/cobros"},
+    {done: data.setup.payments, label: "Activa los cobros en línea", hint: "Conecta las llaves de tu cuenta Culqi.", href: base + "/cobros"},
     {done: data.setup.twoFactor, label: "Protege tu cuenta", hint: "Verificación en dos pasos con tu celular.", href: base + "/cuenta"},
   ];
   const done = steps.filter(s => s.done).length;

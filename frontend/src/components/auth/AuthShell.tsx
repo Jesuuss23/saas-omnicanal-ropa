@@ -4,7 +4,7 @@ import {brand} from "@/lib/brand";
 
 const points = [
   "Catálogo web, WhatsApp y tienda física con el mismo stock",
-  "Pagos con Mercado Pago y comprobantes SUNAT",
+  "Pagos con Culqi y comprobantes SUNAT",
   "Acceso protegido con verificación en dos pasos",
 ];
 
