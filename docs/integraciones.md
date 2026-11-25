@@ -40,6 +40,17 @@ Compatibilidad con Evolution 2.3.x (Baileys 7):
   ("Desde el celular" en la bandeja) y nunca disparan la IA. No se guarda el eco de un envío del panel o de la IA: se
   reconoce por el mismo `key.id`, o por el mismo texto aún en curso si el webhook llega antes que la respuesta del envío.
 - **Acuses (`MESSAGES_UPDATE`):** se aceptan en chats `@lid` y `@s.whatsapp.net`.
+- **Estado de conexión:** el último estado (`CONNECTED`, `PAIRING`, `DISCONNECTED`, `UNLINKED`) queda en
+  `whatsapp_channel_setting.evolution_state` con su hora. Se actualiza con "Actualizar estado" del panel
+  (`POST /api/owner/stores/{id}/whatsapp/refresh`, que consulta en vivo `GET /instance/connectionState/{instance}`), con
+  `GET .../whatsapp` y con el webhook `CONNECTION_UPDATE` (`open`, `connecting`, `close`). Si la instancia está `open`
+  pero la tienda no la tenía asignada (por ejemplo, se vinculó o reconectó el QR desde Evolution Manager), se asigna sola.
+- **Antes de un 409 al responder:** `PUT .../whatsapp/replies/{requestId}` y `.../media` consultan en vivo el estado si
+  la instancia no figura asignada; si está `open`, guardan el estado y envían normalmente. Solo responden 409 "Conecta el
+  número de WhatsApp antes de responder." cuando Evolution confirma que no está conectada.
+- **Webhook:** "Activar inbox" registra `MESSAGES_UPSERT`, `MESSAGES_UPDATE` y `CONNECTION_UPDATE` con el header de la
+  tienda. Las tiendas que lo activaron antes deben pulsarlo otra vez para recibir `CONNECTION_UPDATE`. Un webhook creado a
+  mano en Evolution Manager no lleva el header y se rechaza.
 
 ### Archivos (voz, imagen, video y documentos)
 

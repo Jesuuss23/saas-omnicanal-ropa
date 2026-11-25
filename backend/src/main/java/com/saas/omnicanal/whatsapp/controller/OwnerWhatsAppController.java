@@ -80,6 +80,13 @@ class OwnerWhatsAppController {
         return noStore(evolution.status(store));
     }
 
+    /** "Actualizar estado": consulta en vivo a Evolution, guarda el estado en la BD y lo devuelve. */
+    @PostMapping("/refresh")
+    ResponseEntity<Connection> refresh(@PathVariable UUID store, Principal owner) {
+        requireOwner(store, owner);
+        return noStore(evolution.status(store));
+    }
+
     @PostMapping("/connect")
     ResponseEntity<Connection> connect(@PathVariable UUID store, Principal owner) {
         requireOwner(store, owner);
