@@ -78,6 +78,32 @@ public class WhatsAppMessageRepository {
     public void finishReply(UUID tenant, UUID requestId, String status, String providerId) {
         db.update("UPDATE whatsapp_manual_reply SET status=?,provider_id=? WHERE tenant_id=? AND request_id=?",
                 status, providerId, tenant, requestId);
+        // Si el eco del webhook (fromMe) llegó antes que el id del envío, no queda duplicado como mensaje del celular.
+        if (providerId != null && !providerId.isBlank())
+            db.update("""
+                    DELETE FROM whatsapp_manual_reply p USING whatsapp_manual_reply r
+                     WHERE p.tenant_id=? AND p.author='PHONE' AND p.provider_id=? AND r.tenant_id=p.tenant_id
+                       AND r.request_id=? AND r.request_id<>p.request_id
+                    """, tenant, providerId, requestId);
+    }
+
+    /**
+     * Mensaje que la tienda envió desde el celular (fromMe en Evolution). Se descarta si es el eco de un envío del panel
+     * o de la IA: mismo id del proveedor, o el mismo texto todavía en curso (el webhook puede llegar antes que la
+     * respuesta del envío). Se compara en toda la tienda porque el eco puede llegar con el @lid de un chat que se
+     * respondió por su número. Devuelve 1 si se guardó.
+     */
+    public int saveFromPhone(UUID tenant, String chat, String providerId, String body) {
+        UUID request = UUID.nameUUIDFromBytes(("phone/" + tenant + "/" + chat + "/" + providerId)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return db.update("""
+                INSERT INTO whatsapp_manual_reply(tenant_id,request_id,chat_id,body,status,provider,provider_id,author)
+                SELECT ?,?,?,left(?,4000),'ACCEPTED','EVOLUTION',?,'PHONE' WHERE NOT EXISTS (
+                    SELECT 1 FROM whatsapp_manual_reply r WHERE r.tenant_id=?
+                       AND (r.provider_id=? OR (r.provider_id IS NULL AND r.status='REVIEW' AND r.body=left(?,4000)
+                            AND r.created_at>=now()-interval '5 minutes')))
+                ON CONFLICT (tenant_id,request_id) DO NOTHING
+                """, tenant, request, chat, body, providerId, tenant, providerId, body);
     }
 
     public record TestMessage(UUID id, String recipient, String kind, String templateName, String status,

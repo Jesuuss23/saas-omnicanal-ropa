@@ -149,9 +149,9 @@ public class AssistantService {
         executor.shutdown();
     }
 
-    /** Reserva el mensaje (PENDING); false si no es un chat de teléfono o ya se había recibido (webhook repetido). */
+    /** Reserva el mensaje (PENDING); false si no es un chat individual (teléfono o @lid) o ya se había recibido (webhook repetido). */
     public boolean receive(InboundMessageEvent e) {
-        return ChatIds.isPhoneChat(e.chat()) && repo.claim(e.tenant(), e.chat(), e.messageId());
+        return ChatIds.isDirectChat(e.chat()) && repo.claim(e.tenant(), e.chat(), e.messageId());
     }
 
     private void schedule(UUID tenant, String chat) {

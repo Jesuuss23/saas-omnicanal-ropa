@@ -18,7 +18,7 @@ type Status = "OPEN" | "ESCALATED" | "CLOSED";
 type Row = {chat: string; phone: string | null; contactName: string | null; status: Status; aiEnabled: boolean; assignee: string | null;
   lastMessage: string | null; lastAuthor: string | null; lastInboundAt: string | null; lastOutboundAt: string | null;
   escalatedAt: string | null; overdue: boolean; aiPausedReason: "OFF_TOPIC" | null; offTopicCount: number};
-type Message = {author: "CUSTOMER" | "AI" | "HUMAN"; body: string; at: string; status: string | null};
+type Message = {author: "CUSTOMER" | "AI" | "HUMAN" | "PHONE"; body: string; at: string; status: string | null};
 type Conversation = {row: Row; escalationReason: string | null; summary: string | null; handbackNote: string | null; revision: number; messages: Message[]};
 type Counts = {open: number; escalated: number; overdue: number};
 
@@ -70,7 +70,7 @@ export default function Inbox({store, initialChat}: {store: string; initialChat:
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">{when(r.lastInboundAt)}</span>
             </span>
             <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              {r.lastAuthor === "AI" && <Bot className="size-3.5 shrink-0"/>}{r.lastAuthor === "HUMAN" && <UserRound className="size-3.5 shrink-0"/>}
+              {r.lastAuthor === "AI" && <Bot className="size-3.5 shrink-0"/>}{(r.lastAuthor === "HUMAN" || r.lastAuthor === "PHONE") && <UserRound className="size-3.5 shrink-0"/>}
               <span className="truncate">{r.lastMessage ?? ""}</span>
               {!r.aiEnabled && <span className="ml-auto shrink-0 text-xs">{r.aiPausedReason === "OFF_TOPIC" ? "IA pausada: fuera de tema" : "IA pausada"}</span>}
             </span>
@@ -150,7 +150,7 @@ function Thread({store, chat, onBack, onChanged, version}: {store: string; chat:
           m.author === "AI" ? "rounded-br-sm bg-accent text-accent-foreground" : "rounded-br-sm bg-primary text-primary-foreground")}>
           <p className="whitespace-pre-wrap break-words">{m.body}</p>
           <p className="mt-1 flex items-center justify-end gap-1 text-[11px] opacity-70">
-            {m.author === "AI" && <><Bot className="size-3"/>IA · </>}{m.author === "HUMAN" && "Equipo · "}{when(m.at)}
+            {m.author === "AI" && <><Bot className="size-3"/>IA · </>}{m.author === "HUMAN" && "Equipo · "}{m.author === "PHONE" && "Desde el celular · "}{when(m.at)}
             {m.status === "READ" && " · Leído"}{m.status === "REJECTED" && " · No enviado"}</p>
         </div>
       </li>)}

@@ -49,8 +49,11 @@ public class WhatsAppReplyService {
 
     private String send(UUID store, UUID requestId, String chat, String rawText, String author) {
         String text = rawText.strip();
-        if (!ChatIds.isPhoneChat(chat)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        if (!ChatIds.isDirectChat(chat)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         WhatsAppProvider provider = channels.activeProvider(store);
+        // Cloud API solo envía a números; un chat @lid solo existe en Evolution.
+        if (provider == WhatsAppProvider.CLOUD_API && !ChatIds.isPhoneChat(chat))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este chat solo se puede responder por la conexión con QR (Evolution).");
         if (provider == WhatsAppProvider.EVOLUTION) {
             if (!evolution.configured()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
             if (!channels.evolutionInstanceBound(store, EvolutionApiClient.instanceName(store)))
@@ -61,7 +64,8 @@ public class WhatsAppReplyService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT));
         }
         SendResult result = switch (provider) {
-            case EVOLUTION -> evolution.sendText(EvolutionApiClient.instanceName(store), ChatIds.phoneOf(chat), text);
+            // Evolution 2.3.x acepta el remoteJid completo (@lid o @s.whatsapp.net) en "number": se envía tal cual.
+            case EVOLUTION -> evolution.sendText(EvolutionApiClient.instanceName(store), chat, text);
             case CLOUD_API -> cloud.credentials(store)
                     .map(c -> cloudClient.sendText(c, ChatIds.phoneOf(chat), text))
                     .orElse(SendResult.rejected("Cloud API sin configurar"));

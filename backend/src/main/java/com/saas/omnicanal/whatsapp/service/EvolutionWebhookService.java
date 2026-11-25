@@ -1,6 +1,8 @@
 package com.saas.omnicanal.whatsapp.service;
 
+import com.saas.omnicanal.inbox.service.InboxService;
 import com.saas.omnicanal.shared.crypto.Hmac;
+import com.saas.omnicanal.whatsapp.model.ChatIds;
 import com.saas.omnicanal.whatsapp.model.WhatsAppProvider;
 import com.saas.omnicanal.whatsapp.repository.WhatsAppChannelSettingRepository;
 import com.saas.omnicanal.whatsapp.repository.WhatsAppMessageRepository;
@@ -28,11 +30,13 @@ public class EvolutionWebhookService {
     private final WhatsAppChannelSettingRepository channels;
     private final WhatsAppMessageRepository messages;
     private final ApplicationEventPublisher events;
+    private final InboxService inbox;
 
     public EvolutionWebhookService(@Value("${EVOLUTION_WEBHOOK_SECRET:}") String secret,
                                    WhatsAppChannelSettingRepository channels, WhatsAppMessageRepository messages,
-                                   ApplicationEventPublisher events) {
+                                   ApplicationEventPublisher events, InboxService inbox) {
         this.events = events;
+        this.inbox = inbox;
         this.secret = secret;
         this.channels = channels;
         this.messages = messages;
@@ -67,31 +71,52 @@ public class EvolutionWebhookService {
         JsonNode outgoing = item.has("fromMe") ? item.path("fromMe") : key.path("fromMe");
         if (!outgoing.isBoolean() || !outgoing.asBoolean()) return 0;
         String id = item.path("keyId").asText(key.path("id").asText(""));
-        String chat = item.path("remoteJid").asText(key.path("remoteJid").asText(""));
-        chat = chat.replaceFirst(":[0-9]+@s[.]whatsapp[.]net$", "@s.whatsapp.net");
-        if (id.isBlank() || id.length() > 200 || !chat.matches("[0-9]{5,15}@s[.]whatsapp[.]net")) return 0;
+        String chat = ChatIds.withoutDevice(item.path("remoteJid").asText(key.path("remoteJid").asText("")));
+        if (id.isBlank() || id.length() > 200 || !ChatIds.isDirectChat(chat)) return 0;
         String rawStatus = item.path("status").asText(item.path("update").path("status").asText(""));
         String status = switch (rawStatus) {
             case "DELIVERY_ACK", "3" -> "DELIVERED";
-            case "READ", "4" -> "READ";
+            case "READ", "PLAYED", "4", "5" -> "READ";
             default -> null;
         };
         return status == null ? 0 : messages.saveReceipt(store, chat, id, status);
     }
 
+    /**
+     * Evolution 2.3.x entrega en MESSAGES_UPSERT tanto los mensajes del cliente como los que la tienda envía (desde el
+     * celular, el panel o la IA), con {@code key.fromMe}. El chat es {@code key.remoteJid} tal cual ({@code …@lid} o
+     * {@code …@s.whatsapp.net}); si es @lid, el número visible llega en {@code key.remoteJidAlt}.
+     */
     private int save(UUID store, JsonNode item) {
         JsonNode key = item.path("key");
-        if (!key.path("fromMe").isBoolean() || key.path("fromMe").asBoolean()) return 0;
-        String chat = key.path("remoteJid").asText("");
-        if (!(chat.endsWith("@s.whatsapp.net") || chat.endsWith("@lid"))) return 0;
+        if (!key.path("fromMe").isBoolean()) return 0;
+        boolean fromMe = key.path("fromMe").asBoolean();
+        String chat = ChatIds.withoutDevice(key.path("remoteJid").asText(""));
+        String alt = ChatIds.withoutDevice(key.path("remoteJidAlt").asText(key.path("senderPn").asText("")));
+        // Algunas versiones invierten los campos: el número en remoteJid y el @lid en remoteJidAlt. El chat sigue siendo remoteJid.
+        if (!ChatIds.isDirectChat(chat)) return 0;
+        String phone = ChatIds.isPhoneChat(chat) ? null : ChatIds.phoneOf(alt);
         String id = key.path("id").asText("");
-        JsonNode message = item.path("message");
-        String body = message.path("conversation").asText("");
-        if (body.isBlank()) body = message.path("extendedTextMessage").path("text").asText("");
+        String body = text(item.path("message"));
         if (body.isBlank()) return 0;
         if (id.isBlank() || id.length() > 200 || chat.length() > 160) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        if (fromMe) {
+            // Eco de un envío del panel o de la IA, o un mensaje escrito en el celular: nunca dispara la IA.
+            int saved = messages.saveFromPhone(store, chat, id, body);
+            if (saved == 1) inbox.sentFromPhone(store, chat, phone);
+            return saved;
+        }
         int saved = messages.saveInbound(store, chat, id, body, WhatsAppProvider.EVOLUTION);
-        if (saved == 1) events.publishEvent(new InboundMessageEvent(store, chat, id, body));
+        if (saved == 1) events.publishEvent(new InboundMessageEvent(store, chat, id, body, phone));
         return saved;
+    }
+
+    private static String text(JsonNode message) {
+        String body = message.path("conversation").asText("");
+        if (body.isBlank()) body = message.path("extendedTextMessage").path("text").asText("");
+        if (body.isBlank()) body = message.path("ephemeralMessage").path("message").path("extendedTextMessage").path("text").asText("");
+        if (body.isBlank()) body = message.path("imageMessage").path("caption").asText("");
+        if (body.isBlank()) body = message.path("videoMessage").path("caption").asText("");
+        return body;
     }
 }

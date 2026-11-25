@@ -21,7 +21,8 @@ public class ConversationRepository {
             SELECT c.chat_id, c.status, c.ai_enabled, c.assignee, c.last_inbound_at, c.last_outbound_at, c.escalated_at,
                    c.escalation_reason, c.summary, c.handback_note, c.revision, c.ai_paused_reason, c.off_topic_count,
                    (SELECT k.full_name FROM contact k WHERE k.tenant_id = c.tenant_id AND k.merged_into IS NULL
-                     AND k.phone = split_part(c.chat_id, '@', 1)) AS contact_name,
+                     AND k.phone = coalesce(c.phone, CASE WHEN c.chat_id LIKE '%@s.whatsapp.net' THEN split_part(c.chat_id, '@', 1) END)) AS contact_name,
+                   c.phone AS alias_phone,
                    last.body AS last_body, last.author AS last_author,
                    (c.status = 'ESCALATED' AND c.last_inbound_at IS NOT NULL
                      AND (c.last_outbound_at IS NULL OR c.last_outbound_at < c.last_inbound_at)
@@ -48,7 +49,8 @@ public class ConversationRepository {
 
     private static Row row(ResultSet rs) throws SQLException {
         String chat = rs.getString("chat_id");
-        return new Row(chat, chat.contains("@s.whatsapp.net") ? chat.substring(0, chat.indexOf('@')) : null,
+        String phone = com.saas.omnicanal.whatsapp.model.ChatIds.phoneOf(chat);
+        return new Row(chat, phone != null ? phone : rs.getString("alias_phone"),
                 rs.getString("contact_name"), Status.valueOf(rs.getString("status")), rs.getBoolean("ai_enabled"),
                 rs.getString("assignee"), rs.getString("last_body"), rs.getString("last_author"),
                 instant(rs.getTimestamp("last_inbound_at")), instant(rs.getTimestamp("last_outbound_at")),
@@ -61,15 +63,30 @@ public class ConversationRepository {
      * pausado por preguntas fuera de tema la reinicia: la IA vuelve a atender con el contador en cero.
      */
     public void inbound(UUID tenant, String chat) {
+        inbound(tenant, chat, null);
+    }
+
+    /** {@code phone}: número visible para chats @lid (remoteJidAlt); null deja el que ya tenía. */
+    public void inbound(UUID tenant, String chat, String phone) {
         db.update("""
-                INSERT INTO conversation(tenant_id, chat_id, last_inbound_at) VALUES (?,?,now())
+                INSERT INTO conversation(tenant_id, chat_id, last_inbound_at, phone) VALUES (?,?,now(),?)
                 ON CONFLICT (tenant_id, chat_id) DO UPDATE SET last_inbound_at = now(), updated_at = now(),
+                    phone = coalesce(excluded.phone, conversation.phone),
                     status = CASE WHEN conversation.status = 'CLOSED' THEN 'OPEN' ELSE conversation.status END,
                     ai_enabled = CASE WHEN conversation.status = 'CLOSED' AND conversation.ai_paused_reason = 'OFF_TOPIC'
                                       THEN true ELSE conversation.ai_enabled END,
                     off_topic_count = CASE WHEN conversation.status = 'CLOSED' THEN 0 ELSE conversation.off_topic_count END,
                     ai_paused_reason = CASE WHEN conversation.status = 'CLOSED' THEN NULL ELSE conversation.ai_paused_reason END
-                """, tenant, chat);
+                """, tenant, chat, phone);
+    }
+
+    /** Mensaje enviado desde el celular de la tienda (Evolution, fromMe). */
+    public void sentFromPhone(UUID tenant, String chat, String phone) {
+        db.update("""
+                INSERT INTO conversation(tenant_id, chat_id, last_outbound_at, phone) VALUES (?,?,now(),?)
+                ON CONFLICT (tenant_id, chat_id) DO UPDATE SET last_outbound_at = now(), updated_at = now(),
+                    phone = coalesce(excluded.phone, conversation.phone)
+                """, tenant, chat, phone);
     }
 
     /** Suma una pregunta fuera de tema y devuelve cuántas lleva la conversación. */
