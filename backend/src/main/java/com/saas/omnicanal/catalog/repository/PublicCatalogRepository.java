@@ -18,7 +18,7 @@ public class PublicCatalogRepository {
     private static final String MATCHES = """
               FROM product p JOIN product_variant v ON (v.tenant_id, v.product_id) = (p.tenant_id, p.id)
              WHERE p.tenant_id = ? AND coalesce(v.stock_physical, 0) > coalesce(v.stock_reserved, 0)
-               AND strpos(lower(concat_ws(' ', p.name, p.category, v.size, v.color)), lower(?)) > 0
+               AND strpos(lower(concat_ws(' ', p.name, p.category, p.subcategory, v.size, v.color)), lower(?)) > 0
             """;
     private static final String SIZE = " AND (? = '' OR v.size = ?) ";
     private static final String COLOR = " AND (? = '' OR v.color = ?) ";
@@ -60,7 +60,7 @@ public class PublicCatalogRepository {
     /** Devuelve hasta {@code limit} variantes desde {@code offset}; la portada es la primera foto del producto. */
     public List<Variant> variants(UUID tenant, Filters f, int limit, long offset) {
         return db.query("""
-                SELECT v.id, p.id, p.name, p.category, v.size, v.color, v.price,
+                SELECT v.id, p.id, p.name, p.category, v.size, v.color, v.price, p.subcategory,
                        coalesce(v.stock_physical, 0) - coalesce(v.stock_reserved, 0) AS available,
                        (SELECT i.id FROM product_image i WHERE i.tenant_id = p.tenant_id AND i.product_id = p.id
                          ORDER BY i.position LIMIT 1) AS cover
@@ -69,18 +69,38 @@ public class PublicCatalogRepository {
                  ORDER BY p.name, p.id, array_position(ARRAY['XXS','XS','S','M','L','XL','XXL','XXXL'], upper(trim(v.size))) NULLS LAST, length(v.size), v.size, v.color, v.id LIMIT ? OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3),
                 rs.getString(4), rs.getString(5), rs.getString(6), rs.getBigDecimal(7), rs.getInt("available"),
-                rs.getObject("cover", UUID.class)),
+                rs.getObject("cover", UUID.class), rs.getString("subcategory")),
                 tenant, f.query(), f.category(), f.category(), f.size(), f.size(), f.color(), f.color(),
                 f.variant(), f.variant(), limit, offset);
     }
 
-    public Optional<CategoryResource> resource(UUID tenant, String category) {
+    public record CategoryCount(String category, String subcategory, int products) {}
+
+    /**
+     * Categorías y subcategorías con prendas en stock (subcategory null = productos sin subcategoría). "Polos" y "polos"
+     * son la misma categoría: se agrupa sin distinguir mayúsculas y se muestra la forma más usada.
+     */
+    public List<CategoryCount> categoryTree(UUID tenant) {
         return db.query("""
-                SELECT active, CASE active WHEN 'LINK' THEN link_url WHEN 'PDF' THEN pdf_url
-                                           WHEN 'IMAGE' THEN image_url END AS url
-                  FROM category_catalog_resource
-                 WHERE tenant_id = ? AND category = ? AND active IN ('LINK','PDF','IMAGE')
-                """, (rs, n) -> new CategoryResource(rs.getString("active"), rs.getString("url")), tenant, category)
+                WITH s AS (
+                    SELECT lower(trim(p.category)) AS ck, trim(p.category) AS c, lower(nullif(trim(p.subcategory), '')) AS sk,
+                           nullif(trim(p.subcategory), '') AS sc, p.id
+                      FROM product p JOIN product_variant v ON (v.tenant_id, v.product_id) = (p.tenant_id, p.id)
+                     WHERE p.tenant_id = ? AND coalesce(v.stock_physical, 0) > coalesce(v.stock_reserved, 0)
+                       AND nullif(trim(p.category), '') IS NOT NULL)
+                SELECT n.name, mode() WITHIN GROUP (ORDER BY s.sc), count(DISTINCT s.id)
+                  FROM s JOIN (SELECT ck, mode() WITHIN GROUP (ORDER BY c) AS name FROM s GROUP BY ck) n USING (ck)
+                 GROUP BY s.ck, n.name, s.sk ORDER BY s.ck, s.sk NULLS LAST
+                """, (rs, n) -> new CategoryCount(rs.getString(1), rs.getString(2), rs.getInt(3)), tenant);
+    }
+
+    public Optional<CategoryResource> resource(UUID tenant, String category) {
+        // Recurso elegido por la tienda; en automático, PDF, luego imagen, luego enlace.
+        return db.query("SELECT k.kind AS active, CASE k.kind WHEN 'LINK' THEN r.link_url WHEN 'PDF' THEN r.pdf_url"
+                        + " WHEN 'IMAGE' THEN r.image_url END AS url FROM category_catalog_resource r"
+                        + " CROSS JOIN LATERAL (SELECT " + CategoryResourceRepository.EFFECTIVE_KIND + " AS kind) k"
+                        + " WHERE r.tenant_id = ? AND r.category = ? AND k.kind IS NOT NULL",
+                (rs, n) -> new CategoryResource(rs.getString("active"), rs.getString("url")), tenant, category)
                 .stream().findFirst();
     }
 

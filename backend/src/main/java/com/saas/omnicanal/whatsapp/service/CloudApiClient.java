@@ -106,6 +106,57 @@ public class CloudApiClient {
         return send(c, payload);
     }
 
+    public record Downloaded(byte[] content, String mimeType) {}
+
+    /** Archivo recibido: {@code GET /{media-id}} da una URL temporal, que se descarga con el mismo token. */
+    public Downloaded download(CloudApiCredentials c, String mediaId) {
+        JsonNode meta = call(() -> graph.get().uri("/{id}", mediaId).headers(h -> h.setBearerAuth(c.accessToken()))
+                .retrieve().body(JsonNode.class));
+        String url = meta.path("url").asText("");
+        if (!url.startsWith("https://")) throw new GraphException(502, "Meta no devolvió la URL del archivo");
+        byte[] content = graph.get().uri(java.net.URI.create(url)).headers(h -> h.setBearerAuth(c.accessToken()))
+                .retrieve().body(byte[].class);
+        if (content == null || content.length == 0) throw new GraphException(502, "Archivo vacío");
+        return new Downloaded(content, meta.path("mime_type").asText("application/octet-stream"));
+    }
+
+    /**
+     * Sube el archivo a {@code /{phone-number-id}/media} y lo envía como image, video o document.
+     */
+    public SendResult sendMedia(CloudApiCredentials c, String to, String type, String mimeType, String fileName, byte[] content,
+                                String caption) {
+        String mediaId;
+        try {
+            var parts = new org.springframework.util.LinkedMultiValueMap<String, Object>();
+            parts.add("messaging_product", "whatsapp");
+            parts.add("type", mimeType);
+            var headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(mimeType));
+            parts.add("file", new org.springframework.http.HttpEntity<>(new org.springframework.core.io.ByteArrayResource(content) {
+                @Override public String getFilename() { return fileName == null ? "archivo" : fileName; }
+            }, headers));
+            JsonNode uploaded = graph.post().uri("/{id}/media", c.phoneNumberId()).headers(h -> h.setBearerAuth(c.accessToken()))
+                    .contentType(MediaType.MULTIPART_FORM_DATA).body(parts).retrieve().body(JsonNode.class);
+            mediaId = uploaded == null ? "" : uploaded.path("id").asText("");
+        } catch (RestClientResponseException ex) {
+            return SendResult.rejected(describe(ex));
+        } catch (RestClientException ex) {
+            return SendResult.rejected("Sin respuesta de Meta al subir el archivo");
+        }
+        if (mediaId.isBlank()) return SendResult.rejected("Meta no devolvió el id del archivo");
+        Map<String, Object> media = new LinkedHashMap<>();
+        media.put("id", mediaId);
+        if (caption != null && !caption.isBlank() && !"audio".equals(type)) media.put("caption", caption);
+        if ("document".equals(type)) media.put("filename", fileName == null ? "archivo.pdf" : fileName);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("messaging_product", "whatsapp");
+        payload.put("recipient_type", "individual");
+        payload.put("to", to);
+        payload.put("type", type);
+        payload.put(type, media);
+        return send(c, payload);
+    }
+
     private SendResult send(CloudApiCredentials c, Map<String, Object> payload) {
         try {
             JsonNode node = graph.post().uri("/{id}/messages", c.phoneNumberId())

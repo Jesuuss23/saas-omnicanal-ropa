@@ -7,6 +7,8 @@ import com.saas.omnicanal.whatsapp.model.WhatsAppProvider;
 import com.saas.omnicanal.whatsapp.repository.WhatsAppChannelSettingRepository;
 import com.saas.omnicanal.whatsapp.repository.WhatsAppMessageRepository;
 import com.saas.omnicanal.whatsapp.model.InboundMessageEvent;
+import com.saas.omnicanal.whatsapp.model.InboundMediaEvent;
+import com.saas.omnicanal.whatsapp.model.MediaKind;
 import org.springframework.context.ApplicationEventPublisher;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -97,7 +99,10 @@ public class EvolutionWebhookService {
         if (!ChatIds.isDirectChat(chat)) return 0;
         String phone = ChatIds.isPhoneChat(chat) ? null : ChatIds.phoneOf(alt);
         String id = key.path("id").asText("");
-        String body = text(item.path("message"));
+        JsonNode message = unwrap(item.path("message"));
+        Media media = media(message);
+        String body = text(message);
+        if (body.isBlank() && media != null) body = media.kind().placeholder();
         if (body.isBlank()) return 0;
         if (id.isBlank() || id.length() > 200 || chat.length() > 160) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         if (fromMe) {
@@ -106,17 +111,47 @@ public class EvolutionWebhookService {
             if (saved == 1) inbox.sentFromPhone(store, chat, phone);
             return saved;
         }
-        int saved = messages.saveInbound(store, chat, id, body, WhatsAppProvider.EVOLUTION);
-        if (saved == 1) events.publishEvent(new InboundMessageEvent(store, chat, id, body, phone));
+        int saved = media == null
+                ? messages.saveInbound(store, chat, id, body, WhatsAppProvider.EVOLUTION)
+                : messages.saveInboundMedia(store, chat, id, body, WhatsAppProvider.EVOLUTION, media.kind(), media.mime(), media.caption());
+        if (saved == 1) {
+            if (media != null) events.publishEvent(new InboundMediaEvent(store, chat, id, WhatsAppProvider.EVOLUTION,
+                    media.kind(), media.mime(), item, null));
+            events.publishEvent(new InboundMessageEvent(store, chat, id, body, phone));
+        }
         return saved;
+    }
+
+    private record Media(MediaKind kind, String mime, String caption) {}
+
+    /** Mensajes temporales y de "ver una vez" traen el contenido real un nivel más adentro. */
+    private static JsonNode unwrap(JsonNode message) {
+        for (String wrapper : List.of("ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2", "documentWithCaptionMessage")) {
+            JsonNode inner = message.path(wrapper).path("message");
+            if (inner.isObject()) return unwrap(inner);
+        }
+        return message;
+    }
+
+    private static Media media(JsonNode message) {
+        for (var entry : List.of(Map.entry("audioMessage", MediaKind.AUDIO), Map.entry("imageMessage", MediaKind.IMAGE),
+                Map.entry("videoMessage", MediaKind.VIDEO), Map.entry("documentMessage", MediaKind.DOCUMENT))) {
+            JsonNode node = message.path(entry.getKey());
+            if (!node.isObject()) continue;
+            String mime = node.path("mimetype").asText("");
+            String caption = node.path("caption").asText("");
+            return new Media(entry.getValue(), mime.isBlank() ? null : mime.split(";")[0].strip(),
+                    caption.isBlank() ? null : caption);
+        }
+        return null;
     }
 
     private static String text(JsonNode message) {
         String body = message.path("conversation").asText("");
         if (body.isBlank()) body = message.path("extendedTextMessage").path("text").asText("");
-        if (body.isBlank()) body = message.path("ephemeralMessage").path("message").path("extendedTextMessage").path("text").asText("");
         if (body.isBlank()) body = message.path("imageMessage").path("caption").asText("");
         if (body.isBlank()) body = message.path("videoMessage").path("caption").asText("");
+        if (body.isBlank()) body = message.path("documentMessage").path("caption").asText("");
         return body;
     }
 }

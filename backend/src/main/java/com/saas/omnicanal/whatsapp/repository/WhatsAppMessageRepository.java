@@ -27,6 +27,27 @@ public class WhatsAppMessageRepository {
                 """, tenant, chat, messageId, body, provider.name());
     }
 
+    /** Mensaje entrante con archivo: se guarda ya, y el archivo queda PENDING hasta que se descargue. */
+    public int saveInboundMedia(UUID tenant, String chat, String messageId, String body, WhatsAppProvider provider,
+                                com.saas.omnicanal.whatsapp.model.MediaKind kind, String mimeType, String caption) {
+        return db.update("""
+                INSERT INTO whatsapp_inbound_message(tenant_id,chat_id,message_id,body,provider,media_type,mime_type,caption,media_status)
+                VALUES (?,?,?,?,?,?,left(?,100),left(?,4000),'PENDING')
+                ON CONFLICT (tenant_id,chat_id,message_id) DO NOTHING
+                """, tenant, chat, messageId, body, provider.name(), kind.name(), mimeType, caption);
+    }
+
+    /** Respuesta con archivo (bandeja o IA): igual que {@link #claimReply}, con los datos del archivo ya guardado. */
+    public boolean claimMediaReply(UUID tenant, UUID requestId, String chat, String body, WhatsAppProvider provider, String author,
+                                   com.saas.omnicanal.whatsapp.model.MediaKind kind, String mimeType, String mediaUrl, String caption) {
+        return db.update("""
+                INSERT INTO whatsapp_manual_reply(tenant_id,request_id,chat_id,body,status,provider,author,media_type,mime_type,media_url,caption)
+                SELECT ?,?,?,left(?,4000),'REVIEW',?,?,?,left(?,100),?,left(?,4000) WHERE EXISTS (
+                    SELECT 1 FROM whatsapp_inbound_message m WHERE m.tenant_id=? AND m.chat_id=?)
+                ON CONFLICT (tenant_id,request_id) DO NOTHING
+                """, tenant, requestId, chat, body, provider.name(), author, kind.name(), mimeType, mediaUrl, caption, tenant, chat) == 1;
+    }
+
     /** El acuse puede llegar antes de que el envío devuelva el id del proveedor al CRM. */
     public int saveReceipt(UUID tenant, String chat, String providerId, String status) {
         return db.update("""

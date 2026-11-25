@@ -1,6 +1,11 @@
 package com.saas.omnicanal.assistant.service;
 
+import com.saas.omnicanal.assistant.model.AssistantModels.Attachment;
+import com.saas.omnicanal.assistant.model.AssistantModels.Category;
 import com.saas.omnicanal.assistant.model.AssistantModels.Item;
+import com.saas.omnicanal.assistant.model.AssistantModels.Subcategory;
+import com.saas.omnicanal.catalog.repository.CategoryResourceRepository;
+import com.saas.omnicanal.shared.web.PublicLinks;
 import com.saas.omnicanal.assistant.model.AssistantModels.StoreFacts;
 import com.saas.omnicanal.catalog.model.PublicCatalog.Filters;
 import com.saas.omnicanal.catalog.repository.PublicCatalogRepository;
@@ -22,11 +27,22 @@ public class StoreTools {
     String escalationReason;
     String escalationSummary;
     boolean offTopic;
+    final List<Attachment> attachments = new ArrayList<>();
+    private final CategoryResourceRepository resources;
+    private final boolean imagesAllowed;
 
     StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts) {
+        this(tenant, catalog, facts, null, false);
+    }
+
+    /** {@code imagesAllowed}: el plan permite enviar imágenes por WhatsApp (whatsapp.media.send). */
+    StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts, CategoryResourceRepository resources,
+               boolean imagesAllowed) {
         this.tenant = tenant;
         this.catalog = catalog;
         this.facts = facts;
+        this.resources = resources;
+        this.imagesAllowed = imagesAllowed;
     }
 
     @Tool(description = "Busca prendas con stock en el catálogo de la tienda. Devuelve nombre, talla, color, precio en soles, "
@@ -37,8 +53,56 @@ public class StoreTools {
             @ToolParam(description = "Color exacto como aparece en el catálogo. Vacío para todos.", required = false) String color) {
         used.add("buscarPrendas");
         var filters = new Filters(clean(texto, 100), clean(talla, 10), clean(color, 30), "", null);
-        return catalog.variants(tenant, filters, 8, 0).stream().map(v -> new Item(v.name(), v.category(), v.size(), v.color(),
-                v.price(), v.available(), facts.catalogUrl() + "?variant=" + v.id())).toList();
+        return catalog.variants(tenant, filters, 8, 0).stream().map(v -> new Item(v.name(), v.category(), v.subcategory(), v.size(), v.color(),
+                v.price(), v.available(), facts.catalogUrl() == null ? null : facts.catalogUrl() + "?variant=" + v.id())).toList();
+    }
+
+    @Tool(description = "Categorías de la tienda (por ejemplo polos, jeans) con sus subcategorías o estilos (por ejemplo polos "
+            + "retro, polos de verano), cuántas prendas con stock hay y si la categoría tiene catálogo para enviar. Úsala cuando el "
+            + "cliente pregunta por un tipo de prenda en general o por lo que vende la tienda.")
+    public List<Category> categorias() {
+        used.add("categorias");
+        var tree = new java.util.LinkedHashMap<String, List<Subcategory>>();
+        var totals = new java.util.HashMap<String, Integer>();
+        for (var c : catalog.categoryTree(tenant)) {
+            tree.computeIfAbsent(c.category(), k -> new ArrayList<>());
+            totals.merge(c.category(), c.products(), Integer::sum);
+            if (c.subcategory() != null) tree.get(c.category()).add(new Subcategory(c.subcategory(), c.products()));
+        }
+        return tree.entrySet().stream().map(e -> new Category(e.getKey(), totals.get(e.getKey()), e.getValue(),
+                resources != null && usable(resources.options(tenant, e.getKey())) != null)).toList();
+    }
+
+    @Tool(description = "Envía al cliente el catálogo de una categoría (PDF, imagen o enlace, el que la tienda configuró). "
+            + "Úsala cuando el cliente lo pida o acepte recibirlo. Si devuelve un enlace, compártelo tal cual en tu respuesta; "
+            + "si dice que se adjunta un archivo, avisa que se lo envías.")
+    public String enviarCatalogo(@ToolParam(description = "Categoría exacta, como la devuelve categorias, por ejemplo 'Polos'.") String categoria) {
+        used.add("enviarCatalogo");
+        if (resources == null) return "Esta tienda no tiene catálogos por categoría. Ofrece buscar prendas con buscarPrendas.";
+        var name = resources.category(tenant, clean(categoria, 50));
+        if (name.isEmpty()) return "No existe esa categoría. Usa categorias para ver las que hay.";
+        if (!attachments.isEmpty()) return "Ya se adjuntó un catálogo en esta respuesta.";
+        var option = usable(resources.options(tenant, name.get()));
+        if (option == null) return "La categoría " + name.get() + " no tiene catálogo para enviar. Ofrece buscar prendas con buscarPrendas.";
+        if (option.file() == null) return "Comparte este enlace del catálogo de " + name.get() + ": " + option.url();
+        boolean pdf = "PDF".equals(option.kind());
+        String file = "Catalogo " + name.get() + (pdf ? ".pdf" : option.mediaType() != null && option.mediaType().contains("png") ? ".png" : ".jpg");
+        attachments.add(new Attachment(pdf ? "DOCUMENT" : "IMAGE", option.mediaType(), file, option.file(),
+                (pdf ? "Catálogo PDF de " : "Imagen del catálogo de ") + name.get()));
+        return "Listo: el " + (pdf ? "PDF" : "imagen") + " del catálogo de " + name.get()
+                + " se enviará después de tu mensaje. Avísale al cliente que se lo envías; no escribas ningún enlace.";
+    }
+
+    /** Primer recurso que se puede enviar: archivo (las imágenes solo con el plan) o enlace público. Solo uno. */
+    private CategoryResourceRepository.Option usable(List<CategoryResourceRepository.Option> options) {
+        for (var o : options) {
+            if (o.file() != null) {
+                if ("IMAGE".equals(o.kind()) && !imagesAllowed) continue;
+                return o;
+            }
+            if (PublicLinks.isPublic(o.url())) return o;
+        }
+        return null;
     }
 
     @Tool(description = "Datos de la tienda: dirección y horario de recojo, condiciones de delivery y enlace del catálogo web.")

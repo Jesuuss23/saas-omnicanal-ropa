@@ -8,12 +8,12 @@ import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, Di
 import {Input} from "@/components/ui/input";
 import {Field} from "@/components/ui/label";
 import {useApiData} from "@/lib/useApiData";
-import {CategorySelect, COMMON_COLORS, SizeSelect, skuBase} from "./catalogOptions";
+import {CategorySelect, COMMON_COLORS, SizeSelect, skuBase, SubcategoryInput} from "./catalogOptions";
 
 export type InventoryRow = {
   id:string; name:string; category:string|null; sku:string; size:string; color:string|null;
   price:number; available:number; physical:number; reserved:number; productVersion:string; variantVersion:string;
-  productId:string; coverImage:string|null;
+  productId:string; coverImage:string|null; subcategory?:string|null;
 };
 type Props = {row:InventoryRow; path:string; send:Send; close:()=>void; reload:()=>void};
 
@@ -21,6 +21,8 @@ export default function EditVariant({row,path,send,close,reload}:Props) {
   const categories = useApiData<string[]>(ownerApi.url(path+"/categories")).data;
   const [name,setName] = useState(row.name);
   const [category,setCategory] = useState(row.category ?? "");
+  const [subcategory,setSubcategory] = useState(row.subcategory ?? "");
+  const subcategories = useApiData<Record<string,string[]>>(ownerApi.url(path+"/subcategories")).data;
   const [sku,setSku] = useState(row.sku);
   const [size,setSize] = useState(row.size);
   const [color,setColor] = useState(row.color ?? "");
@@ -36,7 +38,7 @@ export default function EditVariant({row,path,send,close,reload}:Props) {
     setBusy(true); setError("");
     try {
       const res = await send(path + "/variants/" + row.id, JSON.stringify({
-        name, category:category.trim() || null, productVersion:row.productVersion, variantVersion:row.variantVersion,
+        name, category:category.trim() || null, subcategory:category.trim() && subcategory.trim() || null, productVersion:row.productVersion, variantVersion:row.variantVersion,
         variant:{sku, size, color, price, stock:Number(stock)}
       }), "PUT");
       if (res.ok) {reload(); return;}
@@ -52,13 +54,16 @@ export default function EditVariant({row,path,send,close,reload}:Props) {
   return <Dialog open onOpenChange={open=>{ if (!open && !busy) (stale ? reload : close)(); }}>
     <DialogContent className="max-w-2xl">
       <DialogHeader><DialogTitle>Editar {row.sku}</DialogTitle>
-        <DialogDescription>El nombre y la categoría se aplican a todas las variantes de esta prenda.</DialogDescription></DialogHeader>
+        <DialogDescription>El nombre, la categoría y la subcategoría se aplican a todas las variantes de esta prenda.</DialogDescription></DialogHeader>
       <form onSubmit={save}>
         <fieldset disabled={busy || stale} className="grid gap-4 sm:grid-cols-2">
           <Field label="Nombre" htmlFor="ev-name"><Input id="ev-name" value={name} onChange={e=>setName(e.target.value)} maxLength={150} required/></Field>
           <Field label="Categoría" htmlFor="ev-category">
             {categories ? <CategorySelect id="ev-category" value={category} onChange={setCategory} categories={categories}/>
               : <Input id="ev-category" value={category} onChange={e=>setCategory(e.target.value)} maxLength={50}/>}</Field>
+          <Field label="Subcategoría" htmlFor="ev-subcategory" className="sm:col-span-2"
+            hint="Opcional. El estilo dentro de la categoría; la IA lo usa para ofrecer variedad (por ejemplo polos retro o de verano).">
+            <SubcategoryInput id="ev-subcategory" value={subcategory} onChange={setSubcategory} category={category} options={subcategories}/></Field>
           <Field label="Talla" htmlFor="ev-size"><SizeSelect id="ev-size" value={size} onChange={setSize} required/></Field>
           <Field label="Color" htmlFor="ev-color"><Input id="ev-color" list="ev-colors" value={color} onChange={e=>setColor(e.target.value)} maxLength={30} required/>
             <datalist id="ev-colors">{COMMON_COLORS.map(c=><option key={c} value={c}/>)}</datalist></Field>

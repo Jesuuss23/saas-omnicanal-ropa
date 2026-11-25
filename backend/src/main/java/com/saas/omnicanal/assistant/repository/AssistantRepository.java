@@ -120,6 +120,12 @@ public class AssistantRepository {
                 SELECT name, CASE WHEN pickup_enabled THEN pickup_address END, CASE WHEN pickup_enabled THEN pickup_hours END,
                        free_delivery_minimum, delivery_per_km IS NOT NULL FROM tenant WHERE id=?
                 """, (rs, n) -> new StoreFacts(rs.getString(1), rs.getString(2), rs.getString(3), rs.getBigDecimal(4),
-                rs.getBoolean(5), baseUrl + "/tienda/" + tenant), tenant).stream().findFirst();
+                rs.getBoolean(5), catalogUrl(baseUrl, tenant)), tenant).stream().findFirst();
+    }
+
+    /** Enlace del catálogo, o null si la URL configurada no es pública (por ejemplo, localhost en desarrollo). */
+    static String catalogUrl(String baseUrl, UUID tenant) {
+        String url = baseUrl + "/tienda/" + tenant;
+        return com.saas.omnicanal.shared.web.PublicLinks.isPublic(url) ? url : null;
     }
 }

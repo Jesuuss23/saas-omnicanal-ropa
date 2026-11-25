@@ -47,10 +47,16 @@ public class ProductCatalogService {
     /** Alta de producto con sus variantes, respetando la cuota de productos del plan. */
     @Transactional
     public UUID create(UUID store, String name, String category, List<VariantDraft> variants) {
+        return create(store, name, category, null, variants);
+    }
+
+    /** {@code subcategory} solo tiene sentido con categoría (por ejemplo Polos → Retro). */
+    @Transactional
+    public UUID create(UUID store, String name, String category, String subcategory, List<VariantDraft> variants) {
         products.lockTenantCatalog(store);
         entitlements.requireQuota(store, Entitlements.CATALOG_PRODUCTS, products.countProducts(store), 1);
         UUID id = UUID.randomUUID();
-        products.insertProduct(store, id, name.strip(), blank(category));
+        products.insertProduct(store, id, name.strip(), blank(category), blank(category) == null ? null : blank(subcategory));
         var used = new HashSet<String>();
         try {
             for (VariantDraft v : variants) {
@@ -65,11 +71,11 @@ public class ProductCatalogService {
     }
 
     @Transactional
-    public void edit(UUID store, UUID variant, String name, String category, VariantDraft draft,
+    public void edit(UUID store, UUID variant, String name, String category, String subcategory, VariantDraft draft,
                      String productVersion, String variantVersion) {
         if (draft.sku().isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe el SKU");
         if (products.updateProductOfVariant(store, variant, name.strip(), blank(category),
-                productVersion) == 0) throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
+                blank(category) == null ? null : blank(subcategory), productVersion) == 0) throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
         try {
             if (products.updateVariant(store, variant, draft, variantVersion) == 0)
                 throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED);
@@ -80,6 +86,10 @@ public class ProductCatalogService {
 
     public List<String> categories(UUID store) {
         return products.categories(store);
+    }
+
+    public java.util.Map<String, List<String>> subcategories(UUID store) {
+        return products.subcategories(store);
     }
 
     /** Ficha del producto al que apunta un QR: el de una variante (etiquetas actuales) o el de un producto. */

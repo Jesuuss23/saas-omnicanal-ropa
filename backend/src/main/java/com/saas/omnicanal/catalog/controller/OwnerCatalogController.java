@@ -26,10 +26,10 @@ public class OwnerCatalogController {
                    @NotBlank @Size(max=30) String color,
                    @NotNull @Positive @Digits(integer=8, fraction=2) BigDecimal price,
                    @NotNull @PositiveOrZero Integer stock) {}
-    record Product(@NotBlank @Size(max=150) String name, @Size(max=50) String category,
+    record Product(@NotBlank @Size(max=150) String name, @Size(max=50) String category, @Size(max=50) String subcategory,
                    @NotEmpty @Size(max=100) List<@NotNull @Valid Variant> variants) {}
     record Created(UUID id) {}
-    record Edit(@NotBlank @Size(max=150) String name, @Size(max=50) String category,
+    record Edit(@NotBlank @Size(max=150) String name, @Size(max=50) String category, @Size(max=50) String subcategory,
                 @NotNull @Valid Variant variant, @NotBlank String productVersion, @NotBlank String variantVersion) {}
 
     @GetMapping
@@ -46,12 +46,19 @@ public class OwnerCatalogController {
         return catalog.categories(store);
     }
 
+    /** Subcategorías por categoría, por ejemplo {"Polos": ["Retro", "Verano"]}. */
+    @GetMapping("/subcategories")
+    java.util.Map<String, List<String>> subcategories(@PathVariable UUID store, Principal principal) {
+        requireOwner(store, principal);
+        return catalog.subcategories(store);
+    }
+
     @PutMapping("/variants/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void edit(@PathVariable UUID store, @PathVariable UUID id, Principal principal, @Valid @RequestBody Edit edit) {
         requireOwner(store, principal);
         Variant v = edit.variant();
-        catalog.edit(store, id, edit.name(), edit.category(),
+        catalog.edit(store, id, edit.name(), edit.category(), edit.subcategory(),
                 ProductCatalogService.normalize(v.sku(), v.size(), v.color(), v.price(), v.stock()),
                 edit.productVersion(), edit.variantVersion());
     }
@@ -62,6 +69,6 @@ public class OwnerCatalogController {
         requireOwner(store, principal);
         var drafts = product.variants().stream()
                 .map(v -> ProductCatalogService.normalize(v.sku(), v.size(), v.color(), v.price(), v.stock())).toList();
-        return new Created(catalog.create(store, product.name(), product.category(), drafts));
+        return new Created(catalog.create(store, product.name(), product.category(), product.subcategory(), drafts));
     }
 }

@@ -41,6 +41,24 @@ Compatibilidad con Evolution 2.3.x (Baileys 7):
   reconoce por el mismo `key.id`, o por el mismo texto aún en curso si el webhook llega antes que la respuesta del envío.
 - **Acuses (`MESSAGES_UPDATE`):** se aceptan en chats `@lid` y `@s.whatsapp.net`.
 
+### Archivos (voz, imagen, video y documentos)
+
+- **Entrantes:** Evolution (`audioMessage`, `imageMessage`, `videoMessage`, `documentMessage`, también dentro de
+  `ephemeralMessage` o `viewOnceMessage`) y Cloud API (`type` `audio`, `image`, `video`, `document`). El mensaje se guarda
+  al instante con `media_type`, `mime_type`, `caption` y `media_status = 'PENDING'`; el cuerpo es la leyenda o un marcador
+  (`[Nota de voz]`, `[Imagen]`, `[Video]`, `[Documento]`) que también recibe la IA. Después de confirmar la transacción,
+  `WhatsAppMediaService` descarga el archivo en segundo plano: Evolution con `message.base64` si viene en el webhook o
+  `POST /chat/getBase64FromMediaMessage/{instance}`; Cloud API con `GET /{media_id}` y la URL que devuelve, con el token
+  de la tienda. Queda en `whatsapp_media` (PostgreSQL, hasta 16 MB) con `media_url = /media/{id}` y estado `STORED`;
+  si falla, `FAILED`, y si es más grande, `TOO_LARGE`.
+- **Lectura:** `GET /api/owner/stores/{id}/whatsapp/media/{mediaId}`, solo para el equipo de la tienda.
+- **Envío:** `POST /api/owner/stores/{id}/whatsapp/replies/{requestId}/media` (multipart `chat`, `caption`, `file`). El tipo
+  se valida por los primeros bytes: JPG, PNG, WebP, MP4/3GP o PDF. Evolution usa `POST /message/sendMedia/{instance}` en
+  base64; Cloud API sube el archivo a `POST /{phone_number_id}/media` y lo envía por id. Imágenes y videos (de la bandeja o
+  de la IA) requieren la capacidad `whatsapp.media.send` (planes Premium y Piloto); sin ella el backend responde 402 con
+  "Tu plan no incluye enviar imágenes ni videos por WhatsApp. Está disponible en el plan Premium.". Los PDF se envían con
+  cualquier plan. `GET .../whatsapp/media/capabilities` devuelve `{send}` para la bandeja.
+
 ### WhatsApp Cloud API (oficial de Meta)
 Datos que pide el panel (Meta for Developers → tu app → WhatsApp → Configuración de la API):
 
@@ -177,6 +195,18 @@ y nombres exactos de eventos (`CulqiWebhookService.classify`). Sin `type`, un ca
   mensajes quedan `SKIPPED` con `off_topic_paused` antes de llamar al modelo (0 tokens). Se reinicia cuando el equipo
   activa la IA, toma o devuelve la conversación, o la cierra y el cliente vuelve a escribir. La prueba del panel aplica
   las mismas reglas (el panel envía `offTopicCount`) y agrupa igual los mensajes seguidos.
+- **Categorías y subcategorías:** `product.subcategory` (por ejemplo Polos → Retro, Verano, Invierno). La herramienta
+  `categorias` devuelve el árbol con prendas en stock; ante una pregunta general, la IA cuenta la variedad, pregunta cuál
+  se adecua mejor y ofrece más información o el catálogo de la categoría.
+- **Catálogo por categoría (un solo recurso):** cada categoría puede tener PDF, imagen y enlace, pero se usa uno. El
+  dueño elige cuál (`active`) o deja Automático, que toma el primero cargado en orden **PDF → imagen → enlace**. La IA lo
+  manda con `enviarCatalogo`: el PDF subido o generado se adjunta como documento después del texto, la imagen solo si el
+  plan tiene `whatsapp.media.send` (si no, pasa al siguiente) y el enlace solo si es público. El PDF se genera desde el
+  catálogo (`GET /api/owner/stores/{id}/catalog/pdf?category=` para descargarlo, `POST .../catalog/resources/generated-pdf`
+  para guardarlo como el PDF de la categoría): A4, 6 prendas por página con foto, subcategoría, precios, tallas y colores,
+  hasta 10 MB.
+- **Sin enlaces locales:** si `STOREFRONT_BASE_URL` es localhost, una IP privada o un host sin dominio, la IA no recibe
+  enlace del catálogo y el texto final pasa por `PublicLinks.stripPrivate`, que borra cualquier URL no pública.
 
 ## Marketing
 

@@ -4,7 +4,7 @@ import {ownerApi,type Send} from "@/lib/api";
 import {useState,type FormEvent} from "react";
 import {useApiData} from "@/lib/useApiData";
 
-const labels={NONE:"Ninguno",LINK:"Enlace",PDF:"PDF",IMAGE:"Imagen"};
+const labels={NONE:"Automático",LINK:"Enlace",PDF:"PDF",IMAGE:"Imagen"};
 type Kind=keyof typeof labels;
 type Resource={category:string;link:string|null;pdf:string|null;image:string|null;active:Kind;revision:number};
 type Props={store:string;chat?:string;disabled?:boolean;insert?:(line:string)=>void;
@@ -15,7 +15,8 @@ function activeUrl(resource:Resource) {
     case "LINK": return resource.link;
     case "PDF": return resource.pdf;
     case "IMAGE": return resource.image;
-    default: return null;
+    // Automático: el primero cargado en orden PDF → imagen → enlace.
+    default: return resource.pdf ?? resource.image ?? resource.link;
   }
 }
 
@@ -58,8 +59,10 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
   })).filter((row,index,all)=>all.indexOf(row)===index);
   const selected=options.find(row=>row.category===category) || (insert && options.find(row=>activeUrl(row))) || options[0];
   const resourceUrl=selected ? activeUrl(selected) : null;
+  const shownKind:Kind=!selected ? "NONE" : selected.active!=="NONE" ? selected.active
+    : selected.pdf ? "PDF" : selected.image ? "IMAGE" : selected.link ? "LINK" : "NONE";
 
-  const shareUrl=selected?.active==="PDF" && resourceUrl?.startsWith("/catalogos/")
+  const shareUrl=shownKind==="PDF" && resourceUrl?.startsWith("/catalogos/")
     ? resourceUrl+"?view=1" : resourceUrl;
 
   const categoryPath=selected
@@ -105,11 +108,11 @@ export default function CategoryResources({store,chat,disabled,insert,send}:Prop
         {insert ? <div className="flex flex-wrap gap-3">
           {shareUrl && <>
             <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">
-              Revisar {labels[selected.active].toLowerCase()} de {selected.category}
+              Revisar {labels[shownKind].toLowerCase()} de {selected.category}
             </a>
             <button type="button" disabled={disabled} className="text-primary underline"
               onClick={()=>insert("Catálogo de "+selected.category+": "+new URL(shareUrl,window.location.origin).href)}>
-              Agregar {labels[selected.active].toLowerCase()} al borrador
+              Agregar {labels[shownKind].toLowerCase()} al borrador
             </button>
           </>}
           <button type="button" disabled={disabled} className="text-primary underline" onClick={()=>{
