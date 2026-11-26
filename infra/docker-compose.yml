@@ -4,9 +4,12 @@ services:
     ports:
       - "6379:6379"
   evolution-api:
-    image: evoapicloud/evolution-api:v2.1.1
+    image: evoapicloud/evolution-api:v2.3.7
     ports:
-      - "6380:6379"
+      - "8081:8080"
+    volumes:
+      - evolution_store:/evolution/store
+      - evolution_instances:/evolution/instances
     environment:
       - SERVER_URL=http://localhost:8081
       - DOCKER_ENV=true
@@ -14,7 +17,12 @@ services:
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:?Define EVOLUTION_API_KEY en infra/.env}
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=${EVOLUTION_DATABASE_URI:?Define EVOLUTION_DATABASE_URI en infra/.env}
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_LOCAL_ENABLED=true
       - RABBITMQ_ENABLED=false
       - WEBSOCKET_ENABLED=true
     depends_on:
       - redis
+volumes:
+  evolution_store:
+  evolution_instances:
