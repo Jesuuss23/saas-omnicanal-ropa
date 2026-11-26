@@ -15,7 +15,8 @@ import {useApiData} from "@/lib/useApiData";
 import {useStore} from "../_panel/StoreContext";
 
 type Appearance = {name: string; tagline: string | null; description: string | null; primaryColor: string;
-  whatsappPhone: string | null; instagram: string | null; hasLogo: boolean; logoVersion: number; revision: number};
+  whatsappPhone: string | null; instagram: string | null; hasLogo: boolean; logoVersion: number; revision: number;
+  logoUrl?: string | null};
 
 const swatches = ["#0f766e", "#1d4ed8", "#7c3aed", "#be185d", "#c2410c", "#15803d", "#111827"];
 
@@ -38,7 +39,7 @@ function AppearanceForm({store, path, initial, onSaved}: {store: string; path: s
   const [error, setError] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const set = <K extends keyof Appearance>(key: K, value: Appearance[K]) => setDraft(d => ({...d, [key]: value}));
-  const logoUrl = initial.hasLogo ? publicApi.url("stores/" + store + "/logo") + "?v=" + initial.logoVersion : null;
+  const logoUrl = initial.hasLogo ? initial.logoUrl ?? publicApi.url("stores/" + store + "/logo") + "?v=" + initial.logoVersion : null;
 
   async function save(event: FormEvent) {
     event.preventDefault();

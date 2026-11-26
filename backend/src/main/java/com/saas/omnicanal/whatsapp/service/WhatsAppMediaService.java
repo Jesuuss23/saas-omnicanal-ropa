@@ -4,6 +4,8 @@ import com.saas.omnicanal.assistant.service.AssistantService;
 import com.saas.omnicanal.media.ModerationClient;
 import com.saas.omnicanal.media.TranscriptionClient;
 import com.saas.omnicanal.media.VisionCatalogService;
+import com.saas.omnicanal.shared.storage.MediaStorage;
+import com.saas.omnicanal.shared.storage.StoredFile;
 import com.saas.omnicanal.whatsapp.model.InboundMediaEvent;
 import com.saas.omnicanal.whatsapp.model.InboundMessageEvent;
 import com.saas.omnicanal.whatsapp.model.MediaKind;
@@ -46,6 +48,7 @@ public class WhatsAppMediaService {
     private final VisionCatalogService vision;
     private final AssistantService assistant;
     private final ApplicationEventPublisher events;
+    private final MediaStorage storage;
     private final boolean visionRequiresModeration;
     private final ObjectMapper json = new ObjectMapper();
     private final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -53,6 +56,7 @@ public class WhatsAppMediaService {
     public WhatsAppMediaService(WhatsAppMediaRepository media, EvolutionApiClient evolution, CloudApiClient cloud,
                                 CloudApiService cloudAccounts, ModerationClient moderation, TranscriptionClient transcription,
                                 VisionCatalogService vision, @Lazy AssistantService assistant, ApplicationEventPublisher events,
+                                MediaStorage storage,
                                 @Value("${media.vision.require-moderation:true}") boolean visionRequiresModeration) {
         this.media = media;
         this.evolution = evolution;
@@ -63,6 +67,7 @@ public class WhatsAppMediaService {
         this.vision = vision;
         this.assistant = assistant;
         this.events = events;
+        this.storage = storage;
         this.visionRequiresModeration = visionRequiresModeration;
         executor.setCorePoolSize(1);
         executor.setMaxPoolSize(3);
@@ -119,7 +124,7 @@ public class WhatsAppMediaService {
                 if (waitsForAnalysis(e.kind())) toAssistant(e, null);
                 return;
             }
-            id = media.store(e.tenant(), e.kind(), mime, null, content);
+            id = media.store(e.tenant(), e.kind(), mime, null, content, upload(e, content, mime));
             media.finishInbound(e.tenant(), e.chat(), e.messageId(), "STORED", WhatsAppMediaRepository.url(id), mime);
         } catch (RuntimeException ex) {
             log.warn("WhatsApp: no se pudo descargar el archivo {} de {}: {}", e.messageId(), e.tenant(), ex.getMessage());
@@ -128,6 +133,21 @@ public class WhatsAppMediaService {
             return;
         }
         process(e, id, content, mime);
+    }
+
+    /**
+     * Sube el archivo a Cloudinary. Si no está configurado o falla, devuelve null y el archivo se guarda en la base:
+     * el webhook no se puede reintentar, así que el archivo nunca se pierde.
+     */
+    private StoredFile upload(InboundMediaEvent e, byte[] content, String mime) {
+        if (!storage.enabled()) return null;
+        try {
+            return storage.upload(e.tenant(), MediaStorage.Folder.WHATSAPP_INBOUND, content, mime, null);
+        } catch (RuntimeException ex) {
+            log.warn("WhatsApp: no se pudo subir a Cloudinary el archivo {} de {}; se guarda en la base: {}",
+                    e.messageId(), e.tenant(), ex.getMessage());
+            return null;
+        }
     }
 
     /** Procesa un archivo ya guardado. Público para las pruebas; reutiliza todo lo que ya esté en la base. */

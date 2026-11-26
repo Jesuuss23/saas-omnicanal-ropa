@@ -1,12 +1,16 @@
 package com.saas.omnicanal.whatsapp.repository;
 
+import com.saas.omnicanal.shared.storage.StoredFile;
 import com.saas.omnicanal.whatsapp.model.MediaKind;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** Archivos de WhatsApp guardados en la base. Se exponen como {@code /media/{id}} dentro de la API del panel. */
+/**
+ * Archivos de WhatsApp. Se exponen como {@code /media/{id}} dentro de la API del panel; con Cloudinary la base guarda
+ * solo la referencia ({@code storage_url}) y el contenido queda en null.
+ */
 @Repository
 public class WhatsAppMediaRepository {
     public static final int MAX_BYTES = 16 * 1024 * 1024;
@@ -16,17 +20,30 @@ public class WhatsAppMediaRepository {
         this.db = db;
     }
 
-    public record Media(MediaKind kind, String mimeType, String fileName, byte[] content) {}
+    /** {@code content} es null cuando el archivo está en Cloudinary ({@code url}). */
+    public record Media(MediaKind kind, String mimeType, String fileName, byte[] content, String url) {}
+    public record StoredRef(String publicId, String resourceType) {}
 
     public static String url(UUID id) {
         return "/media/" + id;
     }
 
     public UUID store(UUID tenant, MediaKind kind, String mimeType, String fileName, byte[] content) {
+        return store(tenant, kind, mimeType, fileName, content, null);
+    }
+
+    /**
+     * Guarda el archivo: con {@code stored} solo la referencia de Cloudinary; sin ella, el contenido en la base. El hash
+     * del contenido se guarda siempre (caché de transcripción, moderación y visión).
+     */
+    public UUID store(UUID tenant, MediaKind kind, String mimeType, String fileName, byte[] content, StoredFile stored) {
         return db.queryForObject("""
-                INSERT INTO whatsapp_media(tenant_id, kind, mime_type, file_name, content, content_sha256)
-                VALUES (?,?,left(?,100),left(?,200),?,?) RETURNING id
-                """, UUID.class, tenant, kind.name(), mimeType, fileName, content, sha256(content));
+                INSERT INTO whatsapp_media(tenant_id, kind, mime_type, file_name, content, content_sha256,
+                                           storage_url, storage_public_id, storage_resource_type, storage_bytes)
+                VALUES (?,?,left(?,100),left(?,200),?,?,?,?,?,?) RETURNING id
+                """, UUID.class, tenant, kind.name(), mimeType, fileName, stored == null ? content : null, sha256(content),
+                stored == null ? null : stored.url(), stored == null ? null : stored.publicId(),
+                stored == null ? null : stored.resourceType(), stored == null ? null : stored.bytes());
     }
 
     public static String sha256(byte[] content) {
@@ -119,13 +136,16 @@ public class WhatsAppMediaRepository {
     }
 
     public Optional<Media> read(UUID tenant, UUID id) {
-        return db.query("SELECT kind, mime_type, file_name, content FROM whatsapp_media WHERE tenant_id=? AND id=?",
-                (rs, n) -> new Media(MediaKind.valueOf(rs.getString(1)), rs.getString(2), rs.getString(3), rs.getBytes(4)),
+        return db.query("SELECT kind, mime_type, file_name, content, storage_url FROM whatsapp_media WHERE tenant_id=? AND id=?",
+                (rs, n) -> new Media(MediaKind.valueOf(rs.getString(1)), rs.getString(2), rs.getString(3), rs.getBytes(4), rs.getString(5)),
                 tenant, id).stream().findFirst();
     }
 
-    public void delete(UUID tenant, UUID id) {
-        db.update("DELETE FROM whatsapp_media WHERE tenant_id=? AND id=?", tenant, id);
+    /** Borra la fila; devuelve su archivo de Cloudinary (si tenía) para borrarlo allá. */
+    public Optional<StoredRef> delete(UUID tenant, UUID id) {
+        return db.query("DELETE FROM whatsapp_media WHERE tenant_id=? AND id=? RETURNING storage_public_id, storage_resource_type",
+                (rs, n) -> new StoredRef(rs.getString(1), rs.getString(2)), tenant, id).stream()
+                .filter(r -> r.publicId() != null).findFirst();
     }
 
     /** Resultado de la descarga de un archivo entrante: STORED (con url), FAILED o TOO_LARGE. */

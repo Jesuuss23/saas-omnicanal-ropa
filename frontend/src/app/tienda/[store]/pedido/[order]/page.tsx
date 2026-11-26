@@ -23,7 +23,7 @@ type Detail=Pick<Order,"items"|"total"|"freeDelivery"|"deliveryFee"|"method"> & 
   status:keyof typeof statuses;
   reservationExpiresAt?:string;
   pickup?:{address:string;hours:string}|null;
-  store?:{name:string;primaryColor:string|null;logoVersion:number|null;whatsappPhone:string|null}|null;
+  store?:{name:string;primaryColor:string|null;logoVersion:number|null;whatsappPhone:string|null;logoUrl?:string|null}|null;
 };
 
 export default function OrderTracking() {
@@ -99,7 +99,7 @@ function OrderDetails({store,order,token}:{store:string;order:string;token:strin
     ? "/tienda/"+encodeURIComponent(store) : undefined;
   const brand=detail?.store;
   const theme=brandStyle(brand ? {primaryColor:brand.primaryColor ?? "", tagline:null, description:null, whatsappPhone:null, instagram:null, logoVersion:null} : null) as CSSProperties;
-  const logo=brand?.logoVersion ? "/api/public/stores/"+store+"/logo?v="+brand.logoVersion : null;
+  const logo=brand?.logoUrl ?? (brand?.logoVersion ? "/api/public/stores/"+store+"/logo?v="+brand.logoVersion : null);
   const amounts=detail ? getOrderAmounts({merchandise:detail.total,method:detail.method,freeDelivery:detail.freeDelivery,fee:detail.deliveryFee}) : null;
   const payable=detail ? detail.total+(detail.freeDelivery ? 0 : detail.deliveryFee ?? 0) : 0;
   const whatsapp=whatsappLink(brand?.whatsappPhone,"Hola "+(brand?.name || "")+", tengo una consulta sobre mi pedido "+order.slice(0,8).toUpperCase()+".");

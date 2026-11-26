@@ -137,6 +137,10 @@ class OwnerWhatsAppController {
         if (!reveal && media.blocked(store, id))
             throw new ResponseStatusException(HttpStatus.UNAVAILABLE_FOR_LEGAL_REASONS, "Imagen bloqueada por contenido explícito.");
         var file = media.read(store, id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        // En Cloudinary: redirige a la secure_url, solo después de comprobar el dueño y el bloqueo.
+        if (file.content() == null)
+            return ResponseEntity.status(HttpStatus.FOUND).location(java.net.URI.create(file.url()))
+                    .cacheControl(CacheControl.noStore()).build();
         MediaType type;
         try {
             type = MediaType.parseMediaType(file.mimeType());

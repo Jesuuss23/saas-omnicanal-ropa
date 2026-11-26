@@ -9,7 +9,7 @@ import {discountPercent, LOW_STOCK} from "@/lib/pricing";
 import ProductDetail from "./ProductDetail";
 
 export type Variant = {id:string; productId:string; name:string; category:string|null; size:string; color:string|null; price:number; available:number; coverImage:string|null;
-  subcategory?:string|null; compareAtPrice?:number|null; backImage?:string|null};
+  subcategory?:string|null; compareAtPrice?:number|null; backImage?:string|null; coverImageUrl?:string|null; backImageUrl?:string|null};
 type Availability = {id:string; price:number; available:number};
 type StockIssue = {message:string; available:number};
 type Line = Pick<Variant,"id"|"name"|"size"|"color"|"price"> & {quantity:number; available?:number};
@@ -234,11 +234,11 @@ export default function CatalogCart({store,variants,query,pager,theme}:{store:st
                 {item.coverImage
                   ? <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photo(item.coverImage)} alt={product.name} loading="lazy"
+                    <img src={item.coverImageUrl ?? photo(item.coverImage)} alt={product.name} loading="lazy"
                       className={"size-full object-cover transition duration-500 group-hover:scale-[1.04]"+(item.backImage ? " group-hover:opacity-0" : "")}/>
                     {item.backImage && <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo(item.backImage)} alt="" loading="lazy" aria-hidden
+                      <img src={item.backImageUrl ?? photo(item.backImage)} alt="" loading="lazy" aria-hidden
                         className="absolute inset-0 size-full object-cover opacity-0 transition duration-500 group-hover:scale-[1.04] group-hover:opacity-100"/></>}
                   </>
                   : <span className="grid size-full place-items-center text-muted-foreground"><ImageOff aria-hidden className="size-8"/></span>}

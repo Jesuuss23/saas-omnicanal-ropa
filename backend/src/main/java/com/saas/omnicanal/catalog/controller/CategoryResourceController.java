@@ -1,5 +1,8 @@
 package com.saas.omnicanal.catalog.controller;
 
+import com.saas.omnicanal.catalog.repository.CategoryResourceRepository;
+import com.saas.omnicanal.shared.storage.MediaStorage;
+import com.saas.omnicanal.shared.storage.StoredFile;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.net.URI;
@@ -15,8 +18,14 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/owner/stores/{store}/catalog/resources")
 class CategoryResourceController {
     private final JdbcTemplate db;
+    private final MediaStorage storage;
+    private final CategoryResourceRepository resources;
 
-    CategoryResourceController(JdbcTemplate db) { this.db = db; }
+    CategoryResourceController(JdbcTemplate db, MediaStorage storage, CategoryResourceRepository resources) {
+        this.db = db;
+        this.storage = storage;
+        this.resources = resources;
+    }
 
     enum Kind { NONE, LINK, PDF, IMAGE }
     record Resource(@NotBlank @Size(max=50) String category, @Size(max=2048) String link,
@@ -62,10 +71,13 @@ class CategoryResourceController {
                     """,link,pdf,image,input.active().name(),store,input.category(),input.revision());
         }
         if (changed!=1) throw new ResponseStatusException(HttpStatus.CONFLICT);
-        db.update("""
+        // Los archivos que dejó de usar la categoría se borran de la base y, al confirmar, de Cloudinary.
+        db.query("""
                 DELETE FROM category_catalog_file WHERE tenant_id=? AND category=? AND
                 ('/catalogos/' || id::text) IS DISTINCT FROM (CASE WHEN kind='PDF' THEN CAST(? AS text) ELSE CAST(? AS text) END)
-                """,store,input.category(),pdf,image);
+                RETURNING storage_public_id, storage_resource_type
+                """,(rs,row)->new String[]{rs.getString(1),rs.getString(2)},store,input.category(),pdf,image)
+                .forEach(f->storage.deleteAfterCommit(f[0],f[1]));
         return new Resource(input.category(),link,pdf,image,input.active(),input.revision()+1);
     }
 
@@ -104,8 +116,15 @@ class CategoryResourceController {
         else if (kind==Kind.IMAGE && signature.startsWith("ffd8ff")) mime="image/jpeg";
         else throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         UUID id=UUID.randomUUID();
-        db.update("INSERT INTO category_catalog_file(id,tenant_id,category,kind,media_type,content) VALUES (?,?,?,?,?,?)",
-                id,store,category,kind.name(),mime,bytes);
+        StoredFile stored=null;
+        if (storage.enabled()) {
+            try { stored=storage.upload(store,MediaStorage.Folder.CATALOGS,bytes,mime,kind==Kind.PDF?"catalogo.pdf":null); }
+            catch (MediaStorage.StorageException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"No se pudo guardar el archivo. Inténtalo otra vez.");
+            }
+            storage.deleteOnRollback(stored);
+        }
+        resources.insertFile(id,store,category,kind.name(),mime,bytes,stored);
         return "/catalogos/"+id;
     }
 

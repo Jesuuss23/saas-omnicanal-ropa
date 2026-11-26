@@ -107,6 +107,18 @@ media:
     # Sin moderación confirmada (SAFE) no se analiza la foto.
     require-moderation: ${VISION_REQUIRE_MODERATION:true}
 
+# Archivos que no son texto (fotos, logo, catálogos, multimedia de WhatsApp). Con las tres credenciales se suben a
+# Cloudinary y la base guarda solo la secure_url; sin ellas se guardan en la base de datos (desarrollo y pruebas).
+storage:
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    # Carpeta raíz; cada tienda usa {folder}/{storeId}/...
+    folder: ${CLOUDINARY_FOLDER:omnicanal}
+  # true: al arrancar sube por lotes a Cloudinary los archivos antiguos guardados en la base y libera su contenido.
+  backfill: ${CLOUDINARY_BACKFILL:false}
+
 app:
   # URL pública del frontend, usada en los enlaces de los correos.
   base-url: ${APP_BASE_URL:${STOREFRONT_BASE_URL:http://localhost:3000}}

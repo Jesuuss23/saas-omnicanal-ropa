@@ -65,6 +65,9 @@ class StoreAppearanceController {
     @GetMapping("/api/public/stores/{store}/logo")
     ResponseEntity<byte[]> publicLogo(@PathVariable UUID store) {
         var logo = appearance.logo(store).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (logo.content() == null)
+            return ResponseEntity.status(HttpStatus.FOUND).location(java.net.URI.create(logo.url()))
+                    .cacheControl(CacheControl.maxAge(Duration.ofDays(1)).cachePublic()).build();
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofDays(1)).cachePublic())
                 .contentType(MediaType.parseMediaType(logo.mediaType())).header("X-Content-Type-Options", "nosniff")
                 .body(logo.content());

@@ -88,7 +88,7 @@ export default async function StoreCatalog(props:Props) {
   const sharePath=link({page});
   const whatsapp=whatsappLink(brand?.whatsappPhone,"Hola "+catalog.storeName+", vi su catálogo y quiero hacer una consulta.");
   const instagram=instagramLink(brand?.instagram);
-  const logo=brand?.logoVersion ? "/api/public/stores/"+store+"/logo?v="+brand.logoVersion : null;
+  const logo=brand?.logoUrl ?? (brand?.logoVersion ? "/api/public/stores/"+store+"/logo?v="+brand.logoVersion : null);
   const filtered=Boolean(query || size || color || category);
 
   return <div style={brandStyle(brand) as CSSProperties} className="min-h-dvh bg-background text-foreground">

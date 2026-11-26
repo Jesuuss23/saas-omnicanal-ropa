@@ -138,7 +138,9 @@ public class ConversationRepository {
     public List<Message> messages(UUID tenant, String chat, int limit) {
         var newestFirst = db.query("""
                 SELECT t.author, t.body, t.at, t.status, t.media_type, t.mime_type, t.media_url, t.media_status, t.caption,
-                       f.transcript, f.moderation_status, f.vision_analysis_json::text, t.ai_context FROM (
+                       f.transcript, f.moderation_status, f.vision_analysis_json::text, t.ai_context,
+                       CASE WHEN f.moderation_status = 'BLOCKED_NSFW' OR t.media_status = 'BLOCKED_NSFW' THEN NULL
+                            ELSE f.storage_url END FROM (
                     SELECT 'CUSTOMER' AS author, m.body, m.received_at AS at, NULL AS status, m.media_type, m.mime_type,
                            m.media_url, m.media_status, m.caption, m.ai_context FROM whatsapp_inbound_message m
                      WHERE m.tenant_id = ? AND m.chat_id = ?
@@ -152,7 +154,7 @@ public class ConversationRepository {
                  ORDER BY t.at DESC LIMIT ?
                 """, (rs, n) -> new Message(rs.getString(1), rs.getString(2), instant(rs.getTimestamp(3)), rs.getString(4),
                         rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8), rs.getString(9),
-                        rs.getString(10), rs.getString(11), json(rs.getString(12)), rs.getString(13)),
+                        rs.getString(10), rs.getString(11), json(rs.getString(12)), rs.getString(13), rs.getString(14)),
                 tenant, chat, tenant, chat, tenant, limit);
         var chronological = new java.util.ArrayList<>(newestFirst);
         java.util.Collections.reverse(chronological);

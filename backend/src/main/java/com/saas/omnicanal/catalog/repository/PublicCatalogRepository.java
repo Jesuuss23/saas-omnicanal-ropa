@@ -65,14 +65,19 @@ public class PublicCatalogRepository {
                        (SELECT i.id FROM product_image i WHERE i.tenant_id = p.tenant_id AND i.product_id = p.id
                          ORDER BY i.position LIMIT 1) AS cover,
                        (SELECT i.id FROM product_image i WHERE i.tenant_id = p.tenant_id AND i.product_id = p.id
-                         ORDER BY i.position OFFSET 1 LIMIT 1) AS back
+                         ORDER BY i.position OFFSET 1 LIMIT 1) AS back,
+                       (SELECT i.storage_url FROM product_image i WHERE i.tenant_id = p.tenant_id AND i.product_id = p.id
+                         ORDER BY i.position LIMIT 1) AS cover_url,
+                       (SELECT i.storage_url FROM product_image i WHERE i.tenant_id = p.tenant_id AND i.product_id = p.id
+                         ORDER BY i.position OFFSET 1 LIMIT 1) AS back_url
                 """ + MATCHES + CATEGORY + SIZE + COLOR + """
                    AND (CAST(? AS uuid) IS NULL OR v.id = ?)
                  ORDER BY p.name, p.id, array_position(ARRAY['XXS','XS','S','M','L','XL','XXL','XXXL'], upper(trim(v.size))) NULLS LAST, length(v.size), v.size, v.color, v.id LIMIT ? OFFSET ?
                 """, (rs, n) -> new Variant(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3),
                 rs.getString(4), rs.getString(5), rs.getString(6), rs.getBigDecimal(7), rs.getInt("available"),
                 rs.getObject("cover", UUID.class), rs.getString("subcategory"),
-                rs.getBigDecimal("compare_at_price"), rs.getObject("back", UUID.class)),
+                rs.getBigDecimal("compare_at_price"), rs.getObject("back", UUID.class),
+                rs.getString("cover_url"), rs.getString("back_url")),
                 tenant, f.query(), f.category(), f.category(), f.size(), f.size(), f.color(), f.color(),
                 f.variant(), f.variant(), limit, offset);
     }
@@ -83,8 +88,10 @@ public class PublicCatalogRepository {
                 (rs, n) -> new String[]{rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5)},
                 tenant, product).stream().findFirst();
         if (head.isEmpty()) return Optional.empty();
-        var images = db.queryForList("SELECT id FROM product_image WHERE tenant_id=? AND product_id=? ORDER BY position, id",
-                UUID.class, tenant, product);
+        var photos = db.query("SELECT id, storage_url FROM product_image WHERE tenant_id=? AND product_id=? ORDER BY position, id",
+                (rs, n) -> new Object[]{rs.getObject(1, UUID.class), rs.getString(2)}, tenant, product);
+        List<UUID> images = photos.stream().map(r -> (UUID) r[0]).toList();
+        List<String> imageUrls = photos.stream().map(r -> (String) r[1]).collect(java.util.stream.Collectors.toList());
         var options = db.query("""
                 SELECT id, size, color, price, compare_at_price,
                        greatest(coalesce(stock_physical, 0) - coalesce(stock_reserved, 0), 0) AS available
@@ -98,7 +105,7 @@ public class PublicCatalogRepository {
                 rs.getInt("available")), tenant, product);
         String[] h = head.get();
         return Optional.of(new com.saas.omnicanal.catalog.model.PublicCatalog.ProductDetail(product, h[0], h[1], h[2], h[3], h[4],
-                images, options));
+                images, options, imageUrls));
     }
 
     /** Prenda parecida a una foto: {@code score} suma tipo (3), subcategoría (2) y color (2); se piden al menos tipo o color. */

@@ -1,5 +1,5 @@
 /** Utilidades de marca de la tienda pública: el color lo elige el dueño, así que el texto sobre él se calcula. */
-export type Brand = {tagline:string|null; description:string|null; primaryColor:string; whatsappPhone:string|null; instagram:string|null; logoVersion:number|null};
+export type Brand = {tagline:string|null; description:string|null; primaryColor:string; whatsappPhone:string|null; instagram:string|null; logoVersion:number|null; logoUrl?:string|null};
 
 const HEX=/^#[0-9a-f]{6}$/i;
 
