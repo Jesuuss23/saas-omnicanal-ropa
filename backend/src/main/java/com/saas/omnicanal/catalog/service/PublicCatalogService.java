@@ -33,7 +33,7 @@ public class PublicCatalogService {
         var rows = catalog.variants(tenant, f, PAGE_SIZE + 1, (long) page * PAGE_SIZE);
         var resource = f.category().isBlank() ? null : catalog.resource(tenant, f.category()).orElse(null);
         var brand = appearance.find(tenant).map(a -> new Brand(a.tagline(), a.description(), a.primaryColor(),
-                a.whatsappPhone(), a.instagram(), a.hasLogo() ? a.logoVersion() : null)).orElse(null);
+                a.whatsappPhone(), a.instagram(), a.hasLogo() ? a.logoVersion() : null, a.logoUrl())).orElse(null);
         return new PublicCatalog(store.name(), rows.stream().limit(PAGE_SIZE).toList(), rows.size() > PAGE_SIZE,
                 store.pickup(), catalog.sizes(tenant, f), catalog.colors(tenant, f), catalog.categories(tenant, f),
                 resource, brand);

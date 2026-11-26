@@ -73,7 +73,7 @@ public class StoreOverviewRepository {
                 SELECT
                   EXISTS (SELECT 1 FROM product WHERE tenant_id = ?),
                   EXISTS (SELECT 1 FROM product_image WHERE tenant_id = ?),
-                  EXISTS (SELECT 1 FROM store_appearance WHERE tenant_id = ? AND (logo IS NOT NULL OR tagline IS NOT NULL)),
+                  EXISTS (SELECT 1 FROM store_appearance WHERE tenant_id = ? AND (logo IS NOT NULL OR logo_storage_url IS NOT NULL OR tagline IS NOT NULL)),
                   EXISTS (SELECT 1 FROM tenant WHERE id = ? AND (pickup_enabled OR delivery_per_km IS NOT NULL)),
                   EXISTS (SELECT 1 FROM whatsapp_inbound_message WHERE tenant_id = ?)
                     OR EXISTS (SELECT 1 FROM whatsapp_cloud_credential WHERE tenant_id = ? AND status = 'VERIFIED'),

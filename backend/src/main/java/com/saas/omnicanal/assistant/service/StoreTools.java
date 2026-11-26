@@ -6,6 +6,7 @@ import com.saas.omnicanal.assistant.model.AssistantModels.Item;
 import com.saas.omnicanal.assistant.model.AssistantModels.Subcategory;
 import com.saas.omnicanal.catalog.repository.CategoryResourceRepository;
 import com.saas.omnicanal.catalog.repository.ProductImageRepository;
+import com.saas.omnicanal.shared.storage.MediaStorage;
 import com.saas.omnicanal.shared.web.PublicLinks;
 import com.saas.omnicanal.assistant.model.AssistantModels.StoreFacts;
 import com.saas.omnicanal.catalog.model.PublicCatalog.Filters;
@@ -32,6 +33,7 @@ public class StoreTools {
     private final CategoryResourceRepository resources;
     private final boolean imagesAllowed;
     private final ProductImageRepository images;
+    private final MediaStorage storage;
 
     StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts) {
         this(tenant, catalog, facts, null, false);
@@ -45,7 +47,14 @@ public class StoreTools {
 
     StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts, CategoryResourceRepository resources,
                boolean imagesAllowed, ProductImageRepository images) {
+        this(tenant, catalog, facts, resources, imagesAllowed, images, null);
+    }
+
+    /** {@code storage}: descarga de Cloudinary los archivos que ya no están en la base. */
+    StoreTools(UUID tenant, PublicCatalogRepository catalog, StoreFacts facts, CategoryResourceRepository resources,
+               boolean imagesAllowed, ProductImageRepository images, MediaStorage storage) {
         this.images = images;
+        this.storage = storage;
         this.tenant = tenant;
         this.catalog = catalog;
         this.facts = facts;
@@ -93,10 +102,12 @@ public class StoreTools {
             return "Ya se adjuntó un catálogo en esta respuesta.";
         var option = usable(resources.options(tenant, name.get()));
         if (option == null) return "La categoría " + name.get() + " no tiene catálogo para enviar. Ofrece buscar prendas con buscarPrendas.";
-        if (option.file() == null) return "Comparte este enlace del catálogo de " + name.get() + ": " + option.url();
+        if (!option.hasFile()) return "Comparte este enlace del catálogo de " + name.get() + ": " + option.url();
+        byte[] content = content(option.file(), option.storageUrl());
+        if (content == null) return "No pude adjuntar el catálogo de " + name.get() + " en este momento. Ofrece buscar prendas con buscarPrendas.";
         boolean pdf = "PDF".equals(option.kind());
         String file = "Catalogo " + name.get() + (pdf ? ".pdf" : option.mediaType() != null && option.mediaType().contains("png") ? ".png" : ".jpg");
-        attachments.add(new Attachment(pdf ? "DOCUMENT" : "IMAGE", option.mediaType(), file, option.file(),
+        attachments.add(new Attachment(pdf ? "DOCUMENT" : "IMAGE", option.mediaType(), file, content,
                 (pdf ? "Catálogo PDF de " : "Imagen del catálogo de ") + name.get()));
         return "Listo: el " + (pdf ? "PDF" : "imagen") + " del catálogo de " + name.get()
                 + " se enviará después de tu mensaje. Avísale al cliente que se lo envías; no escribas ningún enlace.";
@@ -118,6 +129,8 @@ public class StoreTools {
         if (attachments.size() >= 3) return "Ya se adjuntaron suficientes archivos en esta respuesta.";
         var image = images.read(tenant, v.coverImage());
         if (image.isEmpty()) return "Esa prenda todavía no tiene foto. Describe la prenda con sus datos.";
+        byte[] photo = content(image.get().content(), image.get().url());
+        if (photo == null) return "No pude adjuntar la foto en este momento. Describe la prenda con sus datos.";
         String ext = image.get().mediaType().contains("png") ? ".png" : image.get().mediaType().contains("webp") ? ".webp" : ".jpg";
         attachments.add(new Attachment("IMAGE", image.get().mediaType(), v.name() + ext, image.get().content(), "Foto de " + v.name()));
         return "Listo: la foto de " + v.name() + " se enviará después de tu mensaje. Avísale al cliente.";
@@ -126,7 +139,7 @@ public class StoreTools {
     /** Primer recurso que se puede enviar: archivo (las imágenes solo con el plan) o enlace público. Solo uno. */
     private CategoryResourceRepository.Option usable(List<CategoryResourceRepository.Option> options) {
         for (var o : options) {
-            if (o.file() != null) {
+            if (o.hasFile()) {
                 if ("IMAGE".equals(o.kind()) && !imagesAllowed) continue;
                 return o;
             }
@@ -165,5 +178,16 @@ public class StoreTools {
         if (value == null) return "";
         String v = value.strip();
         return v.length() > max ? v.substring(0, max) : v;
+    }
+
+    /** Contenido guardado en la base, o descargado de Cloudinary; null si no se pudo obtener. */
+    private byte[] content(byte[] stored, String url) {
+        if (stored != null) return stored;
+        if (storage == null || url == null) return null;
+        try {
+            return storage.download(url);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 }

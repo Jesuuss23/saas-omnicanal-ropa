@@ -10,7 +10,7 @@ import type {Variant} from "./CatalogCart";
 
 type Option = {id:string; size:string; color:string|null; price:number; compareAtPrice:number|null; discountPercent:number|null; available:number};
 export type ProductInfo = {id:string; name:string; category:string|null; subcategory:string|null; description:string|null;
-  material:string|null; images:string[]; variants:Option[]};
+  material:string|null; images:string[]; variants:Option[]; imageUrls?:(string|null)[]};
 
 const currency = new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN"});
 const ZOOM = 2.5;
@@ -92,7 +92,10 @@ export default function ProductDetail({store, product, initialVariant, open, onO
   const colors = [...new Set(variants.map(v => v.color).filter((c):c is string => Boolean(c)))];
   const sizes = [...new Set(variants.filter(v => !current?.color || v.color === current.color).map(v => v.size))];
   const images = info?.images ?? [];
-  const photo = images[Math.min(image, Math.max(0, images.length - 1))];
+  const shown = Math.min(image, Math.max(0, images.length - 1));
+  const photo = images[shown];
+  // Cloudinary si la foto ya está allá; si no, el backend (que también redirige a Cloudinary).
+  const src = (id:string, i:number) => info?.imageUrls?.[i] ?? "/api/public/stores/" + store + "/images/" + id;
   const discount = current ? current.discountPercent ?? discountPercent(current.price, current.compareAtPrice) : null;
 
   function pick(color:string|null, size:string) {
@@ -108,7 +111,7 @@ export default function ProductDetail({store, product, initialVariant, open, onO
         <div className="grid gap-3 p-4 sm:p-6">
           {!info && !failed ? <Skeleton className="aspect-[4/5] w-full rounded-2xl"/>
             : photo ? <div className="relative">
-              <ZoomImage key={photo} src={"/api/public/stores/" + store + "/images/" + photo}
+              <ZoomImage key={photo} src={src(photo, shown)}
                 alt={product.name + (images.length > 1 ? (image === 0 ? " · vista delantera" : image === 1 ? " · vista trasera" : " · foto " + (image + 1)) : "")}/>
               {images.length > 1 && <>
                 <button type="button" aria-label="Foto anterior" onClick={() => setImage((image - 1 + images.length) % images.length)}
@@ -125,7 +128,7 @@ export default function ProductDetail({store, product, initialVariant, open, onO
                 onClick={() => setImage(i)}
                 className={"block size-16 overflow-hidden rounded-lg border-2 " + (i === image ? "border-[var(--store)]" : "border-transparent opacity-70 hover:opacity-100")}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- miniatura servida por el backend */}
-                <img src={"/api/public/stores/" + store + "/images/" + id} alt="" className="size-full object-cover"/>
+                <img src={src(id, i)} alt="" className="size-full object-cover"/>
               </button>
             </li>)}
           </ul>}

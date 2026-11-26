@@ -1,6 +1,8 @@
 package com.saas.omnicanal.catalog.service;
 
 import com.saas.omnicanal.catalog.repository.CategoryResourceRepository;
+import com.saas.omnicanal.shared.storage.MediaStorage;
+import com.saas.omnicanal.shared.storage.StoredFile;
 import com.saas.omnicanal.catalog.repository.CategoryResourceRepository.PdfItem;
 import java.awt.Color;
 import java.awt.Font;
@@ -38,8 +40,11 @@ public class CatalogPdfService {
     private static final int W = 1240, H = 1754, COLS = 2, ROWS = 3, MARGIN = 70, HEADER = 190, FOOTER = 70;
     private final CategoryResourceRepository resources;
 
-    public CatalogPdfService(CategoryResourceRepository resources) {
+    private final MediaStorage storage;
+
+    public CatalogPdfService(CategoryResourceRepository resources, MediaStorage storage) {
         this.resources = resources;
+        this.storage = storage;
     }
 
     public record Pdf(String category, byte[] content, int products) {}
@@ -77,7 +82,17 @@ public class CatalogPdfService {
     @Transactional
     public String saveAsResource(UUID tenant, String category) {
         Pdf pdf = generate(tenant, category);
-        return resources.savePdf(tenant, pdf.category(), pdf.content());
+        StoredFile stored = null;
+        if (storage.enabled()) {
+            try {
+                stored = storage.upload(tenant, MediaStorage.Folder.CATALOGS, pdf.content(), "application/pdf", "catalogo.pdf");
+            } catch (MediaStorage.StorageException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "No se pudo guardar el PDF. Inténtalo otra vez.");
+            }
+            storage.deleteOnRollback(stored);
+        }
+        return resources.savePdf(tenant, pdf.category(), pdf.content(), stored,
+                removed -> removed.forEach(r -> storage.deleteAfterCommit(r.publicId(), r.resourceType())));
     }
 
     private BufferedImage page(String store, String category, List<PdfItem> items, int number, int pages) throws IOException {
@@ -113,7 +128,8 @@ public class CatalogPdfService {
         int imageH = h - 175;
         g.setColor(new Color(0xF3F4F6));
         g.fillRoundRect(x, y, w, imageH, 24, 24);
-        BufferedImage photo = item.image() == null ? null : ImageIO.read(new ByteArrayInputStream(item.image()));
+        byte[] bytes = photo(item);
+        BufferedImage photo = bytes == null ? null : ImageIO.read(new ByteArrayInputStream(bytes));
         if (photo != null) {
             double scale = Math.min((double) w / photo.getWidth(), (double) imageH / photo.getHeight());
             int pw = (int) (photo.getWidth() * scale), ph = (int) (photo.getHeight() * scale);
@@ -152,5 +168,16 @@ public class CatalogPdfService {
             text += "…";
         }
         g.drawString(text, x, baseline);
+    }
+
+    /** Portada de la prenda: de la base o, si está en Cloudinary, una versión reducida en JPG (más liviana para el PDF). */
+    private byte[] photo(PdfItem item) {
+        if (item.image() != null) return item.image();
+        if (item.imageUrl() == null || !storage.enabled()) return null;
+        try {
+            return storage.download(item.imageUrl().replace("/image/upload/", "/image/upload/c_limit,w_700,f_jpg/"));
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 }

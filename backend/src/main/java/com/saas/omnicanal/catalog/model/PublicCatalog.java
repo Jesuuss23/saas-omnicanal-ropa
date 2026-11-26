@@ -11,27 +11,28 @@ public record PublicCatalog(String storeName, List<Variant> variants, boolean ha
 
     public record Variant(UUID id, UUID productId, String name, String category, String size, String color,
                           BigDecimal price, int available, UUID coverImage, String subcategory,
-                          BigDecimal compareAtPrice, UUID backImage) {
+                          BigDecimal compareAtPrice, UUID backImage, String coverImageUrl, String backImageUrl) {
         public Variant(UUID id, UUID productId, String name, String category, String size, String color,
                        BigDecimal price, int available, UUID coverImage, String subcategory) {
-            this(id, productId, name, category, size, color, price, available, coverImage, subcategory, null, null);
+            this(id, productId, name, category, size, color, price, available, coverImage, subcategory, null, null, null, null);
         }
     }
 
     /**
      * Ficha pública de un producto activo: todas sus fotos (la primera es la delantera y la segunda la trasera) y todas
-     * sus variantes, incluso las agotadas, para que el cliente vea qué tallas y colores existen.
+     * sus variantes, incluso las agotadas, para que el cliente vea qué tallas y colores existen. {@code imageUrls} va en
+     * el mismo orden que {@code images}: la secure_url de Cloudinary, o null si esa foto sigue guardada en la base.
      */
     public record ProductDetail(UUID id, String name, String category, String subcategory, String description,
-                                String material, List<UUID> images, List<Option> variants) {
+                                String material, List<UUID> images, List<Option> variants, List<String> imageUrls) {
         public record Option(UUID id, String size, String color, BigDecimal price, BigDecimal compareAtPrice,
                              Integer discountPercent, int available) {}
     }
     public record Pickup(String address, String hours) {}
     public record CategoryResource(String kind, String url) {}
-    /** {@code logoVersion} es null cuando la tienda no subió logo. */
+    /** {@code logoVersion} es null cuando la tienda no subió logo; {@code logoUrl} es la secure_url de Cloudinary. */
     public record Brand(String tagline, String description, String primaryColor, String whatsappPhone,
-                        String instagram, Integer logoVersion) {}
+                        String instagram, Integer logoVersion, String logoUrl) {}
     public record Availability(UUID id, BigDecimal price, int available) {}
     public record Filters(String query, String size, String color, String category, UUID variant) {}
 }

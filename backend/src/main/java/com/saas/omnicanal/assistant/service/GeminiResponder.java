@@ -45,10 +45,12 @@ public class GeminiResponder implements AssistantResponder {
     private CategoryResourceRepository resources;
     private EntitlementService entitlements;
     private ProductImageRepository images;
+    private com.saas.omnicanal.shared.storage.MediaStorage storage;
 
     @org.springframework.beans.factory.annotation.Autowired
     public GeminiResponder(ObjectProvider<ChatClient.Builder> builders, PublicCatalogRepository catalog,
                            CategoryResourceRepository resources, EntitlementService entitlements, ProductImageRepository images,
+                           com.saas.omnicanal.shared.storage.MediaStorage storage,
                            @Value("${spring.ai.google.genai.api-key:}") String apiKey,
                            @Value("${spring.ai.google.genai.chat.model:gemini-3.5-flash}") String model,
                            @Value("${assistant.gemini-api-base:https://generativelanguage.googleapis.com/v1beta}") String apiBase,
@@ -58,6 +60,7 @@ public class GeminiResponder implements AssistantResponder {
         this.resources = resources;
         this.entitlements = entitlements;
         this.images = images;
+        this.storage = storage;
     }
 
     public GeminiResponder(ObjectProvider<ChatClient.Builder> builders, PublicCatalogRepository catalog,
@@ -156,7 +159,7 @@ public class GeminiResponder implements AssistantResponder {
     @Override
     public Answer answer(UUID tenant, StoreFacts facts, String instructions, List<Turn> history, String note, String message) {
         var tools = new StoreTools(tenant, catalog, facts, resources,
-                entitlements != null && entitlements.enabled(tenant, Entitlements.WHATSAPP_MEDIA_SEND), images);
+                entitlements != null && entitlements.enabled(tenant, Entitlements.WHATSAPP_MEDIA_SEND), images, storage);
         List<Message> messages = new ArrayList<>();
         for (Turn t : history) messages.add("CUSTOMER".equals(t.author()) ? new UserMessage(t.text()) : new AssistantMessage(t.text()));
         String text = null;

@@ -1,6 +1,8 @@
 package com.saas.omnicanal.whatsapp.service;
 
 import com.saas.omnicanal.inbox.service.InboxService;
+import com.saas.omnicanal.shared.storage.MediaStorage;
+import com.saas.omnicanal.shared.storage.StoredFile;
 import com.saas.omnicanal.subscription.model.Entitlements;
 import com.saas.omnicanal.subscription.service.EntitlementService;
 import com.saas.omnicanal.whatsapp.model.ChatIds;
@@ -29,13 +31,16 @@ public class WhatsAppReplyService {
     private final InboxService inbox;
     private final WhatsAppMediaRepository media;
     private final EntitlementService entitlements;
+    private final MediaStorage storage;
 
     public WhatsAppReplyService(WhatsAppMessageRepository messages, WhatsAppChannelSettingRepository channels,
                                 EvolutionApiClient evolution, CloudApiService cloud, CloudApiClient cloudClient, InboxService inbox,
-                                WhatsAppMediaRepository media, EntitlementService entitlements) {
+                                WhatsAppMediaRepository media, EntitlementService entitlements,
+                                MediaStorage storage) {
         this.inbox = inbox;
         this.media = media;
         this.entitlements = entitlements;
+        this.storage = storage;
         this.messages = messages;
         this.channels = channels;
         this.evolution = evolution;
@@ -84,10 +89,10 @@ public class WhatsAppReplyService {
         WhatsAppProvider provider = provider(store, chat);
         String caption = file.caption() == null ? "" : file.caption().strip();
         String body = caption.isEmpty() ? file.kind().placeholder() : caption;
-        UUID id = media.store(store, file.kind(), file.mimeType(), file.fileName(), file.content());
+        UUID id = media.store(store, file.kind(), file.mimeType(), file.fileName(), file.content(), upload(store, file));
         if (!messages.claimMediaReply(store, requestId, chat, body, provider, author, file.kind(), file.mimeType(),
                 WhatsAppMediaRepository.url(id), caption.isEmpty() ? null : caption)) {
-            media.delete(store, id);
+            media.delete(store, id).ifPresent(r -> storage.deleteAfterCommit(r.publicId(), r.resourceType()));
             return messages.existingReplyStatus(store, requestId, chat, body)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, NO_CHAT));
         }
@@ -104,6 +109,18 @@ public class WhatsAppReplyService {
                     .orElse(SendResult.rejected("Cloud API sin configurar"));
         };
         return finish(store, requestId, chat, result);
+    }
+
+    /** Copia del archivo enviado en Cloudinary; si no está configurado o falla, null y el archivo queda en la base. */
+    private StoredFile upload(UUID store, Outgoing file) {
+        if (!storage.enabled()) return null;
+        try {
+            return storage.upload(store, MediaStorage.Folder.WHATSAPP_OUTBOUND, file.content(), file.mimeType(), file.fileName());
+        } catch (RuntimeException e) {
+            org.slf4j.LoggerFactory.getLogger(WhatsAppReplyService.class)
+                    .warn("WhatsApp: no se pudo subir a Cloudinary un archivo enviado de {}; se guarda en la base: {}", store, e.getMessage());
+            return null;
+        }
     }
 
     /** Proveedor activo, validando que pueda responder este chat. */

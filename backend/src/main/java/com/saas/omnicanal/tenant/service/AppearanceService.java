@@ -1,6 +1,8 @@
 package com.saas.omnicanal.tenant.service;
 
 import com.saas.omnicanal.shared.media.ImageUpload;
+import com.saas.omnicanal.shared.storage.MediaStorage;
+import com.saas.omnicanal.shared.storage.StoredFile;
 import com.saas.omnicanal.tenant.model.Appearance;
 import com.saas.omnicanal.tenant.repository.AppearanceRepository;
 import java.util.Locale;
@@ -15,9 +17,11 @@ public class AppearanceService {
     public static final int MAX_LOGO_BYTES = 512 * 1024;
 
     private final AppearanceRepository appearance;
+    private final MediaStorage storage;
 
-    public AppearanceService(AppearanceRepository appearance) {
+    public AppearanceService(AppearanceRepository appearance, MediaStorage storage) {
         this.appearance = appearance;
+        this.storage = storage;
     }
 
     public record Changes(String name, String tagline, String description, String primaryColor, String whatsappPhone,
@@ -45,14 +49,25 @@ public class AppearanceService {
     @Transactional
     public Appearance setLogo(UUID tenant, ImageUpload logo) {
         appearance.ensureRow(tenant);
-        appearance.setLogo(tenant, logo.mediaType(), logo.content());
+        StoredFile stored = null;
+        if (storage.enabled()) {
+            try {
+                stored = storage.upload(tenant, MediaStorage.Folder.LOGO, logo.content(), logo.mediaType(), null);
+            } catch (MediaStorage.StorageException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "No se pudo guardar el logo. Inténtalo otra vez.");
+            }
+            storage.deleteOnRollback(stored);
+        }
+        appearance.setLogo(tenant, logo.mediaType(), logo.content(), stored)
+                .ifPresent(old -> storage.deleteAfterCommit(old.publicId(), old.resourceType()));
         return get(tenant);
     }
 
     @Transactional
     public Appearance removeLogo(UUID tenant) {
         appearance.ensureRow(tenant);
-        appearance.setLogo(tenant, null, null);
+        appearance.setLogo(tenant, null, null, null)
+                .ifPresent(old -> storage.deleteAfterCommit(old.publicId(), old.resourceType()));
         return get(tenant);
     }
 

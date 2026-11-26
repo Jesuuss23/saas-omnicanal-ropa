@@ -65,6 +65,10 @@ class ProductImageController {
     @GetMapping("/api/public/stores/{store}/images/{image}")
     ResponseEntity<byte[]> read(@PathVariable UUID store, @PathVariable UUID image) {
         var data = images.read(store, image).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        // En Cloudinary: redirige a la secure_url (los enlaces antiguos por id siguen funcionando).
+        if (data.content() == null)
+            return ResponseEntity.status(HttpStatus.FOUND).location(java.net.URI.create(data.url()))
+                    .cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable()).build();
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable())
                 .contentType(MediaType.parseMediaType(data.mediaType())).header("X-Content-Type-Options", "nosniff")
                 .body(data.content());

@@ -11,7 +11,8 @@ import {toast} from "@/components/ui/toaster";
 import {ApiError, errorMessage, ownerApi, publicApi} from "@/lib/api";
 import {useApiData} from "@/lib/useApiData";
 
-type Photo = {id: string; position: number; mediaType: string; bytes: number};
+/** url: secure_url de Cloudinary (null si la foto sigue guardada en la base). */
+type Photo = {id: string; position: number; mediaType: string; bytes: number; url?: string | null};
 const MAX = 8;
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -72,7 +73,7 @@ export function ProductPhotos({store, product, name, open, onOpenChange, onChang
       {data && <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {data.map((p, i) => <li key={p.id} className="group relative overflow-hidden rounded-lg border bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element -- imágenes servidas por el backend */}
-          <img src={photoUrl(store, p.id)} alt={"Foto " + (i + 1) + " de " + name} className="aspect-[3/4] w-full object-cover"/>
+          <img src={p.url ?? photoUrl(store, p.id)} alt={"Foto " + (i + 1) + " de " + name} className="aspect-[3/4] w-full object-cover"/>
           {i < 2 && <Badge className="absolute left-2 top-2 shadow-card">{i === 0 ? <><Star/>Delantera · portada</> : "Trasera"}</Badge>}
           <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 bg-gradient-to-t from-black/60 to-transparent p-2">
             <span className="flex gap-1">

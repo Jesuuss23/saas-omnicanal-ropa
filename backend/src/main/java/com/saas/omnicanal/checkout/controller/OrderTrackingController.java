@@ -32,7 +32,7 @@ class OrderTrackingController {
     }
 
     /** Marca de la tienda para que el enlace del pedido se vea como la tienda (nombre, color, logo y WhatsApp). */
-    record Store(String name, String primaryColor, Integer logoVersion, String whatsappPhone) {}
+    record Store(String name, String primaryColor, Integer logoVersion, String whatsappPhone, String logoUrl) {}
 
     record Pickup(String address, String hours) {}
     record Header(UUID reservation, String status, BigDecimal total, boolean freeDelivery, BigDecimal deliveryFee, Pickup pickup, String method, Instant reservationExpiresAt) {}
@@ -65,7 +65,7 @@ class OrderTrackingController {
 
     private Store storeOf(UUID store) {
         String name=db.query("SELECT name FROM tenant WHERE id=?",(rs,n)->rs.getString(1),store).stream().findFirst().orElse("");
-        return appearance.find(store).map(a->new Store(name,a.primaryColor(),a.hasLogo() ? a.logoVersion() : null,a.whatsappPhone()))
-                .orElse(new Store(name,null,null,null));
+        return appearance.find(store).map(a->new Store(name,a.primaryColor(),a.hasLogo() ? a.logoVersion() : null,a.whatsappPhone(),a.logoUrl()))
+                .orElse(new Store(name,null,null,null,null));
     }
 }

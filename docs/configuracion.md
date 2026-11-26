@@ -127,6 +127,27 @@ un reinicio o la misma foto reenviada (mismo SHA-256 en la tienda) usan lo guard
 La descripción de productos con IA (`POST catalog/description/generate`) usa `GOOGLE_GENAI_API_KEY` y `GEMINI_MODEL`
 (o `CATALOG_DESCRIPTION_MODEL` en `catalog.description-model`); sin clave devuelve un borrador con los datos de la ficha.
 
+## Almacenamiento de archivos (Cloudinary)
+
+Todo lo que no es texto (fotos de producto, logo, PDF e imágenes de catálogo, archivos entrantes y enviados de WhatsApp)
+se sube a Cloudinary en `{CLOUDINARY_FOLDER}/{storeId}/{products|logo|catalogs|whatsapp/inbound|whatsapp/outbound}`.
+Tipo de recurso: `image` para imágenes, `video` para videos y audios, `raw` para PDF y documentos. La base guarda solo
+`storage_url` (la `secure_url`), `storage_public_id`, `storage_resource_type` y `storage_bytes`; `content` queda en null.
+Las respuestas de la API devuelven esa URL (`url` en fotos, `logoUrl`, `coverImageUrl`/`backImageUrl`/`imageUrls` en el
+catálogo público, `fileUrl` en la bandeja) y los endpoints antiguos por id redirigen (302) a ella.
+
+Sin las tres credenciales todo se guarda en la base como antes (desarrollo local y pruebas). Si Cloudinary falla al
+recibir un archivo de WhatsApp, se guarda en la base para no perderlo; en una subida desde el panel se muestra el error.
+Una imagen bloqueada por contenido explícito nunca expone su URL: solo se ve con `/media/{id}?reveal=true`.
+El certificado `.pfx` de facturación (secreto cifrado) y los PDF de Nubefact (enlaces de Nubefact) no pasan por Cloudinary.
+
+| Variable | Obligatoria | Formato | Local / test | Producción |
+|---|---|---|---|---|
+| `CLOUDINARY_CLOUD_NAME` | Para usar Cloudinary | Cloud name del panel de Cloudinary | Vacía (guarda en la base) | El de la cuenta |
+| `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Para usar Cloudinary | API key y secret (Settings → API Keys) | Vacías | Las de la cuenta |
+| `CLOUDINARY_FOLDER` | Opcional (`omnicanal`) | Carpeta raíz | Por defecto | `omnicanal` o una por entorno |
+| `CLOUDINARY_BACKFILL` | Opcional (`false`) | `true`: al arrancar sube los archivos antiguos de la base y libera `content` | `false` | `true` una vez, luego `false` |
+
 ## Correo (Resend)
 
 | Variable | Obligatoria | Formato | Local / test | Producción |

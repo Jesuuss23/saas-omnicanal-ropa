@@ -22,7 +22,9 @@ type MediaType = "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT";
 type Message = {author: "CUSTOMER" | "AI" | "HUMAN" | "PHONE"; body: string; at: string; status: string | null;
   mediaType?: MediaType | null; mimeType?: string | null; mediaUrl?: string | null; mediaStatus?: "PENDING" | "STORED" | "FAILED" | "TOO_LARGE" | "BLOCKED_NSFW" | null;
   caption?: string | null; transcript?: string | null; moderation?: "SAFE" | "BLOCKED_NSFW" | "FAILED" | "DISABLED" | null;
-  vision?: Vision | null};
+  vision?: Vision | null;
+  /** secure_url de Cloudinary; null si el archivo sigue en la base o si la imagen está bloqueada. */
+  fileUrl?: string | null};
 type Vision = {esConsultaValidaTienda: boolean; tipoPrenda: string; subcategoria: string; color: string; estilo: string; resumen: string;
   coincidencias: {productId: string; nombre: string; categoria: string; subcategoria: string | null; colores: string; tallas: string; precioDesde: number; stock: number}[]};
 const placeholders = new Set(["[Imagen]", "[Video]", "[Nota de voz]", "[Documento]"]);
@@ -262,8 +264,10 @@ function MediaView({store, m}: {store: string; m: Message}) {
   if (!m.mediaUrl)
     return <p className="flex items-center gap-1.5 text-xs opacity-80"><Paperclip className="size-3.5"/>
       {m.mediaStatus === "TOO_LARGE" ? "El archivo supera 16 MB y no se guardó." : "No se pudo descargar " + label(m.mediaType) + "."}</p>;
-  const src = ownerApi.url("stores/" + store + "/whatsapp" + m.mediaUrl);
+  const proxy = ownerApi.url("stores/" + store + "/whatsapp" + m.mediaUrl);
   const blocked = m.mediaStatus === "BLOCKED_NSFW" || m.moderation === "BLOCKED_NSFW";
+  // Archivo en Cloudinary: se muestra directo. Una imagen bloqueada siempre pasa por el backend (?reveal=true).
+  const src = !blocked && m.fileUrl ? m.fileUrl : proxy;
   switch (m.mediaType) {
     case "IMAGE":
       if (blocked && !reveal)
@@ -274,9 +278,9 @@ function MediaView({store, m}: {store: string; m: Message}) {
           <button type="button" onClick={() => setReveal(true)} className="text-muted-foreground underline">Ver de todos modos</button>
         </div>;
       return <div className="mb-1 grid gap-1.5">
-        <a href={blocked ? src + "?reveal=true" : src} target="_blank" rel="noreferrer" className="block">
+        <a href={blocked ? proxy + "?reveal=true" : src} target="_blank" rel="noreferrer" className="block">
           {/* eslint-disable-next-line @next/next/no-img-element -- archivo privado del panel, no pasa por next/image */}
-          <img src={blocked ? src + "?reveal=true" : src} alt={m.caption ?? "Imagen del chat"} loading="lazy" className="max-h-72 w-full rounded-lg object-cover"/></a>
+          <img src={blocked ? proxy + "?reveal=true" : src} alt={m.caption ?? "Imagen del chat"} loading="lazy" className="max-h-72 w-full rounded-lg object-cover"/></a>
         {m.vision && <VisionSummary v={m.vision}/>}
       </div>;
     case "VIDEO":
